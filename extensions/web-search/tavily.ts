@@ -3,6 +3,8 @@
  * Fallback when SearXNG is unavailable.
  */
 
+import { getApiKeys } from "../../common/env.js";
+
 const ACADEMIC_DOMAINS = [
   "pubmed.ncbi.nlm.nih.gov",
   "arxiv.org",
@@ -33,7 +35,7 @@ export async function searchTavily(
   tier: number,
   signal?: AbortSignal,
 ): Promise<SearchResult[]> {
-  const apiKey = process.env.TAVILY_KEY;
+  const apiKey = getApiKeys().tavily;
   if (!apiKey) return [];
 
   const body: Record<string, unknown> = {

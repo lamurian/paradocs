@@ -1,12 +1,13 @@
 /**
  * SearXNG search backend for web-search extension.
- * Primary search via Docker container on port 8888.
+ * Primary search via Docker container.
  *
  * Uses HTTP GET with category-based API (categories parameter) and safesearch=1.
  * See AGENTS.md in this directory for full parameter reference.
  */
 
-const SEARXNG_PORT = parseInt(process.env.SEARXNG_PORT || "8888", 10);
+import { getSearxngConfig } from "../../common/env.js";
+const SEARXNG_PORT = getSearxngConfig().port;
 
 export interface SearchResult {
   title: string;

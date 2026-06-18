@@ -11,9 +11,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb } from "../db-sqlite.js";
-
-const DB_FILE = "notes.db";
 
 /**
  * Register the list_para_tags tool.
@@ -35,7 +34,8 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
         details: {},
       });
 
-      const dbPath = resolve(ctx.cwd, DB_FILE);
+      const { dir, db } = getKnowledgeConfig();
+      const dbPath = resolve(dir, db);
       if (!existsSync(dbPath)) {
         return {
           content: [

@@ -9,14 +9,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { getKnowledgeConfig } from "../../../common/env.js";
 import {
   createDb,
   initDb,
   searchDocs,
   type SearchOptions,
 } from "../db-sqlite.js";
-
-const DB_FILE = "notes.db";
 
 /**
  * Register the search_para_docs tool.
@@ -42,7 +41,8 @@ export function registerSearchDocsTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      const dbPath = resolve(ctx.cwd, DB_FILE);
+      const { dir, db } = getKnowledgeConfig();
+      const dbPath = resolve(dir, db);
 
       if (!existsSync(dbPath)) {
         return {

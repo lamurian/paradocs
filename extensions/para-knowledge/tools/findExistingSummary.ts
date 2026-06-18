@@ -8,11 +8,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, searchDocs, type SqliteDb } from "../db-sqlite.js";
 import { textSimilarity } from "../similarity.js";
 import { readFile } from "node:fs/promises";
-
-const DB_FILE = "notes.db";
 const SIMILARITY_THRESHOLD = 0.9;
 
 interface MatchResult {
@@ -90,7 +89,8 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       const { url, content } = params;
-      const dbPath = resolve(ctx.cwd, DB_FILE);
+      const { dir, db } = getKnowledgeConfig();
+      const dbPath = resolve(dir, db);
 
       if (!existsSync(dbPath)) {
         return {

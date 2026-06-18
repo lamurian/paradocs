@@ -8,6 +8,7 @@
  * and JS-heavy pages that Obscura could not reach.
  */
 
+import { getApiKeys } from "../../common/env.js";
 import { tavily } from "@tavily/core";
 
 /**
@@ -61,7 +62,7 @@ export async function extractBatch(
     extractDepth?: "basic" | "advanced";
   },
 ): Promise<BatchExtractResult[]> {
-  const apiKey = process.env.TAVILY_KEY;
+  const apiKey = getApiKeys().tavily;
   if (!apiKey) {
     throw new Error("TAVILY_KEY environment variable not set");
   }

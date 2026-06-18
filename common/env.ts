@@ -102,3 +102,137 @@ export function expandTilde(path: string): string {
   }
   return path;
 }
+
+// ---------------------------------------------------------------------------
+// Typed config interfaces
+// ---------------------------------------------------------------------------
+
+/** Configuration for the PARA knowledge base. */
+export interface KnowledgeConfig {
+  /** Path to the PARA documents root directory. */
+  dir: string;
+  /** SQLite database filename (relative to dir). */
+  db: string;
+}
+
+/** Configuration for the SearXNG search engine. */
+export interface SearxngConfig {
+  port: number;
+  host: string;
+  secretKey: string;
+  version: string;
+}
+
+/** Configuration for the Obscura headless browser. */
+export interface ObscuraConfig {
+  port: number;
+  host: string;
+  version: string;
+}
+
+/** API keys for external services. */
+export interface ApiKeysConfig {
+  tavily: string;
+  github: string;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a port number from a string env var, returning the default if the
+ * value is undefined, empty, or outside the valid port range (1-65535).
+ *
+ * @param val - The string value from process.env (may be undefined).
+ * @param defaultVal - Default port to return if val is not a valid port.
+ * @returns Parsed port number or default.
+ */
+export function parsePort(
+  val: string | undefined,
+  defaultVal: number,
+): number {
+  if (val === undefined || val === "") return defaultVal;
+  const n = Number(val);
+  if (Number.isNaN(n) || !Number.isInteger(n) || n < 1 || n > 65535) {
+    return defaultVal;
+  }
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Typed config getters
+// ---------------------------------------------------------------------------
+
+const DEFAULT_KNOWLEDGE_DIR = "~/data/personal/Documents/Cognoscere";
+const DEFAULT_KNOWLEDGE_DB = "notes.db";
+const DEFAULT_SEARXNG_PORT = 8888;
+const DEFAULT_SEARXNG_HOST = "127.0.0.1";
+const DEFAULT_SEARXNG_SECRET_KEY = "thissisanotherthingtodo!";
+const DEFAULT_SEARXNG_VERSION = "latest";
+const DEFAULT_OBSCURA_PORT = 9222;
+const DEFAULT_OBSCURA_HOST = "127.0.0.1";
+const DEFAULT_OBSCURA_VERSION = "latest";
+
+/**
+ * Get the PARA knowledge base configuration.
+ *
+ * Reads KNOWLEDGE_DIR (tilde-expanded) and KNOWLEDGE_DB from the
+ * environment, falling back to sensible defaults.
+ *
+ * @returns The current knowledge base configuration.
+ */
+export function getKnowledgeConfig(): KnowledgeConfig {
+  return {
+    dir: expandTilde(process.env.KNOWLEDGE_DIR ?? DEFAULT_KNOWLEDGE_DIR),
+    db: process.env.KNOWLEDGE_DB ?? DEFAULT_KNOWLEDGE_DB,
+  };
+}
+
+/**
+ * Get the SearXNG search engine configuration.
+ *
+ * Reads SEARXNG_PORT, SEARXNG_HOST, SEARXNG_SECRET_KEY, and SEARXNG_VERSION
+ * from the environment, falling back to sensible defaults.
+ *
+ * @returns The current SearXNG configuration.
+ */
+export function getSearxngConfig(): SearxngConfig {
+  return {
+    port: parsePort(process.env.SEARXNG_PORT, DEFAULT_SEARXNG_PORT),
+    host: process.env.SEARXNG_HOST ?? DEFAULT_SEARXNG_HOST,
+    secretKey: process.env.SEARXNG_SECRET_KEY ?? DEFAULT_SEARXNG_SECRET_KEY,
+    version: process.env.SEARXNG_VERSION ?? DEFAULT_SEARXNG_VERSION,
+  };
+}
+
+/**
+ * Get the Obscura headless browser configuration.
+ *
+ * Reads OBSCURA_PORT, OBSCURA_HOST, and OBSCURA_VERSION from the
+ * environment, falling back to sensible defaults.
+ *
+ * @returns The current Obscura configuration.
+ */
+export function getObscuraConfig(): ObscuraConfig {
+  return {
+    port: parsePort(process.env.OBSCURA_PORT, DEFAULT_OBSCURA_PORT),
+    host: process.env.OBSCURA_HOST ?? DEFAULT_OBSCURA_HOST,
+    version: process.env.OBSCURA_VERSION ?? DEFAULT_OBSCURA_VERSION,
+  };
+}
+
+/**
+ * Get API keys for external services.
+ *
+ * Reads TAVILY_KEY and GITHUB_TOKEN from the environment, falling back
+ * to empty strings.
+ *
+ * @returns The current API keys configuration.
+ */
+export function getApiKeys(): ApiKeysConfig {
+  return {
+    tavily: process.env.TAVILY_KEY ?? "",
+    github: process.env.GITHUB_TOKEN ?? "",
+  };
+}

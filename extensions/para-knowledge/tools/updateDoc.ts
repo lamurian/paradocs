@@ -8,11 +8,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, indexFile } from "../db-sqlite.js";
 import type { DocIndex } from "../db-sqlite.js";
 import { parseFrontmatter, formatFrontmatter } from "../frontmatter.js";
-
-const DB_FILE = "notes.db";
 
 /**
  * Register the update_para_doc tool.
@@ -70,7 +69,8 @@ export function registerUpdateDocTool(pi: ExtensionAPI): void {
 
       let indexOk = false;
       try {
-        const db = createDb(resolve(ctx.cwd, DB_FILE));
+        const { dir, db: dbName } = getKnowledgeConfig();
+        const db = createDb(resolve(dir, dbName));
         initDb(db);
         const doc: DocIndex = {
           path: params.path,

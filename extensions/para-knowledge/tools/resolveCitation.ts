@@ -14,9 +14,8 @@ import { Type } from "typebox";
 import { appendFile, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, type SqliteDb } from "../db-sqlite.js";
-
-const DB_FILE = "notes.db";
 const REF_BIB = "ref.bib";
 
 interface CitationRow {
@@ -98,7 +97,8 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
       const source = params.source.trim();
       const doi = extractDoi(source);
       const now = new Date().toISOString();
-      const dbPath = resolve(ctx.cwd, DB_FILE);
+      const { dir, db: dbName } = getKnowledgeConfig();
+      const dbPath = resolve(dir, dbName);
 
       // Create DB if it doesn't exist
       const db = createDb(dbPath);

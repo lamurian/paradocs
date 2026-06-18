@@ -4,7 +4,9 @@
  * for native Markdown extraction.
  */
 
-const OBSCURA_CDP_URL = "ws://127.0.0.1:9222/devtools/browser";
+import { getObscuraConfig } from "../../common/env.js";
+const { host, port } = getObscuraConfig();
+const OBSCURA_CDP_URL = `ws://${host}:${port}/devtools/browser`;
 
 class CdpConnection {
   private ws: WebSocket | null = null;
