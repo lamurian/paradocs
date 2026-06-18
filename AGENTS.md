@@ -1,6 +1,6 @@
 # Paradocs — PARA Knowledge Management for pi
 
-Standalone pi package that brings PARA (Projects, Areas, Resources, Archives) knowledge management to pi. Extracted from Cognoscere.
+Standalone pi package that brings PARA (Projects, Areas, Resources, Archives) knowledge management to pi. Extracted from Cognoscere in @~/data/personal/Documents/Cognoscere.
 
 ## Language & Conventions
 
