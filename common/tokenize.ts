@@ -2,7 +2,7 @@
  * Shared tokenizer and BM25 scoring for PARA document search.
  *
  * Used by para-knowledge (search.ts, sync.ts), batch-create (yaml.ts),
- * roadmap-scratchpad (utils.ts), and findExistingSummary.ts
+ * and findExistingSummary.ts
  */
 
 // ── Stop words ──────────────────────────────────────────────────

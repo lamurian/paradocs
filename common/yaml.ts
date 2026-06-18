@@ -8,7 +8,7 @@
  * are automatically quoted to produce valid YAML.
  *
  * This module is used by several extensions and avoids code duplication
- * across batch-create, roadmap-scratchpad, and yaml-enforcer.
+ * across batch-create and yaml-enforcer.
  */
 
 const FIELD_ORDER = ["title", "description", "author", "editor", "date", "tags", "source"] as const;

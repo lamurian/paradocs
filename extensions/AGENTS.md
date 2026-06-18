@@ -9,10 +9,7 @@
 | `link-summarizer/`  | 2     | URL fetch + extract (CDP→HTTP→PDF→Tavily) |
 | `batch-create/`     | 1     | Batch doc creation + auto-link             |
 | `expand-bullets/`   | 1     | Bullet → paragraph via web research        |
-| `roadmap-scratchpad/`| 3    | Learning pathway state tracker             |
-| `scope-gate.ts`     | -     | File access protection (event interceptor) |
 | `skill-gate.ts`     | -     | Workflow enforcement (event interceptor)   |
-| `set-temperature.ts`| -     | Model temperature override (0.1)           |
 
 ## Conventions
 
@@ -20,3 +17,5 @@
 - Single-file extensions are `.ts` files directly in `extensions/`.
 - Each tool file documents its parameters, return type, and side effects.
 - Shared DB code imports from `common/`.
+
+
