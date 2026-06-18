@@ -20,6 +20,7 @@
     "extensions/**/*.d.ts",
     "common/**/*.ts",
     "types/**/*.ts",
+    "types/**/*.d.ts",
     "tests/**/*.ts",
     "scripts/**/*.mjs"
   ],
