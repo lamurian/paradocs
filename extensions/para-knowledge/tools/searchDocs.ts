@@ -12,6 +12,7 @@ import { Type } from "typebox";
 
 import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, searchDocs, type SearchOptions } from "../db-sqlite.js";
+import { rebuildDb } from "../rebuild.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -38,21 +39,44 @@ export function registerSearchDocsTool(pi: ExtensionAPI): void {
       tags: Type.Optional(Type.Array(Type.String(), { description: "Filter by tag (OR logic)" })),
     }),
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_toolCallId, params, _signal, onUpdate, _ctx) {
       const { dir, db } = getKnowledgeConfig();
       const dbPath = resolve(dir, db);
 
       if (!existsSync(dbPath)) {
-        return {
+        onUpdate?.({
           content: [
             {
               type: "text" as const,
-              text: "📭 No documents indexed yet. Create a document first to populate the knowledge base.",
+              text: "📚 notes.db not found — rebuilding from markdown files…",
             },
           ],
-          details: { results: [], count: 0 },
-        };
+          details: {},
+        });
+
+        const count = await rebuildDb(dir);
+
+        if (count === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "📭 No PARA documents found to index. Create a document first.",
+              },
+            ],
+            details: { results: [], count: 0 },
+          };
+        }
+
+        onUpdate?.({
+          content: [
+            {
+              type: "text" as const,
+              text: `✅ Rebuilt index from ${count} document(s). Searching…`,
+            },
+          ],
+          details: {},
+        });
       }
 
       onUpdate?.({
