@@ -68,7 +68,7 @@ web-search, summarize-link, brainstorm, auto-link, research.
 
 All documents are at `implemented` status.
 
-## ADRs (6/6)
+## ADRs (8/8)
 
 - [x] ADR 001 — Migration Architecture (7 extensions, 7 skills, 3 shared
   modules migrate; set-temperature, scope-gate, roadmap-scratchpad removed)
@@ -82,8 +82,12 @@ All documents are at `implemented` status.
   hard gate via vitest with mocked network layers)
 - [x] ADR 006 — Remove Roadmap Skill (delete orphaned roadmap skill,
   update all cross-references)
+- [x] ADR 007 — Markdown Link Format for PARA Cross-References (replace
+  [[slug]] wikilinks with standard [title](path.md) markdown links)
+- [x] ADR 008 — Auto-Link Skill Output Migration (migrate auto-link skill
+  output from wikilinks to standard markdown links)
 
-## Specs (16/16)
+## Specs (19/19)
 
 - [x] Spec 001 — Shared Modules Migration
 - [x] Spec 002 — Type Stubs Migration
@@ -101,9 +105,33 @@ All documents are at `implemented` status.
 - [x] Spec 014 — Mocked Network & Gate Tests
 - [x] Spec 015 — Coverage Config & Hard Gate
 - [x] Spec 016 — Remove Roadmap Skill
+- [x] Spec 017 — Link Format Specification (standard markdown [title](path.md)
+  format with title resolution from files table)
+- [x] Spec 018 — Auto-Link Skill Output Update (update auto-link output to use
+  standard markdown link format)
+- [x] Spec 019 — Downstream Skill References (update all skills referencing
+  wikilinks to use new markdown link format)
+
+## Cross-Reference Format
+
+All PARA cross-references use standard Markdown link syntax:
+
+```markdown
+[Display Title](path-from-knowledge-dir.md)
+```
+
+- **Title resolution**: Queried from the SQLite `files` table via
+  `SELECT title FROM files WHERE path = ?`. Falls back to the filename stem
+  (slug) if the path is not found.
+- **Path convention**: Full relative path from the knowledge base root,
+  including the PARA area prefix (e.g., `Resources/note-title.md`). The
+  `.md` extension is included for direct rendering compatibility.
+- **Scope**: Applies to all "Relevant notes" sections, template placeholders,
+  and link output across all skills and extensions.
+- **Reference implementation**: `extensions/batch-create/search.ts`
+  `appendLinks()` — see ADR 007 and Spec 017 for full details.
 
 ## Quick reference
 
 See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
 decisions, and [docs/specs/](docs/specs/) for detailed specifications.
-- [D] @docs/ADR/007-markdown-link-format-for-para-cross-references.md Replace [[slug]] with [title](path.md) using files table for title resolution.
