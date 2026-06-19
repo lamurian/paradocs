@@ -1,11 +1,11 @@
 ---
 name: auto-link
-description: Automatically finds semantically related notes for a newly created note and appends [[wikilinks]] to the most relevant ones, using LLM-powered semantic understanding beyond BM25 keyword matching.
+description: Automatically finds semantically related notes for a newly created note and appends markdown links to the most relevant ones, using LLM-powered semantic understanding beyond BM25 keyword matching.
 ---
 
 # Auto-link
 
-After creating or updating a note, use this skill to find semantically related notes and append permanent `[[wikilinks]]` to them.
+After creating or updating a note, use this skill to find semantically related notes and append permanent `[title](path)` markdown links to them.
 
 **Why the LLM?** BM25 (used by `search_para_docs`) finds keyword matches. The LLM adds deep semantic understanding — catching synonyms, conceptual parallels, analogies, and indirect connections that keyword search misses. This is the same principle as SBERT embeddings, but powered by the model's full contextual reasoning.
 
@@ -28,7 +28,7 @@ Think of this as: "If another note existed on this subtopic, what would it be ti
 
 For **each** key concept, run `search_para_docs` with that concept as the query. Aggregate all unique results across all queries.
 
-**Exclude the new note itself** from candidates. The note's slug is its filename without `.md` (e.g., `coping-strategies`). The `search_para_docs` results include `path` fields — filter out any path matching the new note's path.
+**Exclude the new note itself** from candidates. The `search_para_docs` results include `path` fields — filter out any path matching the new note's path.
 
 ### 4. LLM-powered semantic evaluation
 
@@ -54,29 +54,29 @@ Choose the top **3–7** candidates with the strongest semantic connections. Kee
 **First, re-read the note** to get its current body content (everything after the YAML frontmatter `---`).
 
 **Check if it already has a "## Relevant notes" section:**
-- **If yes**: Read the existing links. Append any new `[[wikilinks]]` that aren't already present, sorted alphabetically.
+- **If yes**: Read the existing links. Append any new `[title](path.md)` links that aren't already present, sorted alphabetically.
 - **If no**: Append the following at the end of the body:
 
 ```markdown
 
 ## Relevant notes
 
-- [[selected-note-slug]]
-- [[another-selected-note]]
+- [Selected Note Title](path/to/selected-note-slug.md)
+- [Another Note Title](path/to/another-selected-note.md)
 - ...
 ```
 
 **Use `update_para_doc`** with the modified content to save the changes.
 
-> **Important:** Use the `[[slug]]` format — the filename without `.md` extension. For example, a note at `Resources/measuring-semantic-similarity-of-contexts.md` becomes `[[measuring-semantic-similarity-of-contexts]]`.
+> **Important:** Use the `[title](path.md)` format. For example, a note at `Resources/measuring-semantic-similarity-of-contexts.md` with title "Measuring Semantic Similarity of Contexts" becomes `[Measuring Semantic Similarity of Contexts](Resources/measuring-semantic-similarity-of-contexts.md)`.
 
 ### 7. Confirm with the user
 
 Tell the user what was linked and why. Format like:
 
 > ✅ Auto-linked **"New Note Title"** to 5 related notes:
-> - `[[existing-note-1]]` — [brief reason, e.g., "covers the same concept from a different angle"]
-> - `[[existing-note-2]]` — [reason]
+> - `[Existing Note 1](path/to/existing-note-1.md)` — [brief reason, e.g., "covers the same concept from a different angle"]
+> - `[Existing Note 2](path/to/existing-note-2.md)` — [reason]
 > - ...
 
 ## When to use this skill
