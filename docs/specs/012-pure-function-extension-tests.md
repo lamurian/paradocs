@@ -1,7 +1,7 @@
 ---
 title: Pure Function Extension Tests
 description: Pure Function Extension Tests
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---

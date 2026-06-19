@@ -1,7 +1,7 @@
 ---
 title: Coverage Config & Hard Gate
 description: Coverage Config & Hard Gate
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---

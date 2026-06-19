@@ -1,7 +1,7 @@
 ---
 title: Unit Test Strategy & Coverage Gates
 description: Comprehensive unit tests for all extensions and common modules with ≥80% coverage enforced as a hard gate.
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---

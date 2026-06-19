@@ -68,7 +68,7 @@ web-search, summarize-link, brainstorm, auto-link, research, roadmap.
 
 All documents are at `implemented` status.
 
-## ADRs (4/4)
+## ADRs (5/5)
 
 - [x] ADR 001 — Migration Architecture (7 extensions, 8 skills, 3 shared
   modules migrate; set-temperature, scope-gate, roadmap-scratchpad removed)
@@ -78,8 +78,10 @@ All documents are at `implemented` status.
   Prettier + Husky + vitest with 70/60/70/70 coverage)
 - [x] ADR 004 — Skill Gate Workflow Enforcement (event interceptor with
   soft warnings for search-first-ask-later workflow)
+- [x] ADR 005 — Unit Test Strategy & Coverage Gates (≥80% coverage
+  hard gate via vitest with mocked network layers)
 
-## Specs (11/11)
+## Specs (15/15)
 
 - [x] Spec 001 — Shared Modules Migration
 - [x] Spec 002 — Type Stubs Migration
@@ -92,9 +94,12 @@ All documents are at `implemented` status.
 - [x] Spec 009 — TypeScript and ESLint Configuration
 - [x] Spec 010 — Pre-commit Hooks and Test Runner
 - [x] Spec 011 — Skill Gate Implementation
+- [x] Spec 012 — Pure Function Extension Tests
+- [x] Spec 013 — SQLite-Dependent Extension Tests
+- [x] Spec 014 — Mocked Network & Gate Tests
+- [x] Spec 015 — Coverage Config & Hard Gate
 
 ## Quick reference
 
 See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
 decisions, and [docs/specs/](docs/specs/) for detailed specifications.
-- [D] @docs/ADR/005-unit-test-strategy-coverage-gates.md ≥80% unit test coverage across all extensions with mocked network layers.

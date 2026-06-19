@@ -1,7 +1,7 @@
 ---
 title: Mocked Network & Gate Tests
 description: Mocked Network & Gate Tests
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---

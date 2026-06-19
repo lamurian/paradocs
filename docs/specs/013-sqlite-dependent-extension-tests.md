@@ -1,7 +1,7 @@
 ---
 title: SQLite-Dependent Extension Tests
 description: SQLite-Dependent Extension Tests
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---
