@@ -97,3 +97,4 @@ All documents are at `implemented` status.
 
 See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
 decisions, and [docs/specs/](docs/specs/) for detailed specifications.
+- [D] @docs/ADR/005-unit-test-strategy-coverage-gates.md ≥80% unit test coverage across all extensions with mocked network layers.
