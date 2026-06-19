@@ -9,6 +9,7 @@ import { Type } from "typebox";
 
 import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.js";
 import { findParaMdFiles } from "./scanner.js";
+import { getKnowledgeConfig } from "../../common/env.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -28,7 +29,7 @@ export function registerStandardizeTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      const baseDir = ctx.cwd;
+      const baseDir = getKnowledgeConfig(ctx.cwd).dir;
       const dryRun = params.dryRun ?? true;
       const files = await findParaMdFiles(baseDir);
       let changed = 0;

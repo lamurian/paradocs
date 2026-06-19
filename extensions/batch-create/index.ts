@@ -16,6 +16,7 @@ import { Type } from "typebox";
 
 import { findRelated, appendLinks } from "./search.js";
 import { slugify, formatFrontmatter } from "./yaml.js";
+import { getKnowledgeConfig } from "../../common/env.js";
 import { createDb, initDb, indexFile } from "../para-knowledge/db-sqlite.js";
 
 import type { DocIndex } from "../para-knowledge/db-sqlite.js";
@@ -74,8 +75,9 @@ async function createFilesOnDisk(docs: BatchDoc[], cwd: string): Promise<Created
 
 // ── Step 2: Index all documents in SQLite ────────────────────────────
 
-function indexDocumentsInDb(docs: BatchDoc[], created: CreatedFile[], cwd: string): void {
-  const dbPath = resolve(cwd, "notes.db");
+function indexDocumentsInDb(docs: BatchDoc[], created: CreatedFile[], baseDir: string): void {
+  const { db: dbName } = getKnowledgeConfig();
+  const dbPath = resolve(baseDir, dbName);
   const db = createDb(dbPath);
   initDb(db);
   try {
@@ -106,9 +108,10 @@ function indexDocumentsInDb(docs: BatchDoc[], created: CreatedFile[], cwd: strin
 async function autoLinkBatch(
   docs: BatchDoc[],
   created: CreatedFile[],
-  cwd: string,
+  baseDir: string,
 ): Promise<number> {
-  const dbPath = resolve(cwd, "notes.db");
+  const { db: dbName } = getKnowledgeConfig();
+  const dbPath = resolve(baseDir, dbName);
   const db = createDb(dbPath);
   initDb(db);
   try {
@@ -174,12 +177,12 @@ export default function (pi: ExtensionAPI): void {
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       const docs = params.documents;
       const autoLink = params.autoLink !== false;
-      const cwd = ctx.cwd;
+      const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
 
       // Step 1: Create files on disk
       let created: CreatedFile[];
       try {
-        created = await createFilesOnDisk(docs, cwd);
+        created = await createFilesOnDisk(docs, knowledgeDir);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         return {
@@ -197,7 +200,7 @@ export default function (pi: ExtensionAPI): void {
 
       // Step 2: Index in DuckDB (withDb handles lock retry + recovery)
       try {
-        indexDocumentsInDb(docs, created, cwd);
+        indexDocumentsInDb(docs, created, knowledgeDir);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[batch-create] DuckDB indexing error:", msg);
@@ -230,7 +233,7 @@ export default function (pi: ExtensionAPI): void {
         });
 
         try {
-          linkedCount = await autoLinkBatch(docs, created, cwd);
+          linkedCount = await autoLinkBatch(docs, created, knowledgeDir);
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);
           console.error("[batch-create] Auto-link error:", msg);

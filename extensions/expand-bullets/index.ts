@@ -16,6 +16,7 @@ import { Type } from "typebox";
 import { parseFrontmatter, extractBullets, buildSearchQuery, type BulletInfo } from "./parser.js";
 import { searchWeb } from "./search.js";
 import { synthesizeExpansion, type Expansion } from "./synthesis.js";
+import { getKnowledgeConfig } from "../../common/env.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -54,7 +55,8 @@ export default function (pi: ExtensionAPI) {
 
     /* eslint-disable-next-line complexity */
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      const docAbsPath = resolve(ctx.cwd, params.docPath);
+      const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
+      const docAbsPath = resolve(knowledgeDir, params.docPath);
 
       let content: string;
       try {

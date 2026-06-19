@@ -139,7 +139,8 @@ export function registerUpdateDocTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      const filePath = resolve(ctx.cwd, params.path);
+      const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
+      const filePath = resolve(knowledgeDir, params.path);
       const existing = await readFile(filePath, "utf-8");
       const fm = parseFrontmatter(existing);
       const now = new Date().toISOString();

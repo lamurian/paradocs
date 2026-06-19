@@ -1,12 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  mkdtempSync,
-  writeFileSync,
-  rmSync,
-  mkdirSync,
-} from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // expandTilde
@@ -164,5 +160,94 @@ describe("configureEnv", () => {
         projectEnvPath: join(projectDir, "nonexistent", ".env"),
       }),
     ).not.toThrow();
+  });
+
+  it("should fall back to default env paths when options omitted (covers ?? branch)", async () => {
+    vi.resetModules();
+    // Don't create any actual .env files at default paths
+
+    const { configureEnv } = await import("../common/env.js");
+    // Without options, configureEnv resolves default paths using homedir() and cwd.
+    // These paths won't exist, so the function should silently skip them.
+    expect(() => configureEnv(projectDir)).not.toThrow();
+  });
+
+  it("should handle configureEnv without cwd and without options", async () => {
+    vi.resetModules();
+    const { configureEnv } = await import("../common/env.js");
+    // No cwd, no options — only defaults applied
+    expect(() => configureEnv()).not.toThrow();
+    expect(process.env.SEARXNG_PORT).toBe("8888");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getKnowledgeConfig — cwd fallback
+// ---------------------------------------------------------------------------
+
+describe("getKnowledgeConfig", () => {
+  afterEach(() => {
+    delete process.env.KNOWLEDGE_DIR;
+    delete process.env.KNOWLEDGE_DB;
+  });
+
+  it("should return KNOWLEDGE_DIR when set", async () => {
+    vi.resetModules();
+    process.env.KNOWLEDGE_DIR = "/custom/knowledge";
+    const { getKnowledgeConfig } = await import("../common/env.js");
+    const config = getKnowledgeConfig("/fallback/cwd");
+    expect(config.dir).toBe("/custom/knowledge");
+  });
+
+  it("should fall back to cwd when KNOWLEDGE_DIR is unset", async () => {
+    vi.resetModules();
+    delete process.env.KNOWLEDGE_DIR;
+    const { getKnowledgeConfig } = await import("../common/env.js");
+    const config = getKnowledgeConfig("/my/project");
+    expect(config.dir).toBe("/my/project");
+  });
+
+  it("should fall back to default when neither KNOWLEDGE_DIR nor cwd is set", async () => {
+    vi.resetModules();
+    delete process.env.KNOWLEDGE_DIR;
+    const { getKnowledgeConfig } = await import("../common/env.js");
+    const config = getKnowledgeConfig();
+    expect(config.dir).toBe(resolve(homedir(), "data/personal/Documents/Cognoscere"));
+  });
+
+  it("should preserve KNOWLEDGE_DB across all fallback modes", async () => {
+    vi.resetModules();
+    delete process.env.KNOWLEDGE_DIR;
+    const { getKnowledgeConfig } = await import("../common/env.js");
+
+    // Without cwd
+    let config = getKnowledgeConfig();
+    expect(config.db).toBe("notes.db");
+
+    // With cwd
+    config = getKnowledgeConfig("/some/cwd");
+    expect(config.db).toBe("notes.db");
+
+    // With env override
+    process.env.KNOWLEDGE_DB = "custom.db";
+    config = getKnowledgeConfig("/some/cwd");
+    expect(config.db).toBe("custom.db");
+  });
+
+  it("should expand tilde in KNOWLEDGE_DIR", async () => {
+    vi.resetModules();
+    process.env.KNOWLEDGE_DIR = "~/my-knowledge";
+    const { getKnowledgeConfig } = await import("../common/env.js");
+    const config = getKnowledgeConfig();
+    expect(config.dir).toBe(resolve(homedir(), "my-knowledge"));
+  });
+
+  it("should use cwd as-is without tilde expansion", async () => {
+    vi.resetModules();
+    delete process.env.KNOWLEDGE_DIR;
+    const { getKnowledgeConfig } = await import("../common/env.js");
+    const config = getKnowledgeConfig("./relative/path");
+    // cwd is used as-is, no tilde expansion applied
+    expect(config.dir).toBe("./relative/path");
   });
 });

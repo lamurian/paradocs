@@ -196,7 +196,7 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
       const source = params.source.trim();
       const doi = extractDoi(source);
       const now = new Date().toISOString();
-      const { dir, db: dbName } = getKnowledgeConfig();
+      const { dir, db: dbName } = getKnowledgeConfig(ctx.cwd);
       const dbPath = resolve(dir, dbName);
 
       // Create DB if it doesn't exist
@@ -251,7 +251,7 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
         ).run(citekey, fixedBibtex, parsed.doi, parsed.url, now, now);
 
         // Append to ref.bib
-        const refBibPath = resolve(ctx.cwd, REF_BIB);
+        const refBibPath = resolve(dir, REF_BIB);
         let existingBibContent = "";
         try {
           existingBibContent = await readFile(refBibPath, "utf-8");

@@ -81,7 +81,8 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       const area = params.area ?? "Resources";
-      const dirPath = resolve(ctx.cwd, area);
+      const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
+      const dirPath = resolve(knowledgeDir, area);
       const slug = slugify(params.title);
       const filePath = resolve(dirPath, `${slug}.md`);
       const relPath = `${area}/${slug}.md`;

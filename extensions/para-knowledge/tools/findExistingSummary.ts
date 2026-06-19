@@ -95,7 +95,7 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       const { url, content } = params;
-      const { dir, db } = getKnowledgeConfig();
+      const { dir, db } = getKnowledgeConfig(ctx.cwd);
       const dbPath = resolve(dir, db);
 
       if (!existsSync(dbPath)) {
@@ -135,7 +135,8 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
           }
 
           // Check content similarity if content is provided
-          const similar = await findSimilarByContent(db, content ?? "", ctx.cwd);
+          // Use dir (knowledge dir) not ctx.cwd for reading doc bodies
+          const similar = await findSimilarByContent(db, content ?? "", dir);
           if (similar.found) {
             const pct = (similar.similarity * 100).toFixed(1);
             return {

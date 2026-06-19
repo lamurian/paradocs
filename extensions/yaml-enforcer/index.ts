@@ -15,6 +15,7 @@ import { analyzeFrontmatter, repairFileFrontmatter, type FrontmatterIssue } from
 import { registerCheckTool } from "./check-tool.js";
 import { findParaMdFiles } from "./scanner.js";
 import { registerStandardizeTool } from "./standardize-tool.js";
+import { getKnowledgeConfig } from "../../common/env.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -64,7 +65,7 @@ export default function (pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      const baseDir = ctx.cwd;
+      const baseDir = getKnowledgeConfig(ctx.cwd).dir;
       const doRepair = params.repair ?? false;
       const filesToCheck: string[] = params.path
         ? [resolve(baseDir, params.path)]
