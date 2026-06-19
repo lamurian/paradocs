@@ -72,7 +72,7 @@ echo ""
 # 5. Vitest — run tests for changed files
 echo "━━━ Vitest (changed tests) ━━━"
 if [ -n "$STAGED_TS" ]; then
-  npx vitest run --changed 2>&1
+  npx vitest run --changed --coverage 2>&1
   TEST_EXIT=$?
   if [ $TEST_EXIT -ne 0 ]; then
     echo ""

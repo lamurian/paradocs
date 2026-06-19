@@ -19,7 +19,8 @@
     "common/**/*.ts",
     "types/**/*.d.ts",
     "tests/**/*.ts",
-    "scripts/**/*.mjs"
+    "scripts/**/*.mjs",
+    "vitest.config.ts"
   ],
   "exclude": [
     "node_modules"
