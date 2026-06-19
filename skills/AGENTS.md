@@ -1,6 +1,6 @@
 # Skills
 
-8 skills (SKILL.md) that orchestrate knowledge workflows by chaining tools from extensions.
+7 skills (SKILL.md) that orchestrate knowledge workflows by chaining tools from extensions.
 
 | Skill            | Dependencies                              | Purpose                                        |
 |------------------|-------------------------------------------|------------------------------------------------|
@@ -11,7 +11,6 @@
 | `brainstorm`     | (pure LLM)                                | Clarify vague questions via structured dialogue|
 | `auto-link`      | search_para_docs, read, update_para_doc   | [[wikilink]] after note creation               |
 | `research`       | web-search, fetch_url, brainstorm...      | Iterative academic research pipeline           |
-| `roadmap`        | search, web-search, fetch_url...          | Structured learning pathway                    |
 
 ## Conventions
 

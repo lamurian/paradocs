@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, statSync, readdirSync } from "node:fs";
+
+import { describe, it, expect } from "vitest";
 
 const SKILLS = [
   "knowledge",
@@ -9,7 +10,6 @@ const SKILLS = [
   "brainstorm",
   "auto-link",
   "research",
-  "roadmap",
 ] as const;
 
 const REGISTERED_TOOLS = [
@@ -56,10 +56,10 @@ describe("skills migration", () => {
 });
 
 describe("skill count", () => {
-  it("should have exactly 8 skill directories", () => {
+  it("should have exactly 7 skill directories", () => {
     const entries = readdirSync("skills", { withFileTypes: true });
     const dirs = entries.filter((e) => e.isDirectory() && e.name !== "node_modules");
-    expect(dirs).toHaveLength(8);
+    expect(dirs).toHaveLength(7);
   });
 });
 

@@ -2,7 +2,7 @@
 
 **PARA Knowledge Management for [pi](https://github.com/earendil-works/pi-coding-agent)**
 
-> 7 extensions · 14 tools · 8 skills · SQLite FTS5 search · 3-tier web search · semantic auto-linking · YAML enforcer
+> 7 extensions · 14 tools · 7 skills · SQLite FTS5 search · 3-tier web search · semantic auto-linking · YAML enforcer
 
 Paradocs brings [PARA](https://fortelabs.com/blog/para/) knowledge management (Projects, Areas, Resources, Archives) directly into your pi coding agent. It's a standalone pi extension package designed for Zettelkasten-style atomic note-taking, BM25-powered search, citation management, web research, and workflow enforcement.
 
@@ -298,7 +298,6 @@ Skills are markdown workflow definitions that orchestrate the tools above.
 | **auto-link** | LLM-powered semantic `[[wikilink]]` generation |
 | **brainstorm** | Clarifies and refines questions before research |
 | **research** | In-depth research workflow combining search, summarization, and creation |
-| **roadmap** | Sequence-of-topics planning workflow |
 
 ---
 
@@ -345,7 +344,7 @@ paradocs/
 │   ├── expand-bullets/   # 1 tool: bullet → paragraph expansion
 │   ├── yaml-enforcer/    # 3 tools: frontmatter validation/repair
 │   └── skill-gate.ts     # Event interceptor (search-first enforcement)
-├── skills/               # 8 SKILL.md workflow definitions
+├── skills/               # 7 SKILL.md workflow definitions
 ├── common/               # Shared modules (slug, tokenize, yaml, env)
 ├── types/                # Type stubs (citation-js, etc.)
 ├── tests/                # Vitest test files

@@ -5,7 +5,7 @@ description: Single source of truth for PARA document creation — standards, ci
 
 # Create Doc
 
-Call this skill when you need to create a new PARA knowledge document. It defines the standards, citation workflow, and classification rules. Other skills (knowledge, research, roadmap, summarize-link) delegate their document-creation steps here.
+Call this skill when you need to create a new PARA knowledge document. It defines the standards, citation workflow, and classification rules. Other skills (knowledge, research, summarize-link) delegate their document-creation steps here.
 
 ## Call interface
 
@@ -31,9 +31,6 @@ Choose the PARA area based on content type:
 | Active skill development, ongoing responsibility | `"Areas"` | `"health"`, `"finance"`, `"learning"` |
 | Practical work, exercises, deliverables | `"Projects"` | `"practical"`, `"capstone"` |
 | Research atomic notes, executive summaries | `"Resources"` | `"research"`, `"executive-summary"` |
-| Roadmap atomic notes (fundamental) | `"Resources"` | `"roadmap"`, `"fundamental"` |
-| Roadmap atomic notes (practical) | `"Projects"` | `"roadmap"`, `"practical"` |
-| Roadmap master document | `"Projects"` | `"roadmap"`, `"index"` |
 
 ### 3. Resolve citations (if any)
 

@@ -5,7 +5,7 @@ description: Single source of truth for web search methodology — tier selectio
 
 # Web Search
 
-Call this skill when you need to search the web for information. The skill handles tier selection, category routing, and fallback logic. Other skills (knowledge, research, roadmap) delegate their search steps here.
+Call this skill when you need to search the web for information. The skill handles tier selection, category routing, and fallback logic. Other skills (knowledge, research) delegate their search steps here.
 
 ## Call interface
 

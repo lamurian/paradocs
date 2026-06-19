@@ -8,7 +8,7 @@ date: 2026-06-19
 
 Paradocs is a standalone pi extension package that brings PARA
 (Projects, Areas, Resources, Archives) knowledge management to pi.
-Extracted from Cognoscere with a focused scope: 7 extensions, 8 skills,
+Extracted from Cognoscere with a focused scope: 7 extensions, 7 skills,
 and 3 shared modules. No src/ directory — extensions ARE the source.
 
 # Design Principles
@@ -49,10 +49,10 @@ All env vars have hardcoded defaults. Tilde expansion for KNOWLEDGE_DIR.
 slug.ts (slugify), tokenize.ts (BM25 tokenizer), yaml.ts (frontmatter
 formatting). Consumed by multiple extensions.
 
-## Skills (8)
+## Skills (7)
 
 SKILL.md files that orchestrate workflows: knowledge, create-doc,
-web-search, summarize-link, brainstorm, auto-link, research, roadmap.
+web-search, summarize-link, brainstorm, auto-link, research.
 
 ## Data Flow
 
@@ -70,7 +70,7 @@ All documents are at `implemented` status.
 
 ## ADRs (5/5)
 
-- [x] ADR 001 — Migration Architecture (7 extensions, 8 skills, 3 shared
+- [x] ADR 001 — Migration Architecture (7 extensions, 7 skills, 3 shared
   modules migrate; set-temperature, scope-gate, roadmap-scratchpad removed)
 - [x] ADR 002 — Environment Variable Configuration (three-layer cascade:
   defaults → global ~/.pi/agent/.env → project .pi/.env)
@@ -103,3 +103,6 @@ All documents are at `implemented` status.
 
 See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
 decisions, and [docs/specs/](docs/specs/) for detailed specifications.
+- [D] @docs/ADR/006-remove-roadmap-skill.md Remove orphaned roadmap skill (no extension, no tools, out of scope)
+
+- [D] @docs/ADR/007-standard-markdown-links.md Replace [[wikilink]] with [title](path) markdown links via SQLite title lookup
