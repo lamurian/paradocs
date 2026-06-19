@@ -1,8 +1,8 @@
 ---
 title: Remove Roadmap Skill
 description: Remove the roadmap skill (skills/roadmap/) as it is out of scope for PARA knowledge management and its extension was already removed.
-status: proposed
-remaining: 1
+status: implemented
+remaining: 0
 date: 2026-06-19
 ---
 

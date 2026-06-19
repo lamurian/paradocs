@@ -1,8 +1,8 @@
 ---
 title: Remove Roadmap Skill
 description: Delete skills/roadmap/ and update all cross-references.
-status: proposed
-remaining: 1
+status: implemented
+remaining: 0
 date: 2026-06-19
 ---
 

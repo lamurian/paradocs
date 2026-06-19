@@ -68,7 +68,7 @@ web-search, summarize-link, brainstorm, auto-link, research.
 
 All documents are at `implemented` status.
 
-## ADRs (5/5)
+## ADRs (6/6)
 
 - [x] ADR 001 — Migration Architecture (7 extensions, 7 skills, 3 shared
   modules migrate; set-temperature, scope-gate, roadmap-scratchpad removed)
@@ -80,8 +80,10 @@ All documents are at `implemented` status.
   soft warnings for search-first-ask-later workflow)
 - [x] ADR 005 — Unit Test Strategy & Coverage Gates (≥80% coverage
   hard gate via vitest with mocked network layers)
+- [x] ADR 006 — Remove Roadmap Skill (delete orphaned roadmap skill,
+  update all cross-references)
 
-## Specs (15/15)
+## Specs (16/16)
 
 - [x] Spec 001 — Shared Modules Migration
 - [x] Spec 002 — Type Stubs Migration
@@ -98,11 +100,10 @@ All documents are at `implemented` status.
 - [x] Spec 013 — SQLite-Dependent Extension Tests
 - [x] Spec 014 — Mocked Network & Gate Tests
 - [x] Spec 015 — Coverage Config & Hard Gate
+- [x] Spec 016 — Remove Roadmap Skill
 
 ## Quick reference
 
 See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
 decisions, and [docs/specs/](docs/specs/) for detailed specifications.
-- [D] @docs/ADR/006-remove-roadmap-skill.md Remove orphaned roadmap skill (no extension, no tools, out of scope)
-
 - [D] @docs/ADR/007-standard-markdown-links.md Replace [[wikilink]] with [title](path) markdown links via SQLite title lookup
