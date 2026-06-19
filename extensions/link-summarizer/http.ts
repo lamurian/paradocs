@@ -68,7 +68,7 @@ export async function fetchViaHttp(
       chunks.push(value);
       totalSize += value.length;
       if (totalSize > MAX_HTTP_BODY_BYTES) {
-        reader.cancel();
+        void reader.cancel();
         break;
       }
     }

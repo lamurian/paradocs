@@ -8,8 +8,9 @@
  * and JS-heavy pages that Obscura could not reach.
  */
 
-import { getApiKeys } from "../../common/env.js";
 import { tavily } from "@tavily/core";
+
+import { getApiKeys } from "../../common/env.js";
 
 /**
  * Module-level accumulator for URLs where both Obscura and HTTP
@@ -56,12 +57,10 @@ export interface BatchExtractResult {
  * @param options - optional overrides (format, extractDepth)
  * @returns array of per-URL results
  */
-export async function extractBatch(
-  options?: {
-    format?: "markdown" | "text";
-    extractDepth?: "basic" | "advanced";
-  },
-): Promise<BatchExtractResult[]> {
+export async function extractBatch(options?: {
+  format?: "markdown" | "text";
+  extractDepth?: "basic" | "advanced";
+}): Promise<BatchExtractResult[]> {
   const apiKey = getApiKeys().tavily;
   if (!apiKey) {
     throw new Error("TAVILY_KEY environment variable not set");

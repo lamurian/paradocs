@@ -38,9 +38,12 @@ export function indexFile(db: SqliteDb, doc: DocIndex): void {
   // FTS5 (delete old entry, insert new)
   deleteFtsEntry(db, doc.path);
   const tagsCsv = doc.tags.join(", ");
-  db.prepare(
-    "INSERT INTO docs_fts (path, title, body, tags_csv) VALUES (?, ?, ?, ?)",
-  ).run(doc.path, doc.title, doc.body, tagsCsv);
+  db.prepare("INSERT INTO docs_fts (path, title, body, tags_csv) VALUES (?, ?, ?, ?)").run(
+    doc.path,
+    doc.title,
+    doc.body,
+    tagsCsv,
+  );
 }
 
 // ── Remove a document ──
@@ -60,7 +63,7 @@ export function removeFile(db: SqliteDb, path: string): void {
  * Recompute corpus-level statistics. With FTS5, BM25 statistics are managed
  * internally. Kept for API compatibility — currently a no-op.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 export function recomputeStats(_db: SqliteDb): void {
   // FTS5 manages BM25 statistics internally.
 }
@@ -69,9 +72,9 @@ export function recomputeStats(_db: SqliteDb): void {
 
 /** Delete a document from the FTS5 index by finding its rowid via the content shadow table. */
 function deleteFtsEntry(db: SqliteDb, path: string): void {
-  const existing = db.prepare(
-    "SELECT id FROM docs_fts_content WHERE c0 = ?",
-  ).get<{ id: number }>(path);
+  const existing = db
+    .prepare("SELECT id FROM docs_fts_content WHERE c0 = ?")
+    .get<{ id: number }>(path);
   if (existing) {
     db.prepare("DELETE FROM docs_fts WHERE rowid = ?").run(existing.id);
   }
@@ -79,8 +82,8 @@ function deleteFtsEntry(db: SqliteDb, path: string): void {
 
 /** Get all tags for a given file path. */
 export function getFileTags(db: SqliteDb, filePath: string): string[] {
-  const rows = db.prepare(
-    "SELECT tag FROM tags WHERE file_path = ? ORDER BY tag",
-  ).all<{ tag: string }>(filePath);
+  const rows = db
+    .prepare("SELECT tag FROM tags WHERE file_path = ? ORDER BY tag")
+    .all<{ tag: string }>(filePath);
   return rows.map((r) => r.tag);
 }

@@ -7,8 +7,9 @@
  * 3. Tag-only: When text matches nothing under tag filter, fall back to tag-only.
  */
 
-import type { SqliteDb, SearchResult, SearchOptions } from "./sqlite-types.js";
 import { getFileTags } from "./sqlite-indexing.js";
+
+import type { SqliteDb, SearchResult, SearchOptions } from "./sqlite-types.js";
 
 // ── Public search API ──
 
@@ -32,7 +33,7 @@ export function searchDocs(
   const hasFilterTags = filterTags !== undefined && filterTags.length > 0;
 
   if (!hasQuery && hasFilterTags) {
-    return searchByTagsOnly(db, filterTags!, maxResults);
+    return searchByTagsOnly(db, filterTags, maxResults);
   }
   if (hasQuery) {
     return searchByText(db, query, filterTags, maxResults);

@@ -5,6 +5,15 @@
  */
 
 import { getObscuraConfig } from "../../common/env.js";
+
+interface CdpMessage {
+  id?: number;
+  method?: string;
+  params?: unknown;
+  result?: unknown;
+  error?: { message: string };
+}
+
 const { host, port } = getObscuraConfig();
 const OBSCURA_CDP_URL = `ws://${host}:${port}/devtools/browser`;
 
@@ -37,7 +46,7 @@ class CdpConnection {
         };
         this.ws.onmessage = (event) => {
           try {
-            const msg = JSON.parse(event.data as string);
+            const msg = JSON.parse(event.data as string) as CdpMessage;
             if (msg.id !== undefined && this.pending.has(msg.id)) {
               const h = this.pending.get(msg.id)!;
               this.pending.delete(msg.id);
@@ -56,7 +65,7 @@ class CdpConnection {
         };
       } catch (err) {
         clearTimeout(timer);
-        reject(err);
+        reject(err instanceof Error ? err : new Error(String(err)));
       }
     });
   }
@@ -80,9 +89,9 @@ class CdpConnection {
           clearTimeout(timer);
           resolve(v);
         },
-        reject: (e) => {
+        reject: (e: unknown) => {
           clearTimeout(timer);
-          reject(e);
+          reject(e instanceof Error ? e : new Error(String(e)));
         },
       });
     });

@@ -6,14 +6,17 @@
  * Hook: auto-repair after create/update_para_doc
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, relative } from "node:path";
+
+import { Type } from "typebox";
+
 import { analyzeFrontmatter, repairFileFrontmatter, type FrontmatterIssue } from "./analyzer.js";
+import { registerCheckTool } from "./check-tool.js";
 import { findParaMdFiles } from "./scanner.js";
 import { registerStandardizeTool } from "./standardize-tool.js";
-import { registerCheckTool } from "./check-tool.js";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 function buildReport(
   filesToCheck: string[],

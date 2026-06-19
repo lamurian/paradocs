@@ -2,12 +2,15 @@
  * standardize_frontmatter tool — batch rename legacy field names.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { readFile, writeFile } from "node:fs/promises";
 import { relative } from "node:path";
+
+import { Type } from "typebox";
+
 import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.js";
 import { findParaMdFiles } from "./scanner.js";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export function registerStandardizeTool(pi: ExtensionAPI): void {
   pi.registerTool({

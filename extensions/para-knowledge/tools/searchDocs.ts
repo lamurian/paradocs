@@ -5,17 +5,15 @@
  * with optional tag filtering. Replaces the DuckDB-based implementation.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { Type } from "typebox";
+
 import { getKnowledgeConfig } from "../../../common/env.js";
-import {
-  createDb,
-  initDb,
-  searchDocs,
-  type SearchOptions,
-} from "../db-sqlite.js";
+import { createDb, initDb, searchDocs, type SearchOptions } from "../db-sqlite.js";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /**
  * Register the search_para_docs tool.
@@ -40,16 +38,19 @@ export function registerSearchDocsTool(pi: ExtensionAPI): void {
       tags: Type.Optional(Type.Array(Type.String(), { description: "Filter by tag (OR logic)" })),
     }),
 
-    async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async execute(_toolCallId, params, _signal, onUpdate, _ctx) {
       const { dir, db } = getKnowledgeConfig();
       const dbPath = resolve(dir, db);
 
       if (!existsSync(dbPath)) {
         return {
-          content: [{
-            type: "text" as const,
-            text: "📭 No documents indexed yet. Create a document first to populate the knowledge base.",
-          }],
+          content: [
+            {
+              type: "text" as const,
+              text: "📭 No documents indexed yet. Create a document first to populate the knowledge base.",
+            },
+          ],
           details: { results: [], count: 0 },
         };
       }
@@ -72,30 +73,32 @@ export function registerSearchDocsTool(pi: ExtensionAPI): void {
 
           if (results.length === 0) {
             return {
-              content: [{
-                type: "text" as const,
-                text: `📭 No documents found for "${query}"${filterTags.length ? ` with tags [${filterTags.join(", ")}]` : ""}.`,
-              }],
+              content: [
+                {
+                  type: "text" as const,
+                  text: `📭 No documents found for "${query}"${filterTags.length ? ` with tags [${filterTags.join(", ")}]` : ""}.`,
+                },
+              ],
               details: { results: [], count: 0 },
             };
           }
 
           const list = results
             .map((r) => {
-              const rel = r.matchedByTag ? "tag-only"
-                : r.score < -0.001 ? "good" : "weak";
-              const tagHint = r.tagMatches.length > 0
-                ? ` 🏷️${r.tagMatches.slice(0, 3).join(", ")}`
-                : "";
+              const rel = r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak";
+              const tagHint =
+                r.tagMatches.length > 0 ? ` 🏷️${r.tagMatches.slice(0, 3).join(", ")}` : "";
               return `- [${r.title}](${r.path})  (score: ${r.score.toFixed(2)}, relevance: ${rel}${tagHint})`;
             })
             .join("\n");
 
           return {
-            content: [{
-              type: "text" as const,
-              text: `🗄️ notes.db — ${results.length} result(s):\n\n${list}`,
-            }],
+            content: [
+              {
+                type: "text" as const,
+                text: `🗄️ notes.db — ${results.length} result(s):\n\n${list}`,
+              },
+            ],
             details: { results, count: results.length },
           };
         } finally {

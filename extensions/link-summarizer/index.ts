@@ -8,12 +8,14 @@
  * PDF support: Detects PDF URLs and extracts text using pdftotext.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+
 import { tryObscura } from "./cdp.js";
-import { tryExtractPdf, isPdfUrl } from "./pdf.js";
 import { fetchViaHttp } from "./http.js";
-import { addFailedUrl, extractBatch, getPendingUrls, hasPending } from "./tavily-extract.js";
+import { tryExtractPdf, isPdfUrl } from "./pdf.js";
+import { addFailedUrl, extractBatch, hasPending } from "./tavily-extract.js";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const MAX_CONTENT_CHARS = 80_000;
 
@@ -159,7 +161,10 @@ export default function (pi: ExtensionAPI) {
       "Batch-extract URLs that failed Obscura+HTTP extraction. Uses Tavily extract API.",
     parameters: Type.Object({
       format: Type.Optional(
-        Type.Enum({ markdown: "markdown", text: "text" }, { description: "Output format (default: markdown)" }),
+        Type.Enum(
+          { markdown: "markdown", text: "text" },
+          { description: "Output format (default: markdown)" },
+        ),
       ),
       extractDepth: Type.Optional(
         Type.Enum(
@@ -203,14 +208,18 @@ export default function (pi: ExtensionAPI) {
       const failed = results.filter((r) => !r.success);
 
       const lines: string[] = [];
-      lines.push(`**Tavily batch extract** — ${results.length} URL${results.length === 1 ? "" : "s"}`);
+      lines.push(
+        `**Tavily batch extract** — ${results.length} URL${results.length === 1 ? "" : "s"}`,
+      );
       if (succeeded.length) {
         lines.push(`**Succeeded:** ${succeeded.length}`);
         for (const r of succeeded) {
           const title = r.title ?? "(no title)";
           const { body, truncated } = truncate(r.markdown);
           lines.push("");
-          lines.push(formatContent(title, r.url, body, "Tavily extract", r.markdown.length, truncated));
+          lines.push(
+            formatContent(title, r.url, body, "Tavily extract", r.markdown.length, truncated),
+          );
         }
       }
       if (failed.length) {
@@ -273,7 +282,7 @@ export default function (pi: ExtensionAPI) {
         if (pdfResult) return pdfResult;
       }
 
-      return (await handleHtml(url, signal))!;
+      return await handleHtml(url, signal);
     },
   });
 }

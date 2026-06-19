@@ -141,7 +141,7 @@ export function parseFrontmatter(content: string): Frontmatter {
 
   const fm = result as unknown as Frontmatter;
   if (typeof result.description === "string") {
-    fm.description = result.description as string;
+    fm.description = result.description;
   }
 
   return fm;
@@ -193,7 +193,7 @@ function emitLegacyFields(
   sourceVal: string | undefined,
 ): string {
   for (const [k, v] of Object.entries(fm)) {
-    if ((FIELD_ORDER as readonly string[]).includes(k as string)) continue;
+    if ((FIELD_ORDER as readonly string[]).includes(k)) continue;
     if (k === "tags" || k === "source") continue;
     if (typeof v === "string" && v) {
       if ((k === "source_url" || k === "url") && sourceVal) continue;

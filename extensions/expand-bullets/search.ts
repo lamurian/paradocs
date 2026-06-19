@@ -66,8 +66,8 @@ except Exception as e:
   try {
     const r = await pi.exec("python3", ["-c", pyScript, query], { timeout: 30_000 });
     if (r.code !== 0) return [];
-    const data = JSON.parse(r.stdout);
-    if (data.error) return [];
+    const data = JSON.parse(r.stdout) as { error?: string } | Array<Record<string, string>>;
+    if ("error" in data) return [];
     return (data as Array<Record<string, string>>).map((d) => ({
       title: d.title ?? "Untitled",
       url: d.url ?? "",

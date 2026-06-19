@@ -8,13 +8,16 @@
  * sources for each bullet and returns expanded, coherent paragraphs.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+
+import { Type } from "typebox";
+
 import { parseFrontmatter, extractBullets, buildSearchQuery, type BulletInfo } from "./parser.js";
 import { searchWeb } from "./search.js";
 import { synthesizeExpansion, type Expansion } from "./synthesis.js";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const ExpandParams = Type.Object({
   docPath: Type.String({

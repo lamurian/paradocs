@@ -5,8 +5,8 @@
 
 import { execSync } from "node:child_process";
 import { writeFile, unlink, mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const MAX_CONTENT_CHARS = 80_000;
 const MAX_PDF_BYTES = 100_000_000;
@@ -85,7 +85,7 @@ export async function tryExtractPdf(
       chunks.push(value);
       totalSize += value.length;
       if (totalSize > MAX_PDF_BYTES) {
-        reader.cancel();
+        void reader.cancel();
         return null;
       }
     }

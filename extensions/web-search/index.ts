@@ -19,12 +19,14 @@
  * Tavily domain lists handle filtering for phases 1 and 2.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+
+import { searchNativeHttp } from "./native.js";
 import { searchSearxng } from "./searxng.js";
 import { searchTavily } from "./tavily.js";
-import { searchNativeHttp } from "./native.js";
+
 import type { SearchResult } from "./native.js";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 interface SearchOutput {
   results: SearchResult[];
@@ -38,10 +40,25 @@ interface SearchOutput {
  */
 const BING_ALLOWED_SUFFIXES = [
   ".edu",
-  ".ac.uk", ".ac.nz", ".ac.jp", ".ac.kr", ".ac.in", ".ac.cn", ".ac.id",
-  ".edu.au", ".edu.tw", ".edu.hk",
-  ".gov", ".gov.uk", ".gov.au", ".gov.nz", ".gov.in",
-  ".go.jp", ".go.kr", ".go.th", ".go.id",
+  ".ac.uk",
+  ".ac.nz",
+  ".ac.jp",
+  ".ac.kr",
+  ".ac.in",
+  ".ac.cn",
+  ".ac.id",
+  ".edu.au",
+  ".edu.tw",
+  ".edu.hk",
+  ".gov",
+  ".gov.uk",
+  ".gov.au",
+  ".gov.nz",
+  ".gov.in",
+  ".go.jp",
+  ".go.kr",
+  ".go.th",
+  ".go.id",
   ".mil",
 ];
 
@@ -65,9 +82,8 @@ async function phase1SearXNG(
   category: string | undefined,
   signal: AbortSignal | undefined,
 ): Promise<{ results: SearchResult[]; maxTier: number }> {
-  const tiers = forcedTier !== undefined && forcedTier >= 1 && forcedTier <= 3
-    ? [forcedTier]
-    : [1, 2, 3];
+  const tiers =
+    forcedTier !== undefined && forcedTier >= 1 && forcedTier <= 3 ? [forcedTier] : [1, 2, 3];
 
   const allResults: SearchResult[] = [];
   let maxTier = 0;
@@ -76,7 +92,8 @@ async function phase1SearXNG(
     // Only pass category to SearXNG for the matching tier when forcedTier is set
     const catForTier = forcedTier !== undefined && forcedTier === tier ? category : undefined;
     // When running all tiers, only tier 2 gets the category override
-    const effectiveCategory = forcedTier !== undefined ? catForTier : (tier === 2 ? category : undefined);
+    const effectiveCategory =
+      forcedTier !== undefined ? catForTier : tier === 2 ? category : undefined;
     const results = await searchSearxng(query, tier, signal, effectiveCategory);
     allResults.push(...results);
     maxTier = Math.max(maxTier, tier);
@@ -130,7 +147,12 @@ async function search(
   signal?: AbortSignal,
 ): Promise<SearchOutput> {
   // ── Phase 1: SearXNG category-based tiered search ──
-  const { results: searxngResults, maxTier } = await phase1SearXNG(query, forcedTier, category, signal);
+  const { results: searxngResults, maxTier } = await phase1SearXNG(
+    query,
+    forcedTier,
+    category,
+    signal,
+  );
   const usedTier = forcedTier ?? 3;
 
   // When a specific tier is requested, return SearXNG results as-is.
@@ -152,8 +174,6 @@ async function search(
   }
 
   // ── Phase 2: Tavily fallback when SearXNG insufficient ──
-  let note = `SearXNG returned ${searxngResults.length} result${searxngResults.length === 1 ? "" : "s"}, `;
-
   const tavilyResults = await phase2Tavily(query, maxTier || 3, signal);
   if (tavilyResults.length > 0) {
     return {
@@ -164,8 +184,6 @@ async function search(
   }
 
   // ── Phase 3: Bing RSS with domain filter ──
-  note += "Tavily returned 0, ";
-
   const bingResults = await phase3Bing(query, maxTier || 3, signal);
   if (bingResults.length > 0) {
     return {
@@ -174,8 +192,6 @@ async function search(
       tierLabel: `Phase 3 — Bing RSS (domain-filtered, ${bingResults.length} results, SearXNG returned ${searxngResults.length})`,
     };
   }
-
-  note += "Bing RSS returned 0";
 
   // If nothing worked but SearXNG returned something (≤ 3), return those
   if (searxngResults.length > 0) {
@@ -197,8 +213,10 @@ export default function (pi: ExtensionAPI): void {
   pi.registerTool({
     name: "web_search",
     label: "Web Search (3-Phase: SearXNG -> Tavily -> Bing RSS)",
-    description: "Three-phase web search: SearXNG category-based search (1→2→3), then Tavily, then Bing RSS with domain filtering. Tier 1 uses scientific_publications category. Tier 2 uses web category with site:edu OR site:gov (override via category param for it/news). Tier 3 uses general category.",
-    promptSnippet: "Search the web (3-phase: SearXNG academic -> filtered -> general, then Tavily, then Bing RSS). Use tier=1 for academic, tier=2 for filtered web (default site:edu|gov), tier=3 for general. Pass category='it' for tech/software, 'news' for news queries, etc.",
+    description:
+      "Three-phase web search: SearXNG category-based search (1→2→3), then Tavily, then Bing RSS with domain filtering. Tier 1 uses scientific_publications category. Tier 2 uses web category with site:edu OR site:gov (override via category param for it/news). Tier 3 uses general category.",
+    promptSnippet:
+      "Search the web (3-phase: SearXNG academic -> filtered -> general, then Tavily, then Bing RSS). Use tier=1 for academic, tier=2 for filtered web (default site:edu|gov), tier=3 for general. Pass category='it' for tech/software, 'news' for news queries, etc.",
     parameters: Type.Object({
       query: Type.String({ description: "The search query" }),
       tier: Type.Optional(

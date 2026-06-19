@@ -7,8 +7,9 @@
 
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { type FileEntry, type ParsedFile, PARA_DIRS } from "./types.js";
+
 import { parseFrontmatter } from "./frontmatter.js";
+import { type FileEntry, type ParsedFile, PARA_DIRS } from "./types.js";
 
 /**
  * Walk one PARA directory and return all `.md` files with their mtimes.

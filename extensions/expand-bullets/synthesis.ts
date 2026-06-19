@@ -2,8 +2,8 @@
  * Synthesizes expanded text from web search results for a single bullet point.
  */
 
-import type { WebResult } from "./search.js";
 import type { BulletInfo } from "./parser.js";
+import type { WebResult } from "./search.js";
 
 export interface Expansion {
   original: string;

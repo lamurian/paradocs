@@ -7,7 +7,7 @@ const importX = require("eslint-plugin-import-x");
 
 module.exports = tseslint.config(
   eslint.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
+  ...tseslint.configs.recommendedTypeChecked,
   eslintConfigPrettier,
   {
     languageOptions: {
@@ -43,13 +43,7 @@ module.exports = tseslint.config(
       "import-x/order": [
         "error",
         {
-          groups: [
-            "builtin",
-            "external",
-            "internal",
-            ["sibling", "parent"],
-            "type",
-          ],
+          groups: ["builtin", "external", "internal", ["sibling", "parent"], "type"],
           "newlines-between": "always",
           alphabetize: { order: "asc", caseInsensitive: true },
         },

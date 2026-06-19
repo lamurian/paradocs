@@ -9,10 +9,11 @@
  * Also exports `expandTilde` for tilde expansion in path-like env vars.
  */
 
-import { config } from "dotenv";
-import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { resolve } from "node:path";
+
+import { config } from "dotenv";
 
 // ---------------------------------------------------------------------------
 // Default values
@@ -66,16 +67,14 @@ export function configureEnv(
   configured = true;
 
   // Layer 2: global config (no override — only fills gaps)
-  const globalEnv =
-    options?.globalEnvPath ?? resolve(homedir(), ".pi", "agent", ".env");
+  const globalEnv = options?.globalEnvPath ?? resolve(homedir(), ".pi", "agent", ".env");
   if (existsSync(globalEnv)) {
     config({ path: globalEnv });
   }
 
   // Layer 3: project config (with override — beats everything)
   if (cwd) {
-    const projectEnv =
-      options?.projectEnvPath ?? resolve(cwd, ".pi", ".env");
+    const projectEnv = options?.projectEnvPath ?? resolve(cwd, ".pi", ".env");
     if (existsSync(projectEnv)) {
       config({ path: projectEnv, override: true });
     }
@@ -148,10 +147,7 @@ export interface ApiKeysConfig {
  * @param defaultVal - Default port to return if val is not a valid port.
  * @returns Parsed port number or default.
  */
-export function parsePort(
-  val: string | undefined,
-  defaultVal: number,
-): number {
+export function parsePort(val: string | undefined, defaultVal: number): number {
   if (val === undefined || val === "") return defaultVal;
   const n = Number(val);
   if (Number.isNaN(n) || !Number.isInteger(n) || n < 1 || n > 65535) {

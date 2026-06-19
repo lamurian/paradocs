@@ -4,14 +4,17 @@
  * similarity using FTS5 BM25 + word-trigram Jaccard similarity.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+
+import { Type } from "typebox";
+
 import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, searchDocs, type SqliteDb } from "../db-sqlite.js";
 import { textSimilarity } from "../similarity.js";
-import { readFile } from "node:fs/promises";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 const SIMILARITY_THRESHOLD = 0.9;
 
 interface MatchResult {
@@ -22,13 +25,10 @@ interface MatchResult {
   similarity: number;
 }
 
-async function findExactUrlMatch(
-  db: SqliteDb,
-  url: string,
-): Promise<{ path: string; title: string } | null> {
-  const row = db.prepare(
-    "SELECT path, title FROM files WHERE source_url = ?",
-  ).get<{ path: string; title: string }>(url);
+function findExactUrlMatch(db: SqliteDb, url: string): { path: string; title: string } | null {
+  const row = db
+    .prepare("SELECT path, title FROM files WHERE source_url = ?")
+    .get<{ path: string; title: string }>(url);
   return row ?? null;
 }
 
@@ -49,12 +49,10 @@ async function findSimilarByContent(
 
   for (const c of candidates) {
     // Read the full document body from disk
-    let docBody = "";
+    let docBody: string;
     try {
       const fullPath = resolve(cwd, c.path);
-      docBody = (await readFile(fullPath, "utf-8"))
-        .replace(/^---\n[\s\S]*?\n---\n?/, "")
-        .trim();
+      docBody = (await readFile(fullPath, "utf-8")).replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
     } catch {
       continue;
     }
@@ -69,7 +67,13 @@ async function findSimilarByContent(
   }
 
   if (bestSim > SIMILARITY_THRESHOLD) {
-    return { found: true, matchType: "content_similarity", path: bestPath, title: bestTitle, similarity: bestSim };
+    return {
+      found: true,
+      matchType: "content_similarity",
+      path: bestPath,
+      title: bestTitle,
+      similarity: bestSim,
+    };
   }
   return { found: false, matchType: "none" };
 }
@@ -83,7 +87,9 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
     parameters: Type.Object({
       url: Type.String({ description: "The URL to check for existing summaries" }),
       content: Type.Optional(
-        Type.String({ description: "Optional extracted text content for content-based similarity matching." }),
+        Type.String({
+          description: "Optional extracted text content for content-based similarity matching.",
+        }),
       ),
     }),
 
@@ -109,14 +115,22 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
         initDb(db);
         try {
           // Check exact URL match first
-          const exact = await findExactUrlMatch(db, url);
+          const exact = findExactUrlMatch(db, url);
           if (exact) {
             return {
-              content: [{
-                type: "text" as const,
-                text: `✅ Found existing summary — Exact source_url match\n\n**Title:** ${exact.title}\n**Path:** ${exact.path}\n**URL:** ${url}\n\nNo need to re-summarise.`,
-              }],
-              details: { found: true, matchType: "exact_url", path: exact.path, title: exact.title, similarity: 1.0 },
+              content: [
+                {
+                  type: "text" as const,
+                  text: `✅ Found existing summary — Exact source_url match\n\n**Title:** ${exact.title}\n**Path:** ${exact.path}\n**URL:** ${url}\n\nNo need to re-summarise.`,
+                },
+              ],
+              details: {
+                found: true,
+                matchType: "exact_url",
+                path: exact.path,
+                title: exact.title,
+                similarity: 1.0,
+              },
             };
           }
 
@@ -125,16 +139,29 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
           if (similar.found) {
             const pct = (similar.similarity * 100).toFixed(1);
             return {
-              content: [{
-                type: "text" as const,
-                text: `✅ Found existing summary — Content similarity ${pct}%\n\n**Title:** ${similar.title}\n**Path:** ${similar.path}\n**URL:** ${url}`,
-              }],
-              details: { found: true, matchType: "content_similarity", path: similar.path, title: similar.title, similarity: similar.similarity },
+              content: [
+                {
+                  type: "text" as const,
+                  text: `✅ Found existing summary — Content similarity ${pct}%\n\n**Title:** ${similar.title}\n**Path:** ${similar.path}\n**URL:** ${url}`,
+                },
+              ],
+              details: {
+                found: true,
+                matchType: "content_similarity",
+                path: similar.path,
+                title: similar.title,
+                similarity: similar.similarity,
+              },
             };
           }
 
           return {
-            content: [{ type: "text" as const, text: `📭 No existing summary found for ${url}. Proceed with fetch_url.` }],
+            content: [
+              {
+                type: "text" as const,
+                text: `📭 No existing summary found for ${url}. Proceed with fetch_url.`,
+              },
+            ],
             details: { found: false, notFoundReason: "no-match" },
           };
         } finally {
@@ -144,7 +171,12 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[find_existing_summary] Error:", msg);
         return {
-          content: [{ type: "text" as const, text: `⚠️ Error checking for existing summary: ${msg.slice(0, 200)}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `⚠️ Error checking for existing summary: ${msg.slice(0, 200)}`,
+            },
+          ],
           details: { found: false, error: msg },
         };
       }

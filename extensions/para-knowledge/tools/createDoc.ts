@@ -3,15 +3,57 @@
  * and inserts it into the SQLite index (including FTS5 full-text search).
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+
+import { Type } from "typebox";
+
 import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, indexFile } from "../db-sqlite.js";
-import type { DocIndex } from "../db-sqlite.js";
-import { formatFrontmatter } from "../frontmatter.js";
 import { slugify } from "../files.js";
+import { formatFrontmatter } from "../frontmatter.js";
+
+import type { DocIndex } from "../db-sqlite.js";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+/**
+ * Index a newly created document in the SQLite database.
+ */
+function indexDocInDb(
+  relPath: string,
+  params: {
+    title: string;
+    content: string;
+    tags: string[];
+    source?: string | null;
+  },
+  autoDesc: string | null,
+  now: string,
+): boolean {
+  try {
+    const { dir, db: dbName } = getKnowledgeConfig();
+    const db = createDb(resolve(dir, dbName));
+    initDb(db);
+    const doc: DocIndex = {
+      path: relPath,
+      title: params.title,
+      body: (autoDesc ?? "") + "\n" + params.content,
+      tags: params.tags,
+      author: "pi",
+      editor: "lam",
+      created: now,
+      modified: now,
+      file_mtime: now,
+      source_url: params.source || null,
+    };
+    indexFile(db, doc);
+    db.close();
+    return true;
+  } catch (e: unknown) {
+    console.error("[para-knowledge] SQLite insert failed:", e);
+    return false;
+  }
+}
 
 /**
  * Register the create_para_doc tool.
@@ -34,9 +76,7 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
       description: Type.Optional(
         Type.String({ description: "Short summary ≤ 200 characters, enriches BM25 search" }),
       ),
-      source: Type.Optional(
-        Type.String({ description: "Original source URL (optional)" }),
-      ),
+      source: Type.Optional(Type.String({ description: "Original source URL (optional)" })),
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
@@ -48,8 +88,10 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
       const now = new Date().toISOString();
 
       // Auto-generate description from content if not provided
-      const autoDesc = params.description?.trim() ||
-        params.content.replace(/\n+/g, " ").slice(0, 150).trim() || null;
+      const autoDesc =
+        params.description?.trim() ||
+        params.content.replace(/\n+/g, " ").slice(0, 150).trim() ||
+        null;
 
       // Build and write the markdown file
       const frontmatterFields: Record<string, unknown> = {
@@ -72,29 +114,7 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
         details: {},
       });
 
-      let indexOk = false;
-      try {
-        const { dir, db: dbName } = getKnowledgeConfig();
-        const db = createDb(resolve(dir, dbName));
-        initDb(db);
-        const doc: DocIndex = {
-          path: relPath,
-          title: params.title,
-          body: (autoDesc ?? "") + "\n" + params.content,
-          tags: params.tags,
-          author: "pi",
-          editor: "lam",
-          created: now,
-          modified: now,
-          file_mtime: now,
-          source_url: params.source || null,
-        };
-        indexFile(db, doc);
-        db.close();
-        indexOk = true;
-      } catch (e: unknown) {
-        console.error("[para-knowledge] SQLite insert failed:", e);
-      }
+      const indexOk = indexDocInDb(relPath, params, autoDesc, now);
 
       const indexNote = indexOk
         ? "🗄️ notes.db — indexed"
@@ -103,10 +123,12 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
       const sourceNote = params.source ? `\nSource: ${params.source}` : "";
 
       return {
-        content: [{
-          type: "text" as const,
-          text: `${indexNote}\nCreated: ${filePath}\nTitle: ${params.title}\nTags: ${params.tags.join(", ")}${descNote}${sourceNote}`,
-        }],
+        content: [
+          {
+            type: "text" as const,
+            text: `${indexNote}\nCreated: ${filePath}\nTitle: ${params.title}\nTags: ${params.tags.join(", ")}${descNote}${sourceNote}`,
+          },
+        ],
         details: {
           path: filePath,
           title: params.title,

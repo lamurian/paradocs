@@ -9,14 +9,17 @@
  * for concurrent-write safety (retry queue, lock detection, TX recovery).
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+
+import { Type } from "typebox";
+
+import { findRelated, appendLinks } from "./search.js";
 import { slugify, formatFrontmatter } from "./yaml.js";
 import { createDb, initDb, indexFile } from "../para-knowledge/db-sqlite.js";
+
 import type { DocIndex } from "../para-knowledge/db-sqlite.js";
-import { findRelated, appendLinks } from "./search.js";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -71,11 +74,7 @@ async function createFilesOnDisk(docs: BatchDoc[], cwd: string): Promise<Created
 
 // ── Step 2: Index all documents in SQLite ────────────────────────────
 
-async function indexDocumentsInDb(
-  docs: BatchDoc[],
-  created: CreatedFile[],
-  cwd: string,
-): Promise<void> {
+function indexDocumentsInDb(docs: BatchDoc[], created: CreatedFile[], cwd: string): void {
   const dbPath = resolve(cwd, "notes.db");
   const db = createDb(dbPath);
   initDb(db);
@@ -117,7 +116,7 @@ async function autoLinkBatch(
     for (let i = 0; i < docs.length; i++) {
       const doc = docs[i];
       const relPath = created[i].relPath;
-      const related = await findRelated(db, relPath, doc.title, doc.tags, 5);
+      const related = findRelated(db, relPath, doc.title, doc.tags, 5);
       if (related.length > 0) {
         await appendLinks(created[i].path, related);
         linkedCount++;
@@ -198,7 +197,7 @@ export default function (pi: ExtensionAPI): void {
 
       // Step 2: Index in DuckDB (withDb handles lock retry + recovery)
       try {
-        await indexDocumentsInDb(docs, created, cwd);
+        indexDocumentsInDb(docs, created, cwd);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[batch-create] DuckDB indexing error:", msg);

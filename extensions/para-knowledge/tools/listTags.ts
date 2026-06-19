@@ -7,12 +7,15 @@
  * returns an empty array (no tags indexed).
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { Type } from "typebox";
+
 import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb } from "../db-sqlite.js";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /**
  * Register the list_para_tags tool.
@@ -28,7 +31,8 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
     promptSnippet: "List all existing unique tags in the PARA knowledge base",
     parameters: Type.Object({}),
 
-    async execute(_toolCallId, _params, _signal, onUpdate, ctx) {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async execute(_toolCallId, _params, _signal, onUpdate, _ctx) {
       onUpdate?.({
         content: [{ type: "text" as const, text: "🏷️ notes.db — querying unique tags…" }],
         details: {},
@@ -51,7 +55,8 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
       try {
         const db = createDb(dbPath);
         initDb(db);
-        const rows = db.prepare("SELECT DISTINCT tag FROM tags ORDER BY tag")
+        const rows = db
+          .prepare("SELECT DISTINCT tag FROM tags ORDER BY tag")
           .all<{ tag: string }>();
         db.close();
 

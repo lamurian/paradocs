@@ -201,7 +201,7 @@ function buildStandardFrontmatter(fields: Record<string, unknown>): string {
   }
 
   for (const [k, v] of Object.entries(fields)) {
-    if ((STANDARD_FIELDS as readonly string[]).includes(k as string)) continue;
+    if ((STANDARD_FIELDS as readonly string[]).includes(k)) continue;
     if (k === "source_url" || k === "url") continue;
     if (typeof v === "string" && v) out += `${k}: ${yamlQuote(v)}\n`;
   }
@@ -245,7 +245,7 @@ function processLine(line: string, currentKey: string, result: FrontmatterAnalys
   const li = line.match(/^\s*-\s+(.+)/);
   if (li && currentKey.startsWith("tags")) {
     if (!Array.isArray(result.fields.tags)) result.fields.tags = [];
-    (result.fields.tags as string[]).push(li[1].trim());
+    result.fields.tags.push(li[1].trim());
   }
   return currentKey;
 }

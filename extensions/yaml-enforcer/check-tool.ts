@@ -2,11 +2,14 @@
  * check_frontmatter tool — check a specific file for YAML issues.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, relative } from "node:path";
+
+import { Type } from "typebox";
+
 import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.js";
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export function registerCheckTool(pi: ExtensionAPI): void {
   pi.registerTool({
