@@ -14,10 +14,10 @@ type DbConstructor = new (path: string, options?: Record<string, unknown>) => Sq
 let Database: DbConstructor;
 
 try {
-  // @ts-ignore - bun:sqlite is a Bun built-in, not in TS types
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
   Database = require("bun:sqlite").Database;
 } catch {
-  // @ts-ignore - node:sqlite is experimental in Node 22+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
   Database = require("node:sqlite").DatabaseSync;
 }
 
@@ -30,15 +30,15 @@ try {
 export function createDb(path: string): SqliteDb {
   const db = new Database(path);
 
-  const rawDb = db as SqliteDb;
+  const rawDb = db;
   rawDb.run = function run(sql: string, ...params: unknown[]): void {
     this.prepare(sql).run(...params);
   };
   rawDb.all = function all<T>(sql: string, ...params: unknown[]): T[] {
-    return this.prepare(sql).all(...params) as T[];
+    return this.prepare(sql).all(...params);
   };
   rawDb.get = function get<T>(sql: string, ...params: unknown[]): T | undefined {
-    return this.prepare(sql).get(...params) as T | undefined;
+    return this.prepare(sql).get(...params);
   };
 
   return rawDb;

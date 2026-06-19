@@ -1,0 +1,88 @@
+#!/usr/bin/env sh
+
+# .husky/pre-commit
+#
+# Pre-commit pipeline: format → lint → typecheck → line-limit → test
+# All checks must pass before commit lands.
+
+echo "🔍 Running pre-commit checks..."
+echo ""
+
+# Gather staged .ts files
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM \
+  | grep '\.ts$' \
+  || true)
+
+# 1. Prettier — auto-format staged .ts files
+echo "━━━ Prettier ━━━"
+if [ -n "$STAGED_TS" ]; then
+  echo "$STAGED_TS" | xargs npx prettier --write 2>&1
+  echo "$STAGED_TS" | xargs git add
+  echo "✅ Prettier: formatted"
+else
+  echo "⏭️  No .ts files to format"
+fi
+echo ""
+
+# 2. ESLint — lint and auto-fix staged .ts files
+echo "━━━ ESLint ━━━"
+if [ -n "$STAGED_TS" ]; then
+  echo "$STAGED_TS" | xargs npx eslint --fix 2>&1
+  ESLINT_EXIT=$?
+  if [ $ESLINT_EXIT -ne 0 ]; then
+    echo ""
+    echo "❌ ESLint failed. Fix violations and try again."
+    exit 1
+  fi
+  echo "$STAGED_TS" | xargs git add
+  echo "✅ ESLint: passed"
+else
+  echo "⏭️  No .ts files to lint"
+fi
+echo ""
+
+# 3. TypeScript type-check (full project)
+echo "━━━ TypeScript (tsc --noEmit) ━━━"
+npx tsc --noEmit 2>&1
+TSC_EXIT=$?
+if [ $TSC_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ TypeScript type-check failed. Fix type errors and try again."
+  exit 1
+fi
+echo "✅ TypeScript: passed"
+echo ""
+
+# 4. Line count check (staged .ts files only)
+echo "━━━ Line count (max 300 per file) ━━━"
+if [ -n "$STAGED_TS" ]; then
+  node scripts/check-lines.mjs --staged 2>&1
+  LINES_EXIT=$?
+  if [ $LINES_EXIT -ne 0 ]; then
+    echo ""
+    echo "❌ Line count check failed. Refactor oversized files into smaller modules."
+    exit 1
+  fi
+  echo "✅ Line count: passed"
+else
+  echo "⏭️  No .ts files to check"
+fi
+echo ""
+
+# 5. Vitest — run tests for changed files
+echo "━━━ Vitest (changed tests) ━━━"
+if [ -n "$STAGED_TS" ]; then
+  npx vitest run --changed 2>&1
+  TEST_EXIT=$?
+  if [ $TEST_EXIT -ne 0 ]; then
+    echo ""
+    echo "❌ Tests failed. Fix test failures and try again."
+    exit 1
+  fi
+  echo "✅ Vitest: passed"
+else
+  echo "⏭️  No .ts files changed — skipping tests"
+fi
+echo ""
+
+echo "🎉 All pre-commit checks passed!"

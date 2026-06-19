@@ -7,8 +7,8 @@
  */
 
 import { readFile, writeFile } from "node:fs/promises";
+
 import type { SqliteDb } from "../para-knowledge/db-sqlite.js";
-import { searchDocs } from "../para-knowledge/db-sqlite.js";
 
 /**
  * Find related documents via FTS5 BM25 search.
@@ -20,13 +20,13 @@ import { searchDocs } from "../para-knowledge/db-sqlite.js";
  * when multiple tags overlap. The title is included for additional
  * topically-relevant suggestions.
  */
-export async function findRelated(
+export function findRelated(
   db: SqliteDb,
   relPath: string,
   title: string,
   tags: string[],
   maxResults: number,
-): Promise<string[]> {
+): string[] {
   // Clean hyphens from tags (FTS5 tokenizes hyphenated words as separate terms)
   const cleanedTags = tags.map((t) => t.replace(/-/g, " "));
   // Build an OR query: any matching tag or title word is sufficient
@@ -65,9 +65,11 @@ function searchDocsFts(
   maxResults: number,
 ): Array<{ path: string; score: number }> {
   try {
-    const rows = db.prepare(
-      `SELECT d.path, d.rank FROM docs_fts d WHERE d.docs_fts MATCH ? ORDER BY d.rank LIMIT ?`,
-    ).all<{ path: string; rank: number }>(ftsQuery, maxResults);
+    const rows = db
+      .prepare(
+        `SELECT d.path, d.rank FROM docs_fts d WHERE d.docs_fts MATCH ? ORDER BY d.rank LIMIT ?`,
+      )
+      .all<{ path: string; rank: number }>(ftsQuery, maxResults);
 
     return rows.map((r) => ({ path: r.path, score: r.rank }));
   } catch {
