@@ -47,7 +47,7 @@ The tool returns a unique citekey (e.g. `kucsko2013`). It handles dedup — same
 - Every factual claim from a web source must trace back to a citekey
 - Citekey format: `{lastname}{year}` (lowercase), e.g. `kucsko2013`
 - If collisions occur, the tool appends `a`, `b`, `c`...
-- Existing PARA notes don't need BibTeX entries — just use `[[wikilink]]`
+- Existing PARA notes don't need BibTeX entries — just use `[title](path)` markdown links
 
 ### 4. Apply atomic principle
 
@@ -87,11 +87,11 @@ Pandoc-style citation keys referencing `@ref.bib`:
 | `@citekey` — narrative | `Kucsko et al. @kucsko2013 demonstrated that...` |
 | Multiple sources | `Multiple studies confirm this [@kucsko2013; @daw2006].` |
 
-### 7. Cross-reference with wikilinks
+### 7. Cross-reference with markdown links
 
-Use `[[wikilink]]` to reference other notes in the knowledge base:
-- `[[note-title]]` links to the note by slug (filename without `.md`)
-- Use wikilinks for prerequisite notes, related concepts, and further reading
+Use markdown links to reference other notes in the knowledge base:
+- `[title](path/to/note.md)` links to the note by relative path
+- Use markdown links for prerequisite notes, related concepts, and further reading
 
 ### 8. Use correct frontmatter and naming
 
@@ -128,7 +128,7 @@ For reference and summary documents:
 - ...
 
 ## Sources
-- [[wikilink to related existing note]]
+- [Related Note](path/to/note.md)
 - [@citekey] from ref.bib
 ```
 

@@ -102,7 +102,7 @@ Why this content matters or how it might be useful.
 
 ### 5. Auto-link to related notes
 
-After the document is created, run `/skill:auto-link` to find semantically related notes and append `[[wikilinks]]`.
+After the document is created, run `/skill:auto-link` to find semantically related notes and append `[title](path)` markdown links.
 
 ### 6. Confirm with the user
 

@@ -28,7 +28,7 @@ Use `search_para_docs` to find markdown files in `Areas/`, `Projects/`, `Resourc
 - Run `/skill:web-search "<refined question>"` (defaults to tier 2 for general Q&A, but use tier 1 for academic topics)
 - Summarise findings to the user
 - Run `/skill:create-doc` to create the document with proper citations and classification
-- Run `/skill:auto-link` to find semantically related notes and append `[[wikilinks]]`
+- Run `/skill:auto-link` to find semantically related notes and append `[title](path)` markdown links
 
 ## Tools used
 

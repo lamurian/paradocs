@@ -146,9 +146,9 @@ Create one executive summary note that links to all atomic notes. Use `/skill:cr
 
 ## Key Findings
 
-- **[Idea 1]** — [[wikilink to note 1]]
-- **[Idea 2]** — [[wikilink to note 2]]
-- **[Idea 3]** — [[wikilink to note 3]]
+- **[Idea 1]** — [Note Title](Resources/note-title.md)
+- **[Idea 2]** — [Note Title](Resources/note-title.md)
+- **[Idea 3]** — [Note Title](Resources/note-title.md)
 
 ## Confidence Assessment
 
@@ -171,7 +171,7 @@ Include the executive summary in the same `batch_create_para_docs` call as the a
 
 ### 8. Auto-link to existing notes
 
-After creation, run `/skill:auto-link` to find semantically related notes outside the current research set and append [[wikilinks]].
+After creation, run `/skill:auto-link` to find semantically related notes outside the current research set and append markdown links.
 
 ### 9. Confirm with the user
 

@@ -1,5 +1,5 @@
 /**
- * FTS5-based semantic search and [[wikilink]] appending for batch-created documents.
+ * FTS5-based semantic search and markdown link appending for batch-created documents.
  *
  * Replaces the DuckDB BM25 implementation with FTS5 via db-sqlite.ts.
  * `findRelated` uses `searchDocs` which leverages FTS5's built-in BM25 ranking.
