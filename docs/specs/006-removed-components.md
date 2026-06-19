@@ -2,6 +2,7 @@
 title: Removed Components
 description: Document what Cognoscere components are excluded from migration and why.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

@@ -2,6 +2,7 @@
 title: Type Stubs Migration
 description: Migrate citation-js type declarations from @types/ to types/.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

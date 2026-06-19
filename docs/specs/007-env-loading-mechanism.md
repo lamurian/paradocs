@@ -2,6 +2,7 @@
 title: Env Loading Mechanism
 description: Design of common/env.ts for three-layer dotenv cascade loading.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

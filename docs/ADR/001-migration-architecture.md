@@ -1,7 +1,7 @@
 ---
 title: Migration Architecture
 description: Defines which Cognoscere components migrate to paradocs and which are removed or simplified.
-status: proposed
+status: implemented
 date: 2026-06-18
 ---
 

@@ -2,6 +2,7 @@
 title: Extensions Migration
 description: Migrate 7 extensions from Cognoscere .pi/extensions/ to paradocs extensions/.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

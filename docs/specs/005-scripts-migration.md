@@ -2,6 +2,7 @@
 title: Scripts Migration
 description: Migrate build scripts and tooling from Cognoscere to paradocs.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

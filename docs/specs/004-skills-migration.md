@@ -2,6 +2,7 @@
 title: Skills Migration
 description: Migrate all 8 skills from Cognoscere .agents/skills/ to paradocs skills/.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

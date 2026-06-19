@@ -2,6 +2,7 @@
 title: Typed Config Interfaces
 description: Typed getter functions and interfaces for all configuration groups.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

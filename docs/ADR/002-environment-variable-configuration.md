@@ -1,7 +1,7 @@
 ---
 title: Environment Variable Configuration
 description: Three-layer cascade for extension configuration via .env files, with typed access from a shared module.
-status: proposed
+status: implemented
 date: 2026-06-18
 ---
 

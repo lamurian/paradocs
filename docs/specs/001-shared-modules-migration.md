@@ -2,6 +2,7 @@
 title: Shared Modules Migration
 description: Rename _common/ to common/ with exact file mapping and import path updates.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification

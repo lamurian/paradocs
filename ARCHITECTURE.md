@@ -1,7 +1,7 @@
 ---
 title: System Architecture
 description: Paradocs — PARA Knowledge Management for pi
-date: 2026-06-18
+date: 2026-06-19
 ---
 
 # Overview
@@ -66,11 +66,34 @@ web-search, summarize-link, brainstorm, auto-link, research, roadmap.
 
 # Implementation Status
 
-- [D] ADR 001 — Migration Architecture (7 extensions, 8 skills, 3 shared
+All documents are at `implemented` status.
+
+## ADRs (4/4)
+
+- [x] ADR 001 — Migration Architecture (7 extensions, 8 skills, 3 shared
   modules migrate; set-temperature, scope-gate, roadmap-scratchpad removed)
-- [D] ADR 002 — Environment Variable Configuration (three-layer cascade:
+- [x] ADR 002 — Environment Variable Configuration (three-layer cascade:
   defaults → global ~/.pi/agent/.env → project .pi/.env)
-- [D] ADR 003 — Toolchain & Quality Gates (TypeScript strict + ESLint +
+- [x] ADR 003 — Toolchain & Quality Gates (TypeScript strict + ESLint +
   Prettier + Husky + vitest with 70/60/70/70 coverage)
-- [D] ADR 004 — Skill Gate Workflow Enforcement (event interceptor with
+- [x] ADR 004 — Skill Gate Workflow Enforcement (event interceptor with
   soft warnings for search-first-ask-later workflow)
+
+## Specs (11/11)
+
+- [x] Spec 001 — Shared Modules Migration
+- [x] Spec 002 — Type Stubs Migration
+- [x] Spec 003 — Extensions Migration
+- [x] Spec 004 — Skills Migration
+- [x] Spec 005 — Scripts Migration
+- [x] Spec 006 — Removed Components
+- [x] Spec 007 — Env Loading Mechanism
+- [x] Spec 008 — Typed Config Interfaces
+- [x] Spec 009 — TypeScript and ESLint Configuration
+- [x] Spec 010 — Pre-commit Hooks and Test Runner
+- [x] Spec 011 — Skill Gate Implementation
+
+## Quick reference
+
+See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
+decisions, and [docs/specs/](docs/specs/) for detailed specifications.

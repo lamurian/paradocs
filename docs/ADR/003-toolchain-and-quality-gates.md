@@ -1,7 +1,7 @@
 ---
 title: Toolchain and Quality Gates
 description: TypeScript strict, ESLint, Prettier, Husky pre-commit with static checks, and vitest for testing.
-status: proposed
+status: implemented
 date: 2026-06-18
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: Skill Gate Workflow Enforcement
 description: Event interceptor that enforces search-first-ask-later workflow for PARA knowledge management.
-status: proposed
+status: implemented
 date: 2026-06-18
 ---
 

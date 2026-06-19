@@ -2,6 +2,7 @@
 title: Pre-commit Hooks and Test Runner
 description: Husky pre-commit pipeline, vitest configuration, and line-limit enforcement.
 date: 2026-06-18
+status: implemented
 ---
 
 # Requirements Specification
