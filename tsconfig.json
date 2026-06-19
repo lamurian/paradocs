@@ -11,15 +11,12 @@
     "declaration": false,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "allowJs": true,
-    "checkJs": false,
     "types": ["node"]
   },
   "include": [
     "extensions/**/*.ts",
     "extensions/**/*.d.ts",
     "common/**/*.ts",
-    "types/**/*.ts",
     "types/**/*.d.ts",
     "tests/**/*.ts",
     "scripts/**/*.mjs"

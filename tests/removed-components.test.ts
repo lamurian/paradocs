@@ -72,7 +72,7 @@ describe("no remaining references to removed components", () => {
           continue;
         }
 
-        const content = readFileSync(file, "utf-8", { flag: "r" });
+        const content = readFileSync(file, { encoding: "utf-8", flag: "r" });
         if (content.includes(pattern)) {
           offenders.push(file);
         }

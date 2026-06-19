@@ -3,11 +3,33 @@
 const eslint = require("@eslint/js");
 const tseslint = require("typescript-eslint");
 const eslintConfigPrettier = require("eslint-config-prettier");
+const importX = require("eslint-plugin-import-x");
 
 module.exports = tseslint.config(
   eslint.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslint.configs.strictTypeChecked,
   eslintConfigPrettier,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+  },
+  // eslint-plugin-import-x: recommended rules + TypeScript resolver
+  {
+    plugins: {
+      ...importX.flatConfigs.recommended.plugins,
+    },
+    rules: {
+      ...importX.flatConfigs.recommended.rules,
+    },
+    settings: {
+      ...importX.flatConfigs.typescript.settings,
+    },
+  },
+  // Custom rules: complexity, unused vars, import ordering
   {
     rules: {
       complexity: ["error", 15],
@@ -18,25 +40,23 @@ module.exports = tseslint.config(
           varsIgnorePattern: "^_",
         },
       ],
-      "no-restricted-imports": [
+      "import-x/order": [
         "error",
         {
-          patterns: [
-            {
-              group: ["*/index"],
-              message: "Import from the directory name, not from index explicitly.",
-            },
+          groups: [
+            "builtin",
+            "external",
+            "internal",
+            ["sibling", "parent"],
+            "type",
           ],
+          "newlines-between": "always",
+          alphabetize: { order: "asc", caseInsensitive: true },
         },
       ],
     },
   },
   {
-    ignores: [
-      "**/node_modules/**",
-      "**/dist/**",
-      "notes.duckdb",
-      "notes.duckdb.wal",
-    ],
+    ignores: ["**/node_modules/**"],
   },
 );
