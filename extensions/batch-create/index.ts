@@ -118,7 +118,7 @@ async function autoLinkBatch(
       const relPath = created[i].relPath;
       const related = findRelated(db, relPath, doc.title, doc.tags, 5);
       if (related.length > 0) {
-        await appendLinks(created[i].path, related);
+        await appendLinks(created[i].path, related, db);
         linkedCount++;
       }
     }
@@ -242,7 +242,7 @@ export default function (pi: ExtensionAPI): void {
       }
 
       const linkNote = autoLink
-        ? `\n🔗 Auto-linked: ${linkedCount}/${created.length} documents received [[wikilinks]]`
+        ? `\n🔗 Auto-linked: ${linkedCount}/${created.length} documents received markdown links`
         : "";
       const lines = created.map((c) => `  • ${c.relPath} — ${c.title}`).join("\n");
 

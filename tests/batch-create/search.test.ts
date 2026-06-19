@@ -200,13 +200,22 @@ describe("findRelated (batch-create)", () => {
 });
 
 describe("appendLinks (batch-create)", () => {
+  let db: SqliteDb;
   let tmpDir: string;
 
-  beforeEach(() => {
+  async function setupDb(): Promise<void> {
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    db = createDb(":memory:");
+    initDb(db);
+  }
+
+  beforeEach(async () => {
     tmpDir = createTempDir();
+    await setupDb();
   });
 
   afterEach(() => {
+    db?.close();
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -214,78 +223,60 @@ describe("appendLinks (batch-create)", () => {
     const { appendLinks } = await import("../../extensions/batch-create/search.js");
     const filePath = join(tmpDir, "doc.md");
     writeFileSync(filePath, "---\ntitle: My Doc\n---\n\nBody content.", "utf-8");
-
-    await appendLinks(filePath, ["Projects/related.md"]);
-
+    await appendLinks(filePath, ["Projects/related.md"], db);
     const content = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf-8"));
     expect(content).toContain("## Relevant notes");
-    expect(content).toContain("[[related]]");
+    expect(content).toContain("[related](Projects/related.md)");
   });
-
   it("should not duplicate existing links", async () => {
     const { appendLinks } = await import("../../extensions/batch-create/search.js");
     const filePath = join(tmpDir, "doc.md");
     writeFileSync(
       filePath,
-      "---\ntitle: My Doc\n---\n\nBody content.\n\n## Relevant notes\n\n- [[related]]\n",
+      "---\ntitle: My Doc\n---\n\nBody content.\n\n## Relevant notes\n\n- [related](Projects/related.md)\n",
       "utf-8",
     );
-
-    await appendLinks(filePath, ["Projects/related.md"]);
-
+    await appendLinks(filePath, ["Projects/related.md"], db);
     const content = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf-8"));
-    // Count occurrences of [[related]]
-    const matches = content.match(/\[\[related\]\]/g);
+    const matches = content.match(/\[related\]\(Projects\/related\.md\)/g);
     expect(matches?.length).toBe(1);
   });
-
   it("should add to existing ## Relevant notes section", async () => {
     const { appendLinks } = await import("../../extensions/batch-create/search.js");
     const filePath = join(tmpDir, "doc.md");
     writeFileSync(
       filePath,
-      "---\ntitle: My Doc\n---\n\nBody.\n\n## Relevant notes\n\n- [[existing]]\n",
+      "---\ntitle: My Doc\n---\n\nBody.\n\n## Relevant notes\n\n- [existing](Projects/existing.md)\n",
       "utf-8",
     );
-
-    await appendLinks(filePath, ["Projects/new-link.md"]);
-
+    await appendLinks(filePath, ["Projects/new-link.md"], db);
     const content = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf-8"));
-    expect(content).toContain("[[existing]]");
-    expect(content).toContain("[[new-link]]");
+    expect(content).toContain("[existing](Projects/existing.md)");
+    expect(content).toContain("[new-link](Projects/new-link.md)");
   });
-
   it("should do nothing when links array is empty", async () => {
     const { appendLinks } = await import("../../extensions/batch-create/search.js");
     const filePath = join(tmpDir, "doc.md");
     const original = "---\ntitle: My Doc\n---\n\nBody.";
     writeFileSync(filePath, original, "utf-8");
-
-    await appendLinks(filePath, []);
-
+    await appendLinks(filePath, [], db);
     const content = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf-8"));
     expect(content).toBe(original);
   });
-
   it("should handle file with no frontmatter", async () => {
     const { appendLinks } = await import("../../extensions/batch-create/search.js");
     const filePath = join(tmpDir, "plain.md");
     writeFileSync(filePath, "Just body.", "utf-8");
-
-    await appendLinks(filePath, ["Projects/other.md"]);
-
+    await appendLinks(filePath, ["Projects/other.md"], db);
     const content = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf-8"));
     expect(content).toContain("## Relevant notes");
-    expect(content).toContain("[[other]]");
+    expect(content).toContain("[other](Projects/other.md)");
   });
-
   it("should preserve frontmatter when appending", async () => {
     const { appendLinks } = await import("../../extensions/batch-create/search.js");
     const filePath = join(tmpDir, "doc.md");
     writeFileSync(filePath, "---\ntitle: Preserved\ntags:\n  - test\n---\n\nBody.", "utf-8");
-
-    await appendLinks(filePath, ["Projects/link1.md"]);
-
+    await appendLinks(filePath, ["Projects/link1.md"], db);
     const content = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf-8"));
     expect(content).toContain("title: Preserved");
     expect(content).toContain("tags:");

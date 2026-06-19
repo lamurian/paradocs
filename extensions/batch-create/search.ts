@@ -79,17 +79,22 @@ function searchDocsFts(
 }
 
 /**
- * Append [[wikilinks]] to a markdown file under a "## Relevant notes" section.
+ * Append markdown links to a markdown file under a "## Relevant notes" section.
+ *
+ * Looks up each linked document's title from the SQLite `files` table by path.
+ * Falls back to slug (filename without .md) if the path is not found or has no title.
  */
-export async function appendLinks(filePath: string, links: string[]): Promise<void> {
+export async function appendLinks(filePath: string, links: string[], db: SqliteDb): Promise<void> {
   if (links.length === 0) return;
 
   const content = await readFile(filePath, "utf-8");
   const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 
-  const newSlugs = links.map((p) => {
-    const slug = p.replace(/\.md$/, "").split("/").pop() ?? "";
-    return `[[${slug}]]`;
+  // Look up titles from SQLite, fall back to slug
+  const newLinks = links.map((p) => {
+    const row = db.get<{ title: string }>("SELECT title FROM files WHERE path = ?", p);
+    const title = row?.title?.trim() || (p.replace(/\.md$/, "").split("/").pop() ?? "");
+    return `[${title}](${p})`;
   });
 
   const hasSection = /^##\s+Relevant notes\s*$/m.test(body);
@@ -101,14 +106,15 @@ export async function appendLinks(filePath: string, links: string[]): Promise<vo
     let insertIdx = sectionIdx + 1;
     while (insertIdx < lines.length && /^\s*[-*]\s/.test(lines[insertIdx])) insertIdx++;
 
+    // Extract existing markdown link paths for dedup
     const existingLinks = new Set<string>();
     for (let i = sectionIdx + 1; i < lines.length; i++) {
-      const m = lines[i].match(/\[\[([^\]]+)\]\]/);
-      if (m) existingLinks.add(m[1]);
+      const m = lines[i].match(/\[([^\]]+)\]\(([^)]+)\)/);
+      if (m) existingLinks.add(m[2]);
     }
-    const toAdd = newSlugs.filter((s) => {
-      const slugMatch = s.match(/\[\[([^\]]+)\]\]/);
-      return slugMatch ? !existingLinks.has(slugMatch[1]) : true;
+    const toAdd = newLinks.filter((l) => {
+      const pathMatch = l.match(/\[([^\]]+)\]\(([^)]+)\)/);
+      return pathMatch ? !existingLinks.has(pathMatch[2]) : true;
     });
     if (toAdd.length === 0) return;
 
@@ -117,7 +123,7 @@ export async function appendLinks(filePath: string, links: string[]): Promise<vo
     lines.splice(insertIdx, 0, ...toAdd.map((l) => `${indent}${l}`));
     newBody = lines.join("\n");
   } else {
-    newBody = body + "\n\n## Relevant notes\n\n" + newSlugs.map((s) => `- ${s}`).join("\n");
+    newBody = body + "\n\n## Relevant notes\n\n" + newLinks.map((l) => `- ${l}`).join("\n");
   }
 
   const fmMatch = content.match(/^---\n[\s\S]*?\n---\n/);
