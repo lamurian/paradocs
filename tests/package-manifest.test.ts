@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -27,9 +27,13 @@ describe("package pi manifest", () => {
     expect(manifest!.extensions).toContain("./extensions");
   });
 
-  it("should declare skills directory with AGENTS.md exclusion", () => {
+  it("should declare skills directory", () => {
     expect(manifest!.skills).toContain("./skills");
-    expect(manifest!.skills).toContain("!./skills/AGENTS.md");
+    expect(manifest!.skills).not.toContain("!./skills/AGENTS.md");
+  });
+
+  it("should not have AGENTS.md in skills directory to avoid skill conflicts", () => {
+    expect(existsSync(resolve(__dirname, "../skills/AGENTS.md"))).toBe(false);
   });
 
   it("should not declare prompts or themes directories", () => {

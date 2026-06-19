@@ -4,7 +4,7 @@
   "description": "PARA knowledge management for pi",
   "pi": {
     "extensions": ["./extensions"],
-    "skills": ["./skills", "!./skills/AGENTS.md"]
+    "skills": ["./skills"]
   },
   "dependencies": {
     "@citation-js/core": "^0.7.21",
