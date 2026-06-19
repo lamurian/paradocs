@@ -37,7 +37,7 @@ function freshSession(): SessionState {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function isParaPath(path: string | undefined): boolean {
+export function isParaPath(path: string | undefined): boolean {
   if (!path) return false;
   return PARA_PATTERNS.some((re) => re.test(path));
 }
@@ -185,7 +185,7 @@ function gateCreate(ctx: ExtensionContext): void {
 
 // ─── Gate helper ─────────────────────────────────────────────────────────────
 
-function warnGate(ctx: ExtensionContext, message: string): void {
+export function warnGate(ctx: ExtensionContext, message: string): void {
   if (!ctx.hasUI) return;
 
   try {

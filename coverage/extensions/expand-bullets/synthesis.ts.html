@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>13/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">90% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/10</span>
+                <span class='fraction'>9/10</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/12</span>
+                <span class='fraction'>12/12</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -123,27 +123,27 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * Synthesizes expanded text from web search results for a single bullet point.
@@ -163,28 +163,28 @@ export interface Expansion {
  * Generate a coherent, paragraph-form expansion of a single bullet point
  * by combining web search results into a synthesised explanation.
  */
-export function <span class="fstat-no" title="function not covered" >synthesizeExpansion(b</span>ullet: BulletInfo, results: WebResult[]): string {
-  const term = <span class="cstat-no" title="statement not covered" >bullet.text;</span>
-  const ctx = <span class="cstat-no" title="statement not covered" >bullet.context;</span>
+export function synthesizeExpansion(bullet: BulletInfo, results: WebResult[]): string {
+  const term = bullet.text;
+  const ctx = bullet.context;
 &nbsp;
-  let expansion = <span class="cstat-no" title="statement not covered" >`**${term}** — `;</span>
+  let expansion = `**${term}** — `;
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  if (results.length &gt; 0 &amp;&amp; results[0].snippet) {</span>
-    const core = <span class="cstat-no" title="statement not covered" >results[0].snippet.replace(/\s+/g, " ").trim();</span>
-<span class="cstat-no" title="statement not covered" >    expansion += core;</span>
+  if (results.length &gt; 0 &amp;&amp; results[0].snippet) {
+    const core = results[0].snippet.replace(/\s+/g, " ").trim();
+    expansion += core;
   } else {
-<span class="cstat-no" title="statement not covered" >    expansion += `This concept relates to ${ctx || "the broader topic"} and represents a key element that deserves deeper exploration.`;</span>
+    expansion += `This concept relates to ${ctx || "the broader topic"} and represents a key element that deserves deeper exploration.`;
   }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  if (results.length &gt; 1) {</span>
-    const extras = <span class="cstat-no" title="statement not covered" >results</span>
+  if (results.length &gt; 1) {
+    const extras = results
       .slice(1, 3)
-      .<span class="fstat-no" title="function not covered" >map((r</span>) =&gt; <span class="cstat-no" title="statement not covered" >r.snippet?.replace(/\s+/g, " ").trim())</span>
+      .map((r) =&gt; r.snippet?.replace(/\s+/g, " ").trim())
       .filter(Boolean);
-<span class="cstat-no" title="statement not covered" >    if (extras.length &gt; 0) <span class="cstat-no" title="statement not covered" >expansion += ` ${extras.join(" ")}`;</span></span>
+    <span class="missing-if-branch" title="else path not taken" >E</span>if (extras.length &gt; 0) expansion += ` ${extras.join(" ")}`;
   }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  return expansion;</span>
+  return expansion;
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -193,7 +193,7 @@ export function <span class="fstat-no" title="function not covered" >synthesizeE
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-19T10:35:49.402Z
+                at 2026-06-19T11:11:56.892Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

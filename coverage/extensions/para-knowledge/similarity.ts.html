@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/16</span>
+                <span class='fraction'>16/16</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>13/13</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -115,37 +115,37 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">62x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">30x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * Text similarity helpers for findExistingSummary.
@@ -156,38 +156,38 @@
  * Build a set of word trigrams from text.
  * "the quick brown fox" -&gt; {"the quick brown", "quick brown fox"}
  */
-export function <span class="fstat-no" title="function not covered" >wordTrigrams(t</span>ext: string): Set&lt;string&gt; {
-  const words = <span class="cstat-no" title="statement not covered" >text</span>
+export function wordTrigrams(text: string): Set&lt;string&gt; {
+  const words = text
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .<span class="fstat-no" title="function not covered" >filter((t</span>) =&gt; <span class="cstat-no" title="statement not covered" >t.length &gt; 0)</span>;
+    .filter((t) =&gt; t.length &gt; 0);
 &nbsp;
-  const trigrams = <span class="cstat-no" title="statement not covered" >new Set&lt;string&gt;();</span>
-<span class="cstat-no" title="statement not covered" >  for (let i = <span class="cstat-no" title="statement not covered" >0; i</span> &lt;= words.length - 3; i++) {</span>
-<span class="cstat-no" title="statement not covered" >    trigrams.add(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);</span>
+  const trigrams = new Set&lt;string&gt;();
+  for (let i = 0; i &lt;= words.length - 3; i++) {
+    trigrams.add(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
   }
-<span class="cstat-no" title="statement not covered" >  return trigrams;</span>
+  return trigrams;
 }
 &nbsp;
 /**
  * Compute Jaccard similarity between two sets.
  * |A ∩ B| / |A ∪ B|
  */
-export function <span class="fstat-no" title="function not covered" >jaccardSimilarity(a</span>: Set&lt;string&gt;, b: Set&lt;string&gt;): number {
-  const intersection = <span class="cstat-no" title="statement not covered" >new Set&lt;string&gt;();</span>
-<span class="cstat-no" title="statement not covered" >  for (const item of a) {</span>
-<span class="cstat-no" title="statement not covered" >    if (b.has(item)) <span class="cstat-no" title="statement not covered" >intersection.add(item);</span></span>
+export function jaccardSimilarity(a: Set&lt;string&gt;, b: Set&lt;string&gt;): number {
+  const intersection = new Set&lt;string&gt;();
+  for (const item of a) {
+    if (b.has(item)) intersection.add(item);
   }
-  const union = <span class="cstat-no" title="statement not covered" >new Set&lt;string&gt;([...a, ...b]);</span>
-<span class="cstat-no" title="statement not covered" >  if (union.size === 0) <span class="cstat-no" title="statement not covered" >return 0;</span></span>
-<span class="cstat-no" title="statement not covered" >  return intersection.size / union.size;</span>
+  const union = new Set&lt;string&gt;([...a, ...b]);
+  if (union.size === 0) return 0;
+  return intersection.size / union.size;
 }
 &nbsp;
 /**
  * Compute Jaccard similarity between two text strings using word trigrams.
  */
-export function <span class="fstat-no" title="function not covered" >textSimilarity(t</span>extA: string, textB: string): number {
-<span class="cstat-no" title="statement not covered" >  return jaccardSimilarity(wordTrigrams(textA), wordTrigrams(textB));</span>
+export function textSimilarity(textA: string, textB: string): number {
+  return jaccardSimilarity(wordTrigrams(textA), wordTrigrams(textB));
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -196,7 +196,7 @@ export function <span class="fstat-no" title="function not covered" >textSimilar
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-19T10:35:49.402Z
+                at 2026-06-19T11:11:56.892Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

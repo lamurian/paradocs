@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/10</span>
+                <span class='fraction'>10/10</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/1</span>
+                <span class='fraction'>1/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/9</span>
+                <span class='fraction'>9/9</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -96,22 +96,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">11x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * File scanner for yaml-enforcer.
@@ -121,22 +121,22 @@
 import { readdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
 &nbsp;
-const PARA_DIRS = <span class="cstat-no" title="statement not covered" >["Areas", "Projects", "Resources"] as const;</span>
+const PARA_DIRS = ["Areas", "Projects", "Resources"] as const;
 &nbsp;
-export async function <span class="fstat-no" title="function not covered" >findParaMdFiles(b</span>aseDir: string): Promise&lt;string[]&gt; {
-  const files: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
-<span class="cstat-no" title="statement not covered" >  for (const dir of PARA_DIRS) {</span>
-    const <span class="cstat-no" title="statement not covered" >abs = resolve(baseDir, dir);</span>
-<span class="cstat-no" title="statement not covered" >    try {</span>
-      const entries = <span class="cstat-no" title="statement not covered" >await readdir(abs);</span>
-<span class="cstat-no" title="statement not covered" >      for (const name of entries) {</span>
-<span class="cstat-no" title="statement not covered" >        if (name.endsWith(".md")) <span class="cstat-no" title="statement not covered" >files.push(join(abs, name));</span></span>
+export async function findParaMdFiles(baseDir: string): Promise&lt;string[]&gt; {
+  const files: string[] = [];
+  for (const dir of PARA_DIRS) {
+    const abs = resolve(baseDir, dir);
+    try {
+      const entries = await readdir(abs);
+      for (const name of entries) {
+        if (name.endsWith(".md")) files.push(join(abs, name));
       }
     } catch {
       /* directory doesn't exist yet */
     }
   }
-<span class="cstat-no" title="statement not covered" >  return files.sort();</span>
+  return files.sort();
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -145,7 +145,7 @@ export async function <span class="fstat-no" title="function not covered" >findP
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-19T10:35:49.402Z
+                at 2026-06-19T11:11:56.892Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

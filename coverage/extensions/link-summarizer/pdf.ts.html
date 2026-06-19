@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">20.96% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/62</span>
+                <span class='fraction'>13/62</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">16.66% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/24</span>
+                <span class='fraction'>4/24</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">66.66% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>4/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">22.41% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/58</span>
+                <span class='fraction'>13/58</span>
             </div>
         
             
@@ -203,28 +203,28 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -333,28 +333,28 @@ import { writeFile, unlink, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 &nbsp;
-const MAX_CONTENT_CHARS = <span class="cstat-no" title="statement not covered" >80_000;</span>
-const MAX_PDF_BYTES = <span class="cstat-no" title="statement not covered" >100_000_000;</span>
+const MAX_CONTENT_CHARS = 80_000;
+const MAX_PDF_BYTES = 100_000_000;
 &nbsp;
-const PDF_EXT_RE = <span class="cstat-no" title="statement not covered" >/\.pdf(?:[?#].*)?$/i;</span>
-const PDF_PATH_RE = <span class="cstat-no" title="statement not covered" >/\/pdf\/[\d.]+(?:v\d+)?(?:[?#].*)?$/i;</span>
-const PDF_CT_RE = <span class="cstat-no" title="statement not covered" >/^application\/pdf/i;</span>
+const PDF_EXT_RE = /\.pdf(?:[?#].*)?$/i;
+const PDF_PATH_RE = /\/pdf\/[\d.]+(?:v\d+)?(?:[?#].*)?$/i;
+const PDF_CT_RE = /^application\/pdf/i;
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >isPdfUrl(u</span>rl: string): boolean {
-<span class="cstat-no" title="statement not covered" >  try {</span>
-    const parsed = <span class="cstat-no" title="statement not covered" >new URL(url);</span>
-<span class="cstat-no" title="statement not covered" >    return PDF_EXT_RE.test(parsed.pathname) || PDF_PATH_RE.test(parsed.pathname);</span>
+export function isPdfUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return PDF_EXT_RE.test(parsed.pathname) || PDF_PATH_RE.test(parsed.pathname);
   } catch {
-<span class="cstat-no" title="statement not covered" >    return false;</span>
+    return false;
   }
 }
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >extractPdfTitle(t</span>ext: string): string {
-  const lines = <span class="cstat-no" title="statement not covered" >text</span>
+export function extractPdfTitle(text: string): string {
+  const lines = text
     .split("\n")
-    .<span class="fstat-no" title="function not covered" >map((l</span>) =&gt; <span class="cstat-no" title="statement not covered" >l.trim())</span>
-    .<span class="fstat-no" title="function not covered" >filter((l</span>) =&gt; <span class="cstat-no" title="statement not covered" >l.length &gt; 10)</span>;
-<span class="cstat-no" title="statement not covered" >  return lines[0] ?? "(PDF document)";</span>
+    .map((l) =&gt; l.trim())
+    .filter((l) =&gt; l.length &gt; 10);
+  return lines[0] ?? "(PDF document)";
 }
 &nbsp;
 export async function <span class="fstat-no" title="function not covered" >checkPdfContentType(u</span>rl: string, signal?: AbortSignal): Promise&lt;boolean&gt; {
@@ -460,7 +460,7 @@ export async function <span class="fstat-no" title="function not covered" >tryEx
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-19T10:35:49.402Z
+                at 2026-06-19T11:11:56.892Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
