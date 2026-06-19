@@ -106,4 +106,4 @@ All documents are at `implemented` status.
 
 See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
 decisions, and [docs/specs/](docs/specs/) for detailed specifications.
-- [D] @docs/ADR/007-standard-markdown-links.md Replace [[wikilink]] with [title](path) markdown links via SQLite title lookup
+- [D] @docs/ADR/007-markdown-link-format-for-para-cross-references.md Replace [[slug]] with [title](path.md) using files table for title resolution.
