@@ -1,46 +1,97 @@
 /**
- * /summarize command — stub handler for URL summarization workflow.
+ * /summarize command — URL summarization workflow handler.
  *
- * Fetches a URL, checks for existing summaries, extracts content (HTML via
- * Obscura, PDF via pdftotext), summarises it, and creates a PARA document.
+ * Parses a URL, validates it, and sends a structured prompt to the agent
+ * that guides it through dedup check, content fetch, LLM summarization,
+ * citation resolution, and PARA document creation.
  *
  * @module extensions/commands/summarize
  */
 
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 /** Human-readable description shown in /commands list */
 export const description = "Summarise a URL into a knowledge document";
 
 /**
- * Handle the /summarize command.
+ * Create the /summarize command handler.
  *
- * @param args  Raw argument string from the user (the URL).
- * @param ctx   Extension command context for UI interactions.
+ * Factory pattern: captures the ExtensionAPI reference so the handler
+ * can send structured summarization prompts via pi.sendUserMessage().
+ *
+ * @param pi  The pi extension API instance.
+ * @returns   The command handler function.
  */
-export async function handler(args: string, ctx: ExtensionCommandContext): Promise<void> {
-  const url = args.trim();
+export function createHandler(pi: ExtensionAPI) {
+  return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
+    const rawUrl = args.trim();
 
-  if (!url) {
-    ctx.ui.notify("Usage: /summarize <url> — please provide a URL.", "warning");
-    return;
-  }
+    if (!rawUrl) {
+      ctx.ui.notify("Usage: /summarize <url> — please provide a URL.", "warning");
+      return;
+    }
 
-  try {
-    ctx.ui.notify(`📄 Summarising: "${url.slice(0, 80)}…"`, "info");
+    // Prepend https:// if no protocol is present
+    const normalizedUrl = rawUrl.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//)
+      ? rawUrl
+      : `https://${rawUrl}`;
 
-    // TODO: Implement summarise skill workflow
-    // 1. find_existing_summary for dedup check
-    // 2. fetch_url / Obscura extraction
-    // 3. LLM summarisation
-    // 4. resolve_citation for BibTeX
-    // 5. create_para_doc with summary content
+    // Basic URL validation
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      ctx.ui.notify(`❌ Invalid URL: "${rawUrl}". Please provide a valid URL.`, "error");
+      return;
+    }
 
-    await Promise.resolve();
+    try {
+      ctx.ui.notify(`📄 Summarising: "${normalizedUrl.slice(0, 80)}…"`, "info");
 
-    ctx.ui.notify(`✅ Stub: /summarize handled. URL was: "${url.slice(0, 60)}…"`, "info");
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    ctx.ui.notify(`❌ /summarize error: ${msg}`, "error");
-  }
+      pi.sendUserMessage(formatSummarizePrompt(normalizedUrl));
+
+      await Promise.resolve();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      ctx.ui.notify(`❌ /summarize error: ${msg}`, "error");
+    }
+  };
+}
+
+/**
+ * Format a structured summarization prompt for the agent.
+ *
+ * Guides the agent through dedup check, content fetch, summarization,
+ * citation resolution, and PARA document creation with classification
+ * guidance.
+ *
+ * @param url  The normalized URL to summarise.
+ * @returns    The formatted prompt string.
+ */
+function formatSummarizePrompt(url: string): string {
+  return [
+    `Please summarise the following URL into a knowledge document:\n`,
+    `URL: ${url}\n`,
+    `## Instructions`,
+    ``,
+    `1. **Check for existing summary** — Call \`find_existing_summary("${url}")\` first.`,
+    `   - If a document already exists: read it and present the existing document to the user.`,
+    `   - If not, proceed with the steps below.`,
+    `2. **Fetch content** — Call \`fetch_url("${url}")\` to retrieve the page content.`,
+    `   (This handles HTML via Obscura/HTTP and PDF via pdftotext automatically.)`,
+    `3. **Summarize** — Use the fetched content to write a concise summary (2–5 paragraphs).`,
+    `4. **Resolve citation** — Call \`resolve_citation\` with the source URL so a BibTeX entry is created.`,
+    `5. **List existing tags** — Call \`list_para_tags\` to see available tags. Reuse existing tags.`,
+    `6. **Create document** — Call \`create_para_doc\` with:`,
+    `   - **Area**: Resources (default for external references)`,
+    `   - **Tags**: reuse from step 5, add new ones only if necessary`,
+    `   - **Source**: the original URL in frontmatter`,
+    `   - **Content structure**:`,
+    `     - \`## Source\` (original title + URL)`,
+    `     - \`## Summary\` (2–5 paragraphs)`,
+    `     - \`## Key Points\` (bulleted list)`,
+    `     - \`## Relevance\` (why this matters or how to use it)`,
+    `7. **Auto-link** — Auto-linking runs automatically after document creation.`,
+    ``,
+    `Proceed step by step.`,
+  ].join("\n");
 }

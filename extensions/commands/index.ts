@@ -14,7 +14,10 @@ import {
   createHandler as createResearchHandler,
   description as researchDescription,
 } from "./research.js";
-import { handler as summarizeHandler, description as summarizeDescription } from "./summarize.js";
+import {
+  createHandler as createSummarizeHandler,
+  description as summarizeDescription,
+} from "./summarize.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -36,6 +39,6 @@ export default function (pi: ExtensionAPI): void {
 
   pi.registerCommand("summarize", {
     description: summarizeDescription,
-    handler: summarizeHandler,
+    handler: createSummarizeHandler(pi),
   });
 }
