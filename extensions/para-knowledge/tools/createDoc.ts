@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
+import { autoLink } from "../../../common/autoLink.js";
 import { getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, indexFile } from "../db-sqlite.js";
 import { slugify } from "../files.js";
@@ -55,6 +56,62 @@ function indexDocInDb(
   }
 }
 
+/** Auto-generate a description from content when none is provided. */
+function getAutoDesc(params: { description?: string; content: string }): string | null {
+  return (
+    params.description?.trim() || params.content.replace(/\n+/g, " ").slice(0, 150).trim() || null
+  );
+}
+
+/** Build the user-facing response text from creation results. */
+function buildCreatedResponse(
+  indexOk: boolean,
+  autoDesc: string | null,
+  source: string | undefined,
+  filePath: string,
+  title: string,
+  tags: string[],
+  linkCount: number,
+): string {
+  const indexNote = indexOk
+    ? "🗄️ notes.db — indexed"
+    : "⚠️  File created but index update failed. It will be indexed on next search.";
+  const descNote = autoDesc ? `\nDescription: ${autoDesc}` : "";
+  const sourceNote = source ? `\nSource: ${source}` : "";
+  const linkNote =
+    linkCount > 0
+      ? `\n🔗 Auto-linked to ${linkCount} related note${linkCount === 1 ? "" : "s"}`
+      : "";
+  return `${indexNote}\nCreated: ${filePath}\nTitle: ${title}\nTags: ${tags.join(", ")}${descNote}${sourceNote}${linkNote}`;
+}
+
+/**
+ * Run auto-linking for a newly created document.
+ * Opens a fresh DB connection, calls autoLink, and handles all errors
+ * gracefully — returns 0 when no links found or on any failure.
+ */
+async function runAutoLink(
+  relPath: string,
+  title: string,
+  tags: string[],
+  knowledgeDir: string,
+  dbName: string,
+): Promise<number> {
+  try {
+    const linkDb = createDb(resolve(knowledgeDir, dbName));
+    initDb(linkDb);
+    try {
+      return await autoLink(relPath, title, tags, knowledgeDir, linkDb);
+    } finally {
+      linkDb.close();
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[para-knowledge] Auto-link failed:", msg);
+    return 0;
+  }
+}
+
 /**
  * Register the create_para_doc tool.
  */
@@ -95,11 +152,7 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
       const relPath = `${area}/${slug}.md`;
       const now = new Date().toISOString();
 
-      // Auto-generate description from content if not provided
-      const autoDesc =
-        params.description?.trim() ||
-        params.content.replace(/\n+/g, " ").slice(0, 150).trim() ||
-        null;
+      const autoDesc = getAutoDesc(params);
 
       // Build and write the markdown file
       const frontmatterFields: Record<string, unknown> = {
@@ -124,19 +177,31 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
 
       const indexOk = indexDocInDb(relPath, params, autoDesc, now);
 
-      const indexNote = indexOk
-        ? "🗄️ notes.db — indexed"
-        : "⚠️  File created but index update failed. It will be indexed on next search.";
-      const descNote = autoDesc ? `\nDescription: ${autoDesc}` : "";
-      const sourceNote = params.source ? `\nSource: ${params.source}` : "";
+      // Auto-link: find related docs via BM25 and append relevant links
+      let linkCount = 0;
+      if (indexOk) {
+        if (onUpdate) {
+          onUpdate({
+            content: [{ type: "text" as const, text: "🔗 Running auto-link…" }],
+            details: {},
+          });
+        }
+        const { dir: knowledgeDir, db: dbName } = getKnowledgeConfig(ctx.cwd);
+        linkCount = await runAutoLink(relPath, params.title, params.tags, knowledgeDir, dbName);
+      }
+
+      const responseText = buildCreatedResponse(
+        indexOk,
+        autoDesc,
+        params.source,
+        filePath,
+        params.title,
+        params.tags,
+        linkCount,
+      );
 
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: `${indexNote}\nCreated: ${filePath}\nTitle: ${params.title}\nTags: ${params.tags.join(", ")}${descNote}${sourceNote}`,
-          },
-        ],
+        content: [{ type: "text" as const, text: responseText }],
         details: {
           path: filePath,
           title: params.title,
@@ -144,6 +209,7 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
           tags: params.tags,
           source: params.source ?? null,
           indexOk,
+          autoLinked: linkCount,
         },
       };
     },

@@ -14,8 +14,8 @@ import { join, resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { findRelated, appendLinks } from "./search.js";
 import { slugify, formatFrontmatter } from "./yaml.js";
+import { autoLink } from "../../common/autoLink.js";
 import { getKnowledgeConfig } from "../../common/env.js";
 import { createDb, initDb, indexFile } from "../para-knowledge/db-sqlite.js";
 
@@ -110,7 +110,7 @@ async function autoLinkBatch(
   created: CreatedFile[],
   baseDir: string,
 ): Promise<number> {
-  const { db: dbName } = getKnowledgeConfig();
+  const { dir: knowledgeDir, db: dbName } = getKnowledgeConfig();
   const dbPath = resolve(baseDir, dbName);
   const db = createDb(dbPath);
   initDb(db);
@@ -119,11 +119,8 @@ async function autoLinkBatch(
     for (let i = 0; i < docs.length; i++) {
       const doc = docs[i];
       const relPath = created[i].relPath;
-      const related = findRelated(db, relPath, doc.title, doc.tags, 5);
-      if (related.length > 0) {
-        await appendLinks(created[i].path, related, db);
-        linkedCount++;
-      }
+      const count = await autoLink(relPath, doc.title, doc.tags, knowledgeDir, db);
+      if (count > 0) linkedCount++;
     }
     return linkedCount;
   } finally {
