@@ -1,7 +1,7 @@
 ---
 title: Research Command Workflow
 description: Research Command Workflow
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-20
 ---

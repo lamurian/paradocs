@@ -1,7 +1,7 @@
 ---
 title: Summarize Command Workflow
 description: Summarize Command Workflow
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-20
 ---

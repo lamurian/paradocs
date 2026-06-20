@@ -1,7 +1,7 @@
 ---
 title: Markdown Link Format for PARA Cross-References
 description: Replace [[slug]] wikilink syntax with standard [title](path.md) markdown links across all skills and extensions.
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---

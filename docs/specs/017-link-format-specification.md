@@ -1,7 +1,7 @@
 ---
 title: Link Format Specification
 description: Defines the [title](path.md) markdown link format for PARA cross-references, including title resolution from SQLite files table, path construction, and migration rules.
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---

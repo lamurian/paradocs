@@ -1,7 +1,7 @@
 ---
 title: Auto-Link Skill Output Migration
 description: Migrate auto-link skill to output [title](path.md) markdown links instead of [[slug]] wikilinks while preserving its LLM-based semantic matching logic.
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---

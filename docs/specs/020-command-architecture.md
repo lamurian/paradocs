@@ -1,7 +1,7 @@
 ---
 title: Command Architecture
 description: Command Architecture
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-20
 ---

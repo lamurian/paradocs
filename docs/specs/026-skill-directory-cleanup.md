@@ -1,7 +1,7 @@
 ---
 title: Skill Directory Cleanup
 description: Skill Directory Cleanup
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-20
 ---

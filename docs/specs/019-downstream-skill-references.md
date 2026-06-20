@@ -1,7 +1,7 @@
 ---
 title: Downstream Skill References
 description: Update text references in create-doc, knowledge, research, summarize-link skills and batch-create/search.ts JSDoc to use markdown links instead of wikilinks.
-status: proposed
+status: implemented
 remaining: 0
 date: 2026-06-19
 ---
