@@ -138,14 +138,25 @@ export default function (pi: ExtensionAPI): void {
     name: "batch_create_para_docs",
     label: "Batch Create PARA Docs",
     description:
-      "Create multiple PARA knowledge documents (markdown with YAML frontmatter) in one call, " +
-      "index all of them in notes.db, and run semantic auto-linking across the batch. " +
-      "Fundamental/reference content should go in Resources/; practical content in Projects/.",
-    promptSnippet: "Create several PARA documents at once, index them, and auto-link them",
+      "Create multiple PARA knowledge documents (markdown + YAML frontmatter) in one call, " +
+      "index all of them in notes.db, and run batch auto-linking across them. " +
+      "Each document follows: PARA classification — Resources (reference/theory), Areas (responsibilities/skills), " +
+      "Projects (deliverables/practical work). " +
+      "Atomic principle — one key idea per note, max 4 paragraphs, ≤100 lines. " +
+      "Filenames auto-generated as kebab-case slug from title. " +
+      "Citations: Pandoc-style @citekey (narrative) or [@citekey] (parenthetical) from @ref.bib. " +
+      "Run list_para_tags first and reuse existing tags. " +
+      "Provide short description ≤ 200 chars for better BM25 search. " +
+      "Recommended body: ## Summary (2-4 paragraphs), ## Key Points, ## Sources.",
+    promptSnippet:
+      "Batch-create multiple PARA docs with auto-linking, following atomic principle and citation conventions",
     promptGuidelines: [
       "Use batch_create_para_docs when creating 3+ related documents to save tool calls and enable batch auto-linking.",
       "Each document in the array has: title, content, tags, area (Resources/Projects/Areas), optional description, optional source.",
       "After creation, the tool auto-links all documents in the batch to each other using BM25 semantic similarity.",
+      "Follow PARA conventions: Resources for reference/theory, Areas for responsibilities, Projects for practical work.",
+      "Use Pandoc-style citations (@citekey / [@citekey]) referencing @ref.bib for any sourced claims.",
+      "Apply atomic principle: one key idea per document, max 4 paragraphs, keep concise.",
     ],
     parameters: Type.Object({
       documents: Type.Array(

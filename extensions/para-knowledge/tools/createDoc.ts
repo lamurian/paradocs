@@ -63,9 +63,16 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
     name: "create_para_doc",
     label: "Create PARA Doc",
     description:
-      "Create a new markdown file with YAML frontmatter in Areas, Projects, or Resources. " +
-      "Also inserts the document and its FTS5 index into the SQLite database automatically.",
-    promptSnippet: "Create a new knowledge document in the PARA directory structure",
+      "Create a new PARA knowledge document (markdown + YAML frontmatter) and index it in notes.db. " +
+      "Conventions: PARA classification — Resources for reference/theory, Areas for responsibilities/skills, " +
+      "Projects for deliverables/practical work. " +
+      "Atomic principle — one key idea per note, max 4 paragraphs (or 2 heading sections), ≤100 lines total. " +
+      "Filename auto-generated as kebab-case slug from title — keep titles concise. " +
+      "Recommended body: ## Summary (2-4 paragraphs), ## Key Points, ## Sources. " +
+      "Citations: Pandoc-style @citekey (narrative) or [@citekey] (parenthetical) from @ref.bib. " +
+      "Run list_para_tags first and reuse existing tags. Provide short description ≤ 200 chars for BM25 search.",
+    promptSnippet:
+      "Create a new knowledge document in the PARA directory structure — uses atomic principle, Pandoc citations",
     parameters: Type.Object({
       title: Type.String({ description: "Document title" }),
       content: Type.String({ description: "Markdown body content" }),

@@ -2,7 +2,7 @@
 title: Auto-Link Skill Output Update
 description: Rewrite auto-link/SKILL.md steps 3, 6, and 7 to output [title](path.md) format instead of [[slug]].
 status: proposed
-remaining: 1
+remaining: 0
 date: 2026-06-19
 ---
 

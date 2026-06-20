@@ -214,7 +214,12 @@ export default function (pi: ExtensionAPI): void {
     name: "web_search",
     label: "Web Search (3-Phase: SearXNG -> Tavily -> Bing RSS)",
     description:
-      "Three-phase web search: SearXNG category-based search (1→2→3), then Tavily, then Bing RSS with domain filtering. Tier 1 uses scientific_publications category. Tier 2 uses web category with site:edu OR site:gov (override via category param for it/news). Tier 3 uses general category.",
+      "Three-phase web search: SearXNG category-based search (1→2→3), then Tavily, then Bing RSS with domain filtering (Phase 3 only). " +
+      "Tier 1 — scientific_publications category (academic papers, peer-reviewed research). " +
+      "Tier 2 — web category with site:edu|gov filtering (authoritative non-academic). Override via category: " +
+      "'it' for tech/software, 'news' for news, 'web' for filtered web. " +
+      "Tier 3 — general category (broad exploration, blogs, any web). " +
+      "Fallback chain (when no tier forced): SearXNG >3 results → Tavily → Bing RSS (domain-filtered).",
     promptSnippet:
       "Search the web (3-phase: SearXNG academic -> filtered -> general, then Tavily, then Bing RSS). Use tier=1 for academic, tier=2 for filtered web (default site:edu|gov), tier=3 for general. Pass category='it' for tech/software, 'news' for news queries, etc.",
     parameters: Type.Object({
