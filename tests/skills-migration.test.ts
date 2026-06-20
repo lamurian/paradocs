@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, statSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { describe, it, expect } from "vitest";
 
-const SKILLS = [
+const REMOVED_SKILLS = [
   "knowledge",
   "create-doc",
   "web-search",
@@ -12,65 +12,50 @@ const SKILLS = [
   "research",
 ] as const;
 
-const REGISTERED_TOOLS = [
-  "search_para_docs",
-  "create_para_doc",
-  "update_para_doc",
-  "list_para_tags",
-  "find_existing_summary",
-  "resolve_citation",
-  "web_search",
-  "fetch_url",
-  "batch_create_para_docs",
-] as const;
+const COMMAND_FILES = ["ask.ts", "research.ts", "summarize.ts", "index.ts"] as const;
 
-describe("skills migration", () => {
-  for (const skill of SKILLS) {
+describe("skills removed", () => {
+  for (const skill of REMOVED_SKILLS) {
     const skillDir = `skills/${skill}`;
     const skillFile = `${skillDir}/SKILL.md`;
 
     describe(skill, () => {
-      it(`${skillFile} should exist`, () => {
-        expect(existsSync(skillFile)).toBe(true);
+      it(`${skillDir} should no longer exist — replaced by commands/tool descriptions`, () => {
+        expect(existsSync(skillDir)).toBe(false);
       });
 
-      it(`${skillFile} should have valid frontmatter (starts with ---)`, () => {
-        const content = readFileSync(skillFile, "utf-8");
-        const lines = content.split("\n");
-        expect(lines[0].trim()).toBe("---");
-        // Find closing --- (second delimiter)
-        const endIndex = lines.indexOf("---", 1);
-        expect(endIndex).toBeGreaterThan(1);
-        // Frontmatter should contain a name and description
-        const frontmatter = lines.slice(1, endIndex).join("\n");
-        expect(frontmatter).toMatch(/^name:/m);
-        expect(frontmatter).toMatch(/^description:/m);
-      });
-
-      it(`${skillDir} should be a directory`, () => {
-        const stats = statSync(skillDir);
-        expect(stats.isDirectory()).toBe(true);
+      it(`${skillFile} should no longer exist`, () => {
+        expect(existsSync(skillFile)).toBe(false);
       });
     });
   }
 });
 
-describe("skill count", () => {
-  it("should have exactly 7 skill directories", () => {
-    const entries = readdirSync("skills", { withFileTypes: true });
-    const dirs = entries.filter((e) => e.isDirectory() && e.name !== "node_modules");
-    expect(dirs).toHaveLength(7);
+describe("commands exist", () => {
+  for (const file of COMMAND_FILES) {
+    it(`extensions/commands/${file} should exist`, () => {
+      expect(existsSync(`extensions/commands/${file}`)).toBe(true);
+    });
+  }
+});
+
+describe("tool descriptions contain conventions", () => {
+  it("web_search description should include tier/category details", () => {
+    const content = readFileSync("extensions/web-search/index.ts", "utf-8");
+    expect(content).toMatch(/tier|category|fallback/i);
   });
-});
 
-describe("tool name references", () => {
-  for (const tool of REGISTERED_TOOLS) {
-    it(`should reference ${tool} in at least one SKILL.md`, () => {
-      const found = SKILLS.some((skill) => {
-        const content = readFileSync(`skills/${skill}/SKILL.md`, "utf-8");
-        return content.includes(tool);
-      });
-      expect(found).toBe(true);
-    });
-  }
+  it("create_para_doc description should include citation format", () => {
+    const content = readFileSync("extensions/para-knowledge/tools/createDoc.ts", "utf-8");
+    expect(content).toContain("@citekey");
+    expect(content).toContain("PARA classification");
+    expect(content).toContain("Atomic principle");
+  });
+
+  it("batch_create_para_docs description should include conventions", () => {
+    const content = readFileSync("extensions/batch-create/index.ts", "utf-8");
+    expect(content).toContain("@citekey");
+    expect(content).toContain("PARA classification");
+    expect(content).toContain("Atomic principle");
+  });
 });

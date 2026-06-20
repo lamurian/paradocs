@@ -27,9 +27,8 @@ describe("package pi manifest", () => {
     expect(manifest!.extensions).toContain("./extensions");
   });
 
-  it("should declare skills directory", () => {
-    expect(manifest!.skills).toContain("./skills");
-    expect(manifest!.skills).not.toContain("!./skills/AGENTS.md");
+  it("should not declare skills directory (skills replaced by commands)", () => {
+    expect(manifest!.skills).toBeUndefined();
   });
 
   it("should not have AGENTS.md in skills directory to avoid skill conflicts", () => {
