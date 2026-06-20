@@ -2,7 +2,7 @@
 title: Slash Command Workflows
 description: Replace orchestration skills with deterministic slash commands via pi.registerCommand()
 status: proposed
-remaining: 0
+remaining: 5
 date: 2026-06-20
 ---
 
