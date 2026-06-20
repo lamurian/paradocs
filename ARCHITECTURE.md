@@ -8,8 +8,9 @@ date: 2026-06-19
 
 Paradocs is a standalone pi extension package that brings PARA
 (Projects, Areas, Resources, Archives) knowledge management to pi.
-Extracted from Cognoscere with a focused scope: 7 extensions, 7 skills,
-and 3 shared modules. No src/ directory — extensions ARE the source.
+Extracted from Cognoscere with a focused scope: 7 extensions, 3 shared
+modules, and archived skills (removed from pi manifest but preserved on
+disk). No src/ directory — extensions ARE the source.
 
 # Design Principles
 
@@ -151,7 +152,7 @@ All PARA cross-references use standard Markdown link syntax:
   including the PARA area prefix (e.g., `Resources/note-title.md`). The
   `.md` extension is included for direct rendering compatibility.
 - **Scope**: Applies to all "Relevant notes" sections, template placeholders,
-  and link output across all skills and extensions.
+  and link output across all extensions and tools.
 - **Reference implementation**: `extensions/batch-create/search.ts`
   `appendLinks()` — see ADR 007 and Spec 017 for full details.
 

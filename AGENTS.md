@@ -19,7 +19,6 @@ the extension directories are the source. Each extension is auto-discovered by `
 | Directory     | Purpose                                              |
 |---------------|------------------------------------------------------|
 | `extensions/` | 9 pi extensions (auto-discovered by pi install)      |
-| `skills/`     | 8 skills for workflow orchestration (SKILL.md)       |
 | `common/`     | Shared modules (slug, tokenize, yaml)                |
 | `types/`      | Type declarations (citation-js stubs, etc.)          |
 | `tests/`      | Test files                                           |
