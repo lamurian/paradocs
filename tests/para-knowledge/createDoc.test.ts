@@ -3,7 +3,7 @@
  * KNOWLEDGE_DIR rather than ctx.cwd.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -11,14 +11,33 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+// Mock homedir so configureEnv looks for ~/.pi/agent/.env in a sandboxed temp
+// directory, avoiding interference from the real global config.
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return {
+    ...actual,
+    homedir: vi.fn(),
+  };
+});
+
 describe("create_para_doc path resolution", () => {
   let tmpDir: string;
+  let fakeHome: string;
   let knowledgeDir: string;
   let projectDir: string;
   let registeredTool: Record<string, unknown> | null;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(homedir(), "createDoc-test-"));
+    // Use /tmp for temp dir creation (not the mocked homedir)
+    tmpDir = mkdtempSync("/tmp/createDoc-test-");
+    fakeHome = join(tmpDir, "fake-home");
+    mkdirSync(fakeHome, { recursive: true });
+
+    // Point mocked homedir to the sandboxed fake home so configureEnv
+    // looks for ~/.pi/agent/.env here, which doesn't exist.
+    vi.mocked(homedir).mockReturnValue(fakeHome);
+
     knowledgeDir = join(tmpDir, "knowledge");
     projectDir = join(tmpDir, "project");
     mkdirSync(knowledgeDir, { recursive: true });
@@ -83,6 +102,64 @@ describe("create_para_doc path resolution", () => {
 
     // Verify result contains the knowledgeDir path
     expect(result.details.path).toBe(knowledgePath);
+  });
+
+  it("should use KNOWLEDGE_DIR from project .pi/.env when process.env.KNOWLEDGE_DIR is not set", async () => {
+    // Create .pi/.env in projectDir with KNOWLEDGE_DIR pointing elsewhere
+    const envKnowledgeDir = join(tmpDir, "env-knowledge");
+    mkdirSync(envKnowledgeDir, { recursive: true });
+    const piEnvDir = join(projectDir, ".pi");
+    mkdirSync(piEnvDir, { recursive: true });
+    writeFileSync(join(piEnvDir, ".env"), `KNOWLEDGE_DIR=${envKnowledgeDir}\n`);
+
+    // Simulate real-world scenario where .env was never loaded into process.env
+    delete process.env.KNOWLEDGE_DIR;
+
+    vi.resetModules();
+    const { registerCreateDocTool } =
+      await import("../../extensions/para-knowledge/tools/createDoc.js");
+
+    const mockPi = {
+      registerTool: (tool: Record<string, unknown>) => {
+        registeredTool = tool;
+      },
+      on: () => {},
+    } as unknown as ExtensionAPI;
+
+    registerCreateDocTool(mockPi);
+    expect(registeredTool).not.toBeNull();
+
+    const tool = registeredTool!;
+    const execute = tool.execute as (
+      toolCallId: string,
+      params: Record<string, unknown>,
+      signal: AbortSignal | undefined,
+      onUpdate: unknown,
+      ctx: ExtensionContext,
+    ) => Promise<{
+      content: Array<{ type: string; text: string }>;
+      details: Record<string, unknown>;
+    }>;
+
+    const result = await execute(
+      "call-4",
+      { title: "Env Doc", content: "Test body.", tags: ["test"] },
+      undefined,
+      undefined,
+      { cwd: projectDir } as ExtensionContext,
+    );
+
+    // File should exist in envKnowledgeDir/Resources/, NOT in projectDir/Resources/
+    const envPath = join(envKnowledgeDir, "Resources", "env-doc.md");
+    const projectPath = join(projectDir, "Resources", "env-doc.md");
+
+    expect(existsSync(envPath)).toBe(true);
+    expect(existsSync(projectPath)).toBe(false);
+    expect(result.details.path).toBe(envPath);
+
+    // Cleanup created files
+    rmSync(piEnvDir, { recursive: true, force: true });
+    rmSync(envKnowledgeDir, { recursive: true, force: true });
   });
 
   it("should fall back to ctx.cwd when KNOWLEDGE_DIR is not set", async () => {

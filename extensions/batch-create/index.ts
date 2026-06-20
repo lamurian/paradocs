@@ -16,7 +16,7 @@ import { Type } from "typebox";
 
 import { slugify, formatFrontmatter } from "./yaml.js";
 import { autoLink } from "../../common/autoLink.js";
-import { getKnowledgeConfig } from "../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
 import { createDb, initDb, indexFile } from "../para-knowledge/db-sqlite.js";
 
 import type { DocIndex } from "../para-knowledge/db-sqlite.js";
@@ -183,6 +183,9 @@ export default function (pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
       const docs = params.documents;
       const autoLink = params.autoLink !== false;
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);

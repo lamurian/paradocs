@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { getKnowledgeConfig } from "../../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb } from "../db-sqlite.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -32,13 +32,16 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
     parameters: Type.Object({}),
 
     // eslint-disable-next-line @typescript-eslint/require-await
-    async execute(_toolCallId, _params, _signal, onUpdate, _ctx) {
+    async execute(_toolCallId, _params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
       onUpdate?.({
         content: [{ type: "text" as const, text: "🏷️ notes.db — querying unique tags…" }],
         details: {},
       });
 
-      const { dir, db } = getKnowledgeConfig();
+      const { dir, db } = getKnowledgeConfig(ctx.cwd);
       const dbPath = resolve(dir, db);
       if (!existsSync(dbPath)) {
         return {

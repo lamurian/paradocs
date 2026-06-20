@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { getKnowledgeConfig } from "../../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, searchDocs, type SqliteDb } from "../db-sqlite.js";
 import { textSimilarity } from "../similarity.js";
 
@@ -94,6 +94,9 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
       const { url, content } = params;
       const { dir, db } = getKnowledgeConfig(ctx.cwd);
       const dbPath = resolve(dir, db);

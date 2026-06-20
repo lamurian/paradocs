@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { getKnowledgeConfig } from "../../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, searchDocs, type SearchOptions } from "../db-sqlite.js";
 import { rebuildDb } from "../rebuild.js";
 
@@ -39,8 +39,11 @@ export function registerSearchDocsTool(pi: ExtensionAPI): void {
       tags: Type.Optional(Type.Array(Type.String(), { description: "Filter by tag (OR logic)" })),
     }),
 
-    async execute(_toolCallId, params, _signal, onUpdate, _ctx) {
-      const { dir, db } = getKnowledgeConfig();
+    async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
+      const { dir, db } = getKnowledgeConfig(ctx.cwd);
       const dbPath = resolve(dir, db);
 
       if (!existsSync(dbPath)) {

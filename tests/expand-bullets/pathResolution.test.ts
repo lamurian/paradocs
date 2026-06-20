@@ -11,20 +11,32 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return {
+    ...actual,
+    homedir: vi.fn(),
+  };
+});
+
 describe("expand_bullet_points path resolution", () => {
   let tmpDir: string;
+  let fakeHome: string;
   let knowledgeDir: string;
   let projectDir: string;
   let registeredTool: Record<string, unknown> | null;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(homedir(), "expandBullets-test-"));
+    tmpDir = mkdtempSync("/tmp/expandBullets-test-");
+    fakeHome = join(tmpDir, "fake-home");
+    mkdirSync(fakeHome, { recursive: true });
+    vi.mocked(homedir).mockReturnValue(fakeHome);
+
     knowledgeDir = join(tmpDir, "knowledge");
     projectDir = join(tmpDir, "project");
     mkdirSync(projectDir, { recursive: true });
 
     process.env.KNOWLEDGE_DIR = knowledgeDir;
-    // set a fake TAVILY_KEY so web search doesn't throw if it gets called
     process.env.TAVILY_KEY = "test-key";
 
     registeredTool = null;

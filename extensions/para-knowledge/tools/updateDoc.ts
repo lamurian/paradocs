@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { getKnowledgeConfig } from "../../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, indexFile } from "../db-sqlite.js";
 import { parseFrontmatter, formatFrontmatter } from "../frontmatter.js";
 
@@ -78,9 +78,10 @@ function updateDocIndex(
   created: string,
   now: string,
   content: string,
+  cwd?: string,
 ): boolean {
   try {
-    const { dir, db: dbName } = getKnowledgeConfig();
+    const { dir, db: dbName } = getKnowledgeConfig(cwd);
     const db = createDb(resolve(dir, dbName));
     initDb(db);
     const doc: DocIndex = {
@@ -139,6 +140,9 @@ export function registerUpdateDocTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
       const filePath = resolve(knowledgeDir, params.path);
       const existing = await readFile(filePath, "utf-8");
@@ -167,6 +171,7 @@ export function registerUpdateDocTool(pi: ExtensionAPI): void {
         created,
         now,
         params.content,
+        ctx.cwd,
       );
 
       const indexNote = indexOk

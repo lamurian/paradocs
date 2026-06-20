@@ -1,12 +1,6 @@
 /**
- * resolve_citation tool — parses a URL or DOI via citation.js for BibTeX citekey.
- *
- * Workflow:
- * 1. Try citation.js to parse the source
- * 2. Generate citekey (lastname-year)
- * 3. Check notes.db dedup via citations table
- * 4. If duplicate → return existing citekey
- * 5. If new → insert into SQLite, append to ref.bib
+ * resolve_citation — parses URL/DOI via citation.js for BibTeX citekey.
+ * Workflow: cite.js → citekey → dedup → insert/return.
  */
 
 import { appendFile, readFile } from "node:fs/promises";
@@ -14,7 +8,7 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { getKnowledgeConfig } from "../../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, type SqliteDb } from "../db-sqlite.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -193,6 +187,9 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
       const source = params.source.trim();
       const doi = extractDoi(source);
       const now = new Date().toISOString();

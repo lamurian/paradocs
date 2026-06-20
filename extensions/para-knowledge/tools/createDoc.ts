@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 import { Type } from "typebox";
 
 import { autoLink } from "../../../common/autoLink.js";
-import { getKnowledgeConfig } from "../../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, indexFile } from "../db-sqlite.js";
 import { slugify } from "../files.js";
 import { formatFrontmatter } from "../frontmatter.js";
@@ -144,6 +144,9 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
       const area = params.area ?? "Resources";
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
       const dirPath = resolve(knowledgeDir, area);

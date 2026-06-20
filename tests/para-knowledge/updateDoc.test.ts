@@ -11,8 +11,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return {
+    ...actual,
+    homedir: vi.fn(),
+  };
+});
+
 describe("update_para_doc path resolution", () => {
   let tmpDir: string;
+  let fakeHome: string;
   let knowledgeDir: string;
   let projectDir: string;
   let registeredTool: Record<string, unknown> | null;
@@ -27,7 +36,11 @@ describe("update_para_doc path resolution", () => {
   }
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(homedir(), "updateDoc-test-"));
+    tmpDir = mkdtempSync("/tmp/updateDoc-test-");
+    fakeHome = join(tmpDir, "fake-home");
+    mkdirSync(fakeHome, { recursive: true });
+    vi.mocked(homedir).mockReturnValue(fakeHome);
+
     knowledgeDir = join(tmpDir, "knowledge");
     projectDir = join(tmpDir, "project");
     mkdirSync(projectDir, { recursive: true });
@@ -91,6 +104,66 @@ describe("update_para_doc path resolution", () => {
     const content = readFileSync(knowledgePath, "utf-8");
     expect(content).toContain("Updated body.");
     expect(content).toContain("title: Existing Doc");
+  });
+
+  it("should use KNOWLEDGE_DIR from project .pi/.env when env var is not set", async () => {
+    // Create a doc in the knowledge dir
+    writeDoc("Resources", "env-doc", "Env Doc", "Original body.");
+
+    // Create .pi/.env in projectDir pointing to knowledgeDir
+    const piEnvDir = join(projectDir, ".pi");
+    mkdirSync(piEnvDir, { recursive: true });
+    writeFileSync(join(piEnvDir, ".env"), `KNOWLEDGE_DIR=${knowledgeDir}\n`);
+
+    // Unset env vars so they must come from .pi/.env via configureEnv
+    delete process.env.KNOWLEDGE_DIR;
+    delete process.env.KNOWLEDGE_DB;
+
+    vi.resetModules();
+    const { registerUpdateDocTool } =
+      await import("../../extensions/para-knowledge/tools/updateDoc.js");
+
+    const mockPi = {
+      registerTool: (tool: Record<string, unknown>) => {
+        registeredTool = tool;
+      },
+      on: () => {},
+    } as unknown as ExtensionAPI;
+
+    registerUpdateDocTool(mockPi);
+    expect(registeredTool).not.toBeNull();
+
+    const tool = registeredTool!;
+    const execute = tool.execute as (
+      toolCallId: string,
+      params: Record<string, unknown>,
+      signal: AbortSignal | undefined,
+      onUpdate: unknown,
+      ctx: ExtensionContext,
+    ) => Promise<{
+      content: Array<{ type: string; text: string }>;
+      details: Record<string, unknown>;
+    }>;
+
+    await execute(
+      "call-env",
+      {
+        path: "Resources/env-doc.md",
+        content: "Updated via .env config.",
+      },
+      undefined,
+      undefined,
+      { cwd: projectDir } as ExtensionContext,
+    );
+
+    // The file should have been updated in KNOWLEDGE_DIR
+    const knowledgePath = join(knowledgeDir, "Resources", "env-doc.md");
+    expect(existsSync(knowledgePath)).toBe(true);
+    const content = readFileSync(knowledgePath, "utf-8");
+    expect(content).toContain("Updated via .env config.");
+
+    // Cleanup
+    rmSync(piEnvDir, { recursive: true, force: true });
   });
 
   it("should fall back to ctx.cwd when KNOWLEDGE_DIR is not set", async () => {

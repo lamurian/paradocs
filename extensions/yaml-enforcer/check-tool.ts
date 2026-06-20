@@ -8,7 +8,7 @@ import { resolve, relative } from "node:path";
 import { Type } from "typebox";
 
 import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.js";
-import { getKnowledgeConfig } from "../../common/env.js";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -28,6 +28,9 @@ export function registerCheckTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
+      configureEnv(ctx.cwd);
+
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
       const filePath = resolve(knowledgeDir, params.path);
       const doRepair = params.repair ?? false;

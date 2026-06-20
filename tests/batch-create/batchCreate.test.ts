@@ -11,14 +11,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return {
+    ...actual,
+    homedir: vi.fn(),
+  };
+});
+
 describe("batch_create_para_docs path resolution", () => {
   let tmpDir: string;
+  let fakeHome: string;
   let knowledgeDir: string;
   let projectDir: string;
   let registeredTool: Record<string, unknown> | null;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(homedir(), "batchCreate-test-"));
+    tmpDir = mkdtempSync("/tmp/batchCreate-test-");
+    fakeHome = join(tmpDir, "fake-home");
+    mkdirSync(fakeHome, { recursive: true });
+    vi.mocked(homedir).mockReturnValue(fakeHome);
+
     knowledgeDir = join(tmpDir, "knowledge");
     projectDir = join(tmpDir, "project");
     mkdirSync(projectDir, { recursive: true });
