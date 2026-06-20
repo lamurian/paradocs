@@ -2,7 +2,7 @@
 title: Tool Description Updates
 description: Tool Description Updates
 status: proposed
-remaining: 1
+remaining: 0
 date: 2026-06-20
 ---
 

@@ -2,7 +2,7 @@
 title: Auto-link Integration
 description: Auto-link Integration
 status: proposed
-remaining: 1
+remaining: 0
 date: 2026-06-20
 ---
 
