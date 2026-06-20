@@ -9,7 +9,7 @@
  * @module extensions/commands/index
  */
 
-import { handler as askHandler, description as askDescription } from "./ask.js";
+import { createHandler as createAskHandler, description as askDescription } from "./ask.js";
 import { handler as researchHandler, description as researchDescription } from "./research.js";
 import { handler as summarizeHandler, description as summarizeDescription } from "./summarize.js";
 
@@ -23,7 +23,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export default function (pi: ExtensionAPI): void {
   pi.registerCommand("ask", {
     description: askDescription,
-    handler: askHandler,
+    handler: createAskHandler(pi),
   });
 
   pi.registerCommand("research", {
