@@ -34,24 +34,24 @@ describe("Spec 016 documentation status", () => {
 });
 
 describe("ARCHITECTURE.md status tracking", () => {
-  it("should show ADRs (6/6)", () => {
+  it("should show ADRs (10/10)", () => {
     const content = readFileSync("ARCHITECTURE.md", "utf-8");
-    expect(content).toContain("## ADRs (6/6)");
+    expect(content).toContain("## ADRs (10/10)");
   });
 
-  it("should list ADR 006 as implemented", () => {
+  it("should list ADR 010 as implemented", () => {
     const content = readFileSync("ARCHITECTURE.md", "utf-8");
-    expect(content).toContain("[x] ADR 006");
+    expect(content).toContain("[x] ADR 010");
   });
 
-  it("should show Specs (16/16)", () => {
+  it("should show Specs (26/26)", () => {
     const content = readFileSync("ARCHITECTURE.md", "utf-8");
-    expect(content).toContain("## Specs (16/16)");
+    expect(content).toContain("## Specs (26/26)");
   });
 
-  it("should list Spec 016 as implemented", () => {
+  it("should list Spec 026 as implemented", () => {
     const content = readFileSync("ARCHITECTURE.md", "utf-8");
-    expect(content).toContain("[x] Spec 016");
+    expect(content).toContain("[x] Spec 026");
   });
 
   it("should NOT have ADR 006 as [D]raft in quick reference", () => {

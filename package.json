@@ -3,8 +3,12 @@
   "private": true,
   "description": "PARA knowledge management for pi",
   "pi": {
-    "extensions": ["./extensions"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
   "dependencies": {
     "@citation-js/core": "^0.7.21",
@@ -29,6 +33,7 @@
     "precommit": "npm run format && npm run lint:fix && npm run typecheck && npm run check:lines && npm run test"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "^0.79.8",
     "@earendil-works/pi-coding-agent": "^0.78.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.9.1",

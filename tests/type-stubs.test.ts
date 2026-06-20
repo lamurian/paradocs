@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { readFileSync, existsSync } from "node:fs";
+
+import { describe, it, expect } from "vitest";
 
 const TYPES_DIR = new URL("../types/", import.meta.url).pathname;
 const STUB_FILE = `${TYPES_DIR}citation-js.d.ts`;
@@ -49,6 +50,7 @@ describe("TypeScript compilation", () => {
     const result = execSync("npx tsc --noEmit", {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 120_000,
     });
 
     // tsc --noEmit outputs nothing on success

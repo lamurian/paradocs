@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
+
+import { describe, it, expect } from "vitest";
 
 const EXTENSIONS: Record<string, string[]> = {
   "para-knowledge": [
@@ -25,7 +26,13 @@ const EXTENSIONS: Record<string, string[]> = {
   "link-summarizer": ["index.ts", "cdp.ts", "http.ts", "pdf.ts", "tavily-extract.ts"],
   "batch-create": ["index.ts", "search.ts", "yaml.ts"],
   "expand-bullets": ["index.ts", "parser.ts", "search.ts", "synthesis.ts"],
-  "yaml-enforcer": ["index.ts", "analyzer.ts", "scanner.ts", "check-tool.ts", "standardize-tool.ts"],
+  "yaml-enforcer": [
+    "index.ts",
+    "analyzer.ts",
+    "scanner.ts",
+    "check-tool.ts",
+    "standardize-tool.ts",
+  ],
 };
 
 describe("extension file existence", () => {
@@ -77,7 +84,7 @@ describe("import path cleanup", () => {
     for (const file of EXT_TS_FILES) {
       const content = readFileSync(file, "utf-8");
       // Only check import lines, not eslint-disable comments
-      const importLines = content.split("\n").filter(l => /from\s+["']/.test(l));
+      const importLines = content.split("\n").filter((l) => /from\s+["']/.test(l));
       for (const line of importLines) {
         expect(line).not.toMatch(/from\s+["'][^"']*@types\//);
       }
@@ -91,6 +98,7 @@ describe("TypeScript compilation", () => {
     const result = execSync("npx tsc --noEmit", {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 120_000,
     });
     // tsc --noEmit outputs nothing on success
     expect(result.trim()).toBe("");

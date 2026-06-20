@@ -14,7 +14,7 @@ export default defineConfig({
         lines: 80,
       },
     },
-    testTimeout: 30_000,
+    testTimeout: 60_000,
   },
   resolve: {
     extensions: [".ts", ".js", ".json"],

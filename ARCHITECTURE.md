@@ -32,7 +32,7 @@ Three-layer dotenv cascade. Exports typed interfaces (KnowledgeConfig,
 SearxngConfig, ObscuraConfig, ApiKeysConfig) and synchronous getters.
 All env vars have hardcoded defaults. Tilde expansion for KNOWLEDGE_DIR.
 
-## Extensions (7)
+## Extensions (8)
 
 | Extension | Type | Purpose |
 |---|---|---|
@@ -42,6 +42,7 @@ All env vars have hardcoded defaults. Tilde expansion for KNOWLEDGE_DIR.
 | batch-create/ | 1 tool | Batch PARA doc creation with auto-linking |
 | expand-bullets/ | 1 tool | Bullet → paragraph via web research |
 | yaml-enforcer/ | 3 tools | Frontmatter validation, check, standardize |
+| commands/ | 3 slash commands | /ask, /research, /summarize workflow starters |
 | skill-gate.ts | event interceptor | Search-first workflow enforcement |
 
 ## Shared Modules (common/)
@@ -49,26 +50,34 @@ All env vars have hardcoded defaults. Tilde expansion for KNOWLEDGE_DIR.
 slug.ts (slugify), tokenize.ts (BM25 tokenizer), yaml.ts (frontmatter
 formatting). Consumed by multiple extensions.
 
-## Skills (7)
+## Commands (extensions/commands/)
 
-SKILL.md files that orchestrate workflows: knowledge, create-doc,
-web-search, summarize-link, brainstorm, auto-link, research.
+Slash commands registered via pi.registerCommand() that orchestrate multi-step
+workflows. The agent executes the steps using registered tools.
+
+| Command | Description |
+|---------|-------------|
+| /ask | Knowledge Q&A — searches PARA docs, falls back to web search |
+| /research | Academic research — WHY/HOW/WHAT decomposition, hypothesis testing |
+| /summarize | URL summarization — fetch, dedup, summarize, create doc |
 
 ## Data Flow
 
-1. User asks question → skill-gate requires search_para_docs first
-2. search_para_docs queries SQLite FTS5 index (at KNOWLEDGE_DIR/KNOWLEDGE_DB)
-3. If no matches or partial → web_search via SearXNG → Tavily fallback
-4. Agent creates atomic notes (create_para_doc / batch_create_para_docs)
-5. yaml-enforcer auto-repairs frontmatter after creation
-6. auto-link skill runs [[wikilink]] semantic linking
-7. Evidence updates trigger re-search via web_search
+1. User runs a slash command (/ask, /research, /summarize) or asks a question
+2. If via command: command handler uses LLM to plan/analyze, outputs structured prompt
+3. skill-gate requires search_para_docs before creating documents
+4. search_para_docs queries SQLite FTS5 index (at KNOWLEDGE_DIR/KNOWLEDGE_DB)
+5. If no matches or partial → web_search via SearXNG → Tavily fallback
+6. Agent creates atomic notes (create_para_doc / batch_create_para_docs)
+7. yaml-enforcer auto-repairs frontmatter after creation
+8. auto-link runs automatically after doc creation (built into tools)
+9. Evidence updates trigger re-search via web_search
 
 # Implementation Status
 
 All documents are at `implemented` status.
 
-## ADRs (8/8)
+## ADRs (10/10)
 
 - [x] ADR 001 — Migration Architecture (7 extensions, 7 skills, 3 shared
   modules migrate; set-temperature, scope-gate, roadmap-scratchpad removed)
@@ -86,8 +95,12 @@ All documents are at `implemented` status.
   [[slug]] wikilinks with standard [title](path.md) markdown links)
 - [x] ADR 008 — Auto-Link Skill Output Migration (migrate auto-link skill
   output from wikilinks to standard markdown links)
+- [x] ADR 009 — Slash Command Workflows (orchestration skills → /ask, /research,
+  /summarize commands via pi.registerCommand())
+- [x] ADR 010 — Reference Convention Consolidation (bake reference skill
+  conventions into tool descriptions, remove skills/ from manifest)
 
-## Specs (19/19)
+## Specs (26/26)
 
 - [x] Spec 001 — Shared Modules Migration
 - [x] Spec 002 — Type Stubs Migration
@@ -111,6 +124,17 @@ All documents are at `implemented` status.
   standard markdown link format)
 - [x] Spec 019 — Downstream Skill References (update all skills referencing
   wikilinks to use new markdown link format)
+- [x] Spec 020 — Command Architecture (extensions/commands/index.ts entry point
+  registering /ask, /research, /summarize)
+- [x] Spec 021 — Ask Command Workflow (/ask command handler)
+- [x] Spec 022 — Research Command Workflow (/research command with LLM
+  decomposition)
+- [x] Spec 023 — Summarize Command Workflow (/summarize command handler)
+- [x] Spec 024 — Auto-link Integration (auto-link in create_para_doc and
+  batch_create_para_docs)
+- [x] Spec 025 — Tool Description Updates (web-search and create-doc conventions
+  baked into tool descriptions)
+- [x] Spec 026 — Skill Directory Cleanup (skills/ removed from pi manifest)
 
 ## Cross-Reference Format
 
