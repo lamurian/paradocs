@@ -1,116 +1,20 @@
 /**
- * create_para_doc tool — creates a new markdown file with YAML frontmatter
- * and inserts it into the SQLite index (including FTS5 full-text search).
+ * create_para_doc tool — thin wrapper around common/createDocument.ts.
+ *
+ * Adapter: parses params via typebox, delegates to the shared
+ * createDocument function, and formats the result for tool output.
+ *
+ * @module extensions/para-knowledge/tools/createDoc
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { autoLink } from "../../../common/autoLink.js";
-import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
-import { createDb, initDb, indexFile } from "../db-sqlite.js";
-import { slugify } from "../files.js";
-import { formatFrontmatter } from "../frontmatter.js";
+import { createDocument } from "../../../common/createDocument.js";
+import { getKnowledgeConfig } from "../../../common/env.js";
 
-import type { DocIndex } from "../db-sqlite.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-
-/**
- * Index a newly created document in the SQLite database.
- */
-function indexDocInDb(
-  relPath: string,
-  params: {
-    title: string;
-    content: string;
-    tags: string[];
-    source?: string | null;
-  },
-  autoDesc: string | null,
-  now: string,
-): boolean {
-  try {
-    const { dir, db: dbName } = getKnowledgeConfig();
-    const db = createDb(resolve(dir, dbName));
-    initDb(db);
-    const doc: DocIndex = {
-      path: relPath,
-      title: params.title,
-      body: (autoDesc ?? "") + "\n" + params.content,
-      tags: params.tags,
-      author: "pi",
-      editor: "lam",
-      created: now,
-      modified: now,
-      file_mtime: now,
-      source_url: params.source || null,
-    };
-    indexFile(db, doc);
-    db.close();
-    return true;
-  } catch (e: unknown) {
-    console.error("[para-knowledge] SQLite insert failed:", e);
-    return false;
-  }
-}
-
-/** Auto-generate a description from content when none is provided. */
-function getAutoDesc(params: { description?: string; content: string }): string | null {
-  return (
-    params.description?.trim() || params.content.replace(/\n+/g, " ").slice(0, 150).trim() || null
-  );
-}
-
-/** Build the user-facing response text from creation results. */
-function buildCreatedResponse(
-  indexOk: boolean,
-  autoDesc: string | null,
-  source: string | undefined,
-  filePath: string,
-  title: string,
-  tags: string[],
-  linkCount: number,
-): string {
-  const indexNote = indexOk
-    ? "🗄️ notes.db — indexed"
-    : "⚠️  File created but index update failed. It will be indexed on next search.";
-  const descNote = autoDesc ? `\nDescription: ${autoDesc}` : "";
-  const sourceNote = source ? `\nSource: ${source}` : "";
-  const linkNote =
-    linkCount > 0
-      ? `\n🔗 Auto-linked to ${linkCount} related note${linkCount === 1 ? "" : "s"}`
-      : "";
-  return `${indexNote}\nCreated: ${filePath}\nTitle: ${title}\nTags: ${tags.join(", ")}${descNote}${sourceNote}${linkNote}`;
-}
-
-/**
- * Run auto-linking for a newly created document.
- * Opens a fresh DB connection, calls autoLink, and handles all errors
- * gracefully — returns 0 when no links found or on any failure.
- */
-async function runAutoLink(
-  relPath: string,
-  title: string,
-  tags: string[],
-  knowledgeDir: string,
-  dbName: string,
-): Promise<number> {
-  try {
-    const linkDb = createDb(resolve(knowledgeDir, dbName));
-    initDb(linkDb);
-    try {
-      return await autoLink(relPath, title, tags, knowledgeDir, linkDb);
-    } finally {
-      linkDb.close();
-    }
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[para-knowledge] Auto-link failed:", msg);
-    return 0;
-  }
-}
 
 /**
  * Register the create_para_doc tool.
@@ -144,75 +48,58 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
-      configureEnv(ctx.cwd);
-
-      const area = params.area ?? "Resources";
-      const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
-      const dirPath = resolve(knowledgeDir, area);
-      const slug = slugify(params.title);
-      const filePath = resolve(dirPath, `${slug}.md`);
-      const relPath = `${area}/${slug}.md`;
-      const now = new Date().toISOString();
-
-      const autoDesc = getAutoDesc(params);
-
-      // Build and write the markdown file
-      const frontmatterFields: Record<string, unknown> = {
-        title: params.title,
-        author: "pi",
-        editor: "lam",
-        date: now,
-        tags: params.tags,
-      };
-      if (autoDesc) frontmatterFields.description = autoDesc;
-      if (params.source?.trim()) frontmatterFields.source = params.source.trim();
-
-      const fm = formatFrontmatter(frontmatterFields);
-      await mkdir(dirPath, { recursive: true });
-      await writeFile(filePath, fm + "\n" + params.content, "utf-8");
-
-      // Index in SQLite
       onUpdate?.({
-        content: [{ type: "text" as const, text: "🗄️ notes.db — inserting into index…" }],
+        content: [{ type: "text" as const, text: "🗄️ Creating document…" }],
         details: {},
       });
 
-      const indexOk = indexDocInDb(relPath, params, autoDesc, now);
+      const area = params.area ?? "Resources";
+      const autoDesc =
+        params.description?.trim() ||
+        params.content.replace(/\n+/g, " ").slice(0, 150).trim() ||
+        null;
 
-      // Auto-link: find related docs via BM25 and append relevant links
-      let linkCount = 0;
-      if (indexOk) {
-        if (onUpdate) {
-          onUpdate({
-            content: [{ type: "text" as const, text: "🔗 Running auto-link…" }],
-            details: {},
-          });
-        }
-        const { dir: knowledgeDir, db: dbName } = getKnowledgeConfig(ctx.cwd);
-        linkCount = await runAutoLink(relPath, params.title, params.tags, knowledgeDir, dbName);
-      }
-
-      const responseText = buildCreatedResponse(
-        indexOk,
-        autoDesc,
-        params.source,
-        filePath,
-        params.title,
-        params.tags,
-        linkCount,
+      const result = await createDocument(
+        {
+          title: params.title,
+          content: params.content,
+          tags: params.tags,
+          area,
+          description: params.description,
+          source: params.source,
+        },
+        { cwd: ctx.cwd },
       );
 
+      // Resolve absolute path for backward compatibility
+      const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
+      const absPath = resolve(knowledgeDir, result.path);
+
+      const indexNote = result.indexOk
+        ? "🗄️ notes.db — indexed"
+        : "⚠️  File created but index update failed. It will be indexed on next search.";
+      const linkNote =
+        result.linkCount > 0
+          ? `\n🔗 Auto-linked to ${result.linkCount} related note${result.linkCount === 1 ? "" : "s"}`
+          : "";
+      const descNote = autoDesc ? `\nDescription: ${autoDesc}` : "";
+      const sourceNote = params.source ? `\nSource: ${params.source}` : "";
+
       return {
-        content: [{ type: "text" as const, text: responseText }],
+        content: [
+          {
+            type: "text" as const,
+            text: `${indexNote}\nCreated: ${absPath}\nTitle: ${result.title}\nTags: ${params.tags.join(", ")}${descNote}${sourceNote}${linkNote}`,
+          },
+        ],
         details: {
-          path: filePath,
-          title: params.title,
+          path: absPath,
+          title: result.title,
           description: autoDesc,
           tags: params.tags,
           source: params.source ?? null,
-          indexOk,
-          autoLinked: linkCount,
+          indexOk: result.indexOk,
+          autoLinked: result.linkCount,
         },
       };
     },

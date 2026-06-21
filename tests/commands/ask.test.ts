@@ -1,5 +1,5 @@
 /**
- * Tests for the /ask command handler.
+ * Tests for the /ask command handler — deterministic JS orchestrator.
  *
  * @module tests/commands/ask.test
  */
@@ -46,39 +46,58 @@ describe("ask command handler", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should send structured research prompt via sendUserMessage", async () => {
+  it("should require TUI mode (ctx.ui.custom must be a function)", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
     const handler = createHandler(mockPi as never);
 
     await handler("What is dopamine?", mockCtx as never);
 
-    // Should notify the user
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍 Researching"), "info");
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("requires interactive (TUI) mode"),
+      "error",
+    );
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
 
-    // Should send structured prompt
-    expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const prompt = sendUserMessage.mock.calls[0][0] as string;
-    expect(prompt).toContain("QUESTION: What is dopamine?");
-    expect(prompt).toContain("search_para_docs");
-    expect(prompt).toContain("web_search");
-    expect(prompt).toContain("fetch_url");
-    expect(prompt).toContain("create_para_doc");
-    expect(prompt).toContain("resolve_citation");
-    expect(prompt).toContain("Proceed step by step");
+  it("should require a selected model", async () => {
+    const { createHandler } = await import("../../extensions/commands/ask.js");
+    const handler = createHandler(mockPi as never);
+
+    await handler("What is dopamine?", {
+      ...mockCtx,
+      ui: { notify, custom: vi.fn() },
+    } as never);
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("No model selected"), "error");
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("should notify the user when research starts", async () => {
+    const { createHandler } = await import("../../extensions/commands/ask.js");
+    const handler = createHandler(mockPi as never);
+
+    // With TUI mode and model, but no modelRegistry — will hit an error
+    // before the orchestration starts
+    await handler("What is dopamine?", {
+      ...mockCtx,
+      ui: { notify, custom: vi.fn() },
+      model: { id: "test-model", provider: "test" },
+      modelRegistry: {
+        getApiKeyAndHeaders: vi.fn().mockRejectedValue(new Error("No registry")),
+      },
+    } as never);
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍 Researching"), "info");
   });
 
   it("should handle errors gracefully", async () => {
-    // Simulate a synchronous throw from sendUserMessage
-    sendUserMessage.mockImplementationOnce(() => {
-      throw new Error("Network error");
-    });
-
+    // Since handler uses ctx.ui.custom that returns immediately with the mock,
+    // this test verifies the outer try/catch doesn't throw
     const { createHandler } = await import("../../extensions/commands/ask.js");
     const handler = createHandler(mockPi as never);
 
-    await handler("What is dopamine?", mockCtx as never);
-
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("❌"), "error");
+    // Should not throw even with minimal mock
+    await expect(handler("What is dopamine?", mockCtx as never)).resolves.not.toThrow();
   });
 
   it("should truncate long question in notification", async () => {
@@ -86,7 +105,14 @@ describe("ask command handler", () => {
     const handler = createHandler(mockPi as never);
 
     const longQuestion = "What is ".repeat(20) + "?";
-    await handler(longQuestion, mockCtx as never);
+    await handler(longQuestion, {
+      ...mockCtx,
+      ui: { notify, custom: vi.fn() },
+      model: { id: "test-model", provider: "test" },
+      modelRegistry: {
+        getApiKeyAndHeaders: vi.fn().mockRejectedValue(new Error("No registry")),
+      },
+    } as never);
 
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("…"), "info");
   });

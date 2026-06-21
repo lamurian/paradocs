@@ -74,7 +74,7 @@ describe("commands index", () => {
     expect(registerCommand).toHaveBeenCalledTimes(3);
   });
 
-  it("should create /ask handler that captures pi.sendUserMessage", async () => {
+  it("should create /ask handler that handles TUI guard gracefully", async () => {
     const mod = await import("../../extensions/commands/index.js");
     mod.default(mockPi as never);
 
@@ -83,11 +83,15 @@ describe("commands index", () => {
     const [, config] = call!;
     const handler = config.handler;
 
-    const mockCtx = { ui: { notify: vi.fn() }, cwd: "/test" };
+    const notify = vi.fn();
+    const mockCtx = { ui: { notify }, cwd: "/test" };
     await handler("What is dopamine?", mockCtx);
 
-    expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const prompt = sendUserMessage.mock.calls[0][0] as string;
-    expect(prompt).toContain("QUESTION: What is dopamine?");
+    // Without TUI mode, the handler notifies about TUI requirement
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("requires interactive (TUI) mode"),
+      "error",
+    );
+    expect(sendUserMessage).not.toHaveBeenCalled();
   });
 });

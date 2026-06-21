@@ -1,25 +1,34 @@
 /**
- * Link Summarizer Extension
+ * Link Summarizer Extension — tool wrapper around common/fetchUrl.ts.
  *
- * Uses Obscura (headless browser, CDP WebSocket protocol) as the primary
- * engine for HTML content extraction. Falls back to simple HTTP fetch +
- * text stripping when Obscura is not running.
+ * Thin adapter: the fetch_url tool delegates to fetchUrlAsText and
+ * formats the result with human-readable metadata. The batch_extract_failed
+ * tool (Tavily batch for URLs that failed primary extraction) stays inline.
  *
- * PDF support: Detects PDF URLs and extracts text using pdftotext.
+ * @module extensions/link-summarizer/index
  */
 
 import { Type } from "typebox";
 
-import { tryObscura } from "./cdp.js";
-import { fetchViaHttp } from "./http.js";
-import { tryExtractPdf, isPdfUrl } from "./pdf.js";
 import { addFailedUrl, extractBatch, hasPending } from "./tavily-extract.js";
+import { fetchUrlAsText } from "../../common/fetchUrl.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+/** Constants for the batch_extract_failed tool formatting. */
 const MAX_CONTENT_CHARS = 80_000;
 
-function formatContent(
+function truncate(text: string): { body: string; truncated: boolean } {
+  if (text.length <= MAX_CONTENT_CHARS) return { body: text, truncated: false };
+  return {
+    body:
+      text.slice(0, MAX_CONTENT_CHARS) +
+      `\n\n[... content truncated to ${MAX_CONTENT_CHARS.toLocaleString()} characters ...]`,
+    truncated: true,
+  };
+}
+
+function formatToolContent(
   title: string,
   url: string,
   body: string,
@@ -35,117 +44,53 @@ function formatContent(
   );
 }
 
-function truncate(text: string): { body: string; truncated: boolean } {
-  if (text.length <= MAX_CONTENT_CHARS) return { body: text, truncated: false };
-  return {
-    body:
-      text.slice(0, MAX_CONTENT_CHARS) +
-      `\n\n[... content truncated to ${MAX_CONTENT_CHARS.toLocaleString()} characters ...]`,
-    truncated: true,
-  };
-}
-
-async function handlePdf(url: string, signal?: AbortSignal) {
-  const result = await tryExtractPdf(url, signal);
-  if (!result) return null;
-  const { title, text } = result;
-  const { body, truncated } = truncate(text);
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: formatContent(
-          title,
-          url,
-          body,
-          "PDF extracted via pdftotext",
-          text.length,
-          truncated,
-        ),
-      },
-    ],
-    details: { engine: "pdftotext", title, url, extractedLength: text.length, truncated },
-  };
-}
-
-async function handleHtml(url: string, signal?: AbortSignal) {
-  const obsResult = await tryObscura(url, signal);
-  if (obsResult) {
-    const { title, markdown } = obsResult;
-    const { body, truncated } = truncate(markdown);
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: formatContent(
-            title,
-            url,
-            body,
-            "Obscura headless browser",
-            markdown.length,
-            truncated,
-          ),
-        },
-      ],
-      details: { engine: "obscura-cdp", title, url, extractedLength: markdown.length, truncated },
-    };
-  }
-
-  const httpResult = await fetchViaHttp(url, signal);
-  if ("error" in httpResult) {
-    if (httpResult.error === "PDF_CONTENT_TYPE") {
-      const pdfResult = await tryExtractPdf(url, signal);
-      if (pdfResult) {
-        const { title, text } = pdfResult;
-        const { body, truncated } = truncate(text);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: formatContent(
-                title,
-                url,
-                body,
-                "PDF extracted via pdftotext",
-                text.length,
-                truncated,
-              ),
-            },
-          ],
-          details: { engine: "pdftotext", title, url, extractedLength: text.length, truncated },
-        };
-      }
-    }
+/**
+ * Format the shared fetchUrlAsText result into a tool response.
+ */
+function formatToolResponse(
+  result: { title: string; content: string; engine: string } | { error: string },
+  url: string,
+): {
+  content: Array<{ type: "text"; text: string }>;
+  details: Record<string, unknown>;
+  isError?: boolean;
+} {
+  if ("error" in result) {
     addFailedUrl(url);
     return {
       content: [
         {
           type: "text" as const,
-          text: `Obscura not available and HTTP fallback failed.\n\n🔗 ${url}\n⚠️ ${httpResult.error}\n\nURL queued for Tavily batch extraction. Call \`batch_extract_failed\` to process all queued URLs.`,
+          text: `Obscura not available and HTTP fallback failed.\n\n🔗 ${url}\n⚠️ ${result.error}\n\nURL queued for Tavily batch extraction. Call \`batch_extract_failed\` to process all queued URLs.`,
         },
       ],
-      details: { url, error: httpResult.error, queuedForTavily: true },
+      details: { url, error: result.error, queuedForTavily: true },
       isError: true,
     };
   }
 
-  const { title, text } = httpResult;
-  const { body, truncated } = truncate(text);
+  const engineLabel =
+    result.engine === "obscura-cdp"
+      ? "Obscura headless browser"
+      : result.engine === "http-fallback"
+        ? "HTTP fallback (Obscura not available)"
+        : result.engine === "pdftotext"
+          ? "PDF extracted via pdftotext"
+          : result.engine;
+
   return {
     content: [
       {
         type: "text" as const,
-        text: formatContent(
-          title || "(no title)",
-          url,
-          body,
-          "HTTP fallback (Obscura not available)",
-          text.length,
-          truncated,
-        ),
+        text: `📄 **${result.title}**\n🔗 ${url}\n${engineLabel} · ${result.content.length.toLocaleString()} chars\n\n━━━ Content ━━━\n\n${result.content}`,
       },
     ],
-    details: { engine: "http-fallback", title, url, extractedLength: text.length, truncated },
+    details: {
+      engine: result.engine,
+      title: result.title,
+      url,
+      extractedLength: result.content.length,
+    },
   };
 }
 
@@ -218,7 +163,7 @@ export default function (pi: ExtensionAPI) {
           const { body, truncated } = truncate(r.markdown);
           lines.push("");
           lines.push(
-            formatContent(title, r.url, body, "Tavily extract", r.markdown.length, truncated),
+            formatToolContent(title, r.url, body, "Tavily extract", r.markdown.length, truncated),
           );
         }
       }
@@ -258,31 +203,8 @@ export default function (pi: ExtensionAPI) {
 
     async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
       const { url } = params;
-
-      let parsed: URL;
-      try {
-        parsed = new URL(url);
-      } catch {
-        return {
-          content: [{ type: "text" as const, text: `Invalid URL: ${url}` }],
-          details: {},
-          isError: true,
-        };
-      }
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        return {
-          content: [{ type: "text" as const, text: `Unsupported protocol: ${parsed.protocol}` }],
-          details: {},
-          isError: true,
-        };
-      }
-
-      if (isPdfUrl(url)) {
-        const pdfResult = await handlePdf(url, signal);
-        if (pdfResult) return pdfResult;
-      }
-
-      return await handleHtml(url, signal);
+      const result = await fetchUrlAsText(url, signal);
+      return formatToolResponse(result, url);
     },
   });
 }
