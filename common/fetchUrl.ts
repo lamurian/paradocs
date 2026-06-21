@@ -90,6 +90,49 @@ async function handleHtml(
   return formatContent(title || "(no title)", url, body, "http-fallback");
 }
 
+// ── Timeout wrapper ──────────────────────────────────────────────────
+
+/**
+ * Fetch a URL with an independent timeout, racing `fetchUrlAsText` against
+ * a configurable timeout. The user-supplied signal (for manual cancellation)
+ * is forwarded to the underlying fetch, but the timeout fires autonomously.
+ *
+ * @param url       - The URL to fetch.
+ * @param timeoutMs - Timeout in milliseconds before returning an error.
+ * @param signal    - Optional AbortSignal for external cancellation.
+ * @returns Same shape as fetchUrlAsText, or { error } on timeout.
+ */
+export async function fetchUrlWithTimeout(
+  url: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<{ title: string; content: string; engine: string } | { error: string }> {
+  // Race fetchUrlAsText against a simple timeout promise
+  const timeoutPromise = new Promise<{ error: string }>((resolve) => {
+    const timer = setTimeout(() => {
+      resolve({ error: `Request timed out after ${timeoutMs}ms` });
+    }, timeoutMs);
+    if (signal) {
+      if (signal.aborted) {
+        clearTimeout(timer);
+        resolve({ error: "Cancelled by caller" });
+        return;
+      }
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          resolve({ error: "Cancelled by caller" });
+        },
+        { once: true },
+      );
+    }
+  });
+
+  const result = await Promise.race([fetchUrlAsText(url, signal), timeoutPromise]);
+  return result;
+}
+
 // ── Main export ─────────────────────────────────────────────────────
 
 /**
