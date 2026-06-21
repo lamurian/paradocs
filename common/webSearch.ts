@@ -124,8 +124,8 @@ export function formatResults(results: SearchResult[], query: string, tierLabel:
  * (>3) are found, returns immediately. Otherwise falls through to
  * Phase 2 (Tavily) and Phase 3 (Bing RSS with domain filtering).
  *
- * When a specific tier is forced, returns SearXNG results directly without
- * falling through to Tavily/Bing.
+ * When a specific tier is forced and SearXNG returns >3 results, returns
+ * SearXNG results directly. Otherwise falls through to Tavily/Bing.
  *
  * @param query         - The search query.
  * @param options.tier  - Force a specific SearXNG tier (1, 2, or 3).
@@ -150,10 +150,10 @@ export async function searchWeb(
   );
   const usedTier = forcedTier ?? 3;
 
-  if (forcedTier !== undefined) {
+  if (forcedTier !== undefined && searxngResults.length > 3) {
     const catNote = category ? ` (category: ${category})` : "";
     const label = `Phase 1 — SearXNG Tier ${forcedTier}${catNote} (${searxngResults.length} results)`;
-    return { results: searxngResults, tier: usedTier, tierLabel: label };
+    return { results: searxngResults.slice(0, 10), tier: usedTier, tierLabel: label };
   }
 
   if (searxngResults.length > 3) {

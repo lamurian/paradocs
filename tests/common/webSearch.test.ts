@@ -85,6 +85,90 @@ describe("searchWeb shared module", () => {
     expect(url.searchParams.get("categories")).toBe("scientific_publications");
   });
 
+  it("should fall through to Tavily when SearXNG returns ≤3 results with forced tier", async () => {
+    // Mock: first call = SearXNG (few results), second call = Tavily (success)
+    const searxngResponse = {
+      results: [
+        {
+          title: "SearXNG Result",
+          url: "https://example.edu/paper",
+          content: "A single result from SearXNG.",
+          engine: "google",
+        },
+      ],
+    };
+
+    const tavilyResponse = {
+      results: [
+        {
+          title: "Tavily Result",
+          url: "https://example.com/result",
+          content: "A result from Tavily.",
+        },
+      ],
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((requestUrl: string | URL | Request) => {
+        const urlStr = typeof requestUrl === "string" ? requestUrl : (requestUrl as URL).href;
+        if (urlStr.includes("tavily.com")) {
+          return {
+            ok: true,
+            json: () => Promise.resolve(tavilyResponse),
+          };
+        }
+        // SearXNG (first call)
+        return {
+          ok: true,
+          json: () => Promise.resolve(searxngResponse),
+        };
+      }),
+    );
+
+    // Need TAVILY_KEY in env for Tavily to attempt
+    process.env.TAVILY_KEY = "test-key";
+
+    const { searchWeb } = await import("../../common/webSearch.js");
+
+    const result = await searchWeb("test query", { tier: 3 });
+
+    // Should fall through to Tavily since SearXNG returned only 1 result (≤3)
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.tierLabel).toContain("Tavily");
+
+    // Clean up
+    delete process.env.TAVILY_KEY;
+  });
+
+  it("should return SearXNG results directly when it has >3 results even with forced tier", async () => {
+    // Many results — should NOT fall through
+    const manyResults = {
+      results: Array.from({ length: 5 }, (_, i) => ({
+        title: `Result ${i + 1}`,
+        url: `https://example.edu/paper${i + 1}`,
+        content: `Content ${i + 1}.`,
+        engine: "google",
+      })),
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(manyResults),
+      }),
+    );
+
+    const { searchWeb } = await import("../../common/webSearch.js");
+
+    const result = await searchWeb("test query", { tier: 3 });
+
+    // Should return SearXNG results directly (>3 results = no fallthrough)
+    expect(result.results.length).toBe(5);
+    expect(result.tierLabel).toContain("SearXNG");
+  });
+
   it("should return empty results when fetch fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
 
