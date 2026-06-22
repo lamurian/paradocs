@@ -1,5 +1,5 @@
 /**
- * Tests for the /ask command handler — deterministic JS orchestrator.
+ * Tests for the /ask command handler — plan generator.
  *
  * @module tests/commands/ask.test
  */
@@ -72,12 +72,10 @@ describe("ask command handler", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should notify the user when research starts", async () => {
+  it("should notify the user when check starts", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
     const handler = createHandler(mockPi as never);
 
-    // With TUI mode and model, but no modelRegistry — will hit an error
-    // before the orchestration starts
     await handler("What is dopamine?", {
       ...mockCtx,
       ui: { notify, custom: vi.fn() },
@@ -87,16 +85,13 @@ describe("ask command handler", () => {
       },
     } as never);
 
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍 Researching"), "info");
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍 Checking:"), "info");
   });
 
   it("should handle errors gracefully", async () => {
-    // Since handler uses ctx.ui.custom that returns immediately with the mock,
-    // this test verifies the outer try/catch doesn't throw
     const { createHandler } = await import("../../extensions/commands/ask.js");
     const handler = createHandler(mockPi as never);
 
-    // Should not throw even with minimal mock
     await expect(handler("What is dopamine?", mockCtx as never)).resolves.not.toThrow();
   });
 

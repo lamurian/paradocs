@@ -1,8 +1,8 @@
 ---
 title: Mandatory Citation Resolution
 description: Every web source used in note synthesis must have a resolved BibTeX citekey before the note can be created
-status: proposed
-remaining: 1
+status: accepted
+remaining: 0
 date: 2026-06-22
 ---
 
