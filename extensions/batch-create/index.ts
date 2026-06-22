@@ -9,115 +9,73 @@
  * for concurrent-write safety (retry queue, lock detection, TX recovery).
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-
 import { Type } from "typebox";
 
-import { slugify, formatFrontmatter } from "./yaml.js";
-import { autoLink } from "../../common/autoLink.js";
+import {
+  validateDocuments,
+  buildSkippedNote,
+  createFilesOnDisk,
+  indexDocumentsInDb,
+  autoLinkBatch,
+} from "./batch-helpers.js";
+import { validateCitations } from "../../common/citation-validation.js";
 import { getKnowledgeConfig } from "../../common/env.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
-import { indexFile } from "../para-knowledge/db-sqlite.js";
 
-import type { DocIndex } from "../para-knowledge/db-sqlite.js";
+import type { BatchDoc, CitationViolation } from "./batch-helpers.js";
+import type { SqliteDb } from "../para-knowledge/sqlite-types.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-// ── Types ─────────────────────────────────────────────────────────────
+// ── Execute helpers (reduce cyclomatic complexity) ─────────────────────
 
-interface BatchDoc {
-  title: string;
-  content: string;
-  tags: string[];
-  area?: string;
-  description?: string;
-  source?: string;
-}
-
-interface CreatedFile {
-  path: string;
-  title: string;
-  relPath: string;
-}
-
-// ── Step 1: Create all files on disk ──────────────────────────────────
-
-async function createFilesOnDisk(docs: BatchDoc[], cwd: string): Promise<CreatedFile[]> {
-  const created: CreatedFile[] = [];
-
-  for (let i = 0; i < docs.length; i++) {
-    const doc = docs[i];
-    const area = doc.area ?? "Resources";
-    const dirPath = resolve(cwd, area);
-    const slug = slugify(doc.title);
-    const filePath = join(dirPath, `${slug}.md`);
-    const relPath = `${area}/${slug}.md`;
-    const now = new Date().toISOString();
-
-    const frontmatterFields: Record<string, unknown> = {
-      title: doc.title,
-      author: "pi",
-      editor: "lam",
-      date: now,
-      tags: doc.tags,
-    };
-    if (doc.description?.trim()) frontmatterFields.description = doc.description.trim();
-    if (doc.source?.trim()) frontmatterFields.source = doc.source.trim();
-
-    const fm = formatFrontmatter(frontmatterFields);
-    await mkdir(dirPath, { recursive: true });
-    await writeFile(filePath, fm + "\n" + doc.content, "utf-8");
-
-    created.push({ path: filePath, title: doc.title, relPath });
+function findCitationViolations(docs: BatchDoc[], db: SqliteDb): CitationViolation[] {
+  const violations: CitationViolation[] = [];
+  for (const doc of docs) {
+    const vr = validateCitations(doc.content, db);
+    if (!vr.valid) {
+      violations.push({ title: doc.title, missing: vr.missing });
+    }
   }
+  return violations;
+}
 
+function buildCreatedSummary(
+  created: Array<{ relPath: string; title: string }>,
+  linkNote: string,
+  skippedNote: string,
+): string {
+  const lines = created.map((c) => `  • ${c.relPath} — ${c.title}`).join("\n");
+  return `✅ Created and indexed ${created.length} documents:${linkNote}${skippedNote}\n\n${lines}`;
+}
+
+async function createAndIndexAll(
+  docs: BatchDoc[],
+  knowledgeDir: string,
+  cwd: string,
+): Promise<Array<{ path: string; title: string; relPath: string }>> {
+  const created = await createFilesOnDisk(docs, knowledgeDir);
+  await indexDocumentsInDb(docs, created, cwd);
   return created;
 }
 
-// ── Step 2: Index all documents in SQLite ────────────────────────────
-
-async function indexDocumentsInDb(
-  docs: BatchDoc[],
-  created: CreatedFile[],
-  cwd: string,
-): Promise<void> {
-  const db = await ensureNotesDb(cwd);
-  for (let i = 0; i < docs.length; i++) {
-    const doc = docs[i];
-    const relPath = created[i].relPath;
-    const docIndex: DocIndex = {
-      path: relPath,
-      title: doc.title,
-      body: (doc.description ?? "") + "\n" + doc.content,
-      tags: doc.tags,
-      author: "pi",
-      editor: "lam",
-      created: new Date().toISOString(),
-      modified: new Date().toISOString(),
-      file_mtime: new Date().toISOString(),
-      source_url: doc.source ?? null,
-    };
-    indexFile(db, docIndex);
-  }
-}
-
-// ── Step 3: Auto-link across the batch ────────────────────────────────
-
-async function autoLinkBatch(
-  docs: BatchDoc[],
-  created: CreatedFile[],
-  cwd: string,
-): Promise<number> {
-  const db = await ensureNotesDb(cwd);
-  const { dir: knowledgeDir } = getKnowledgeConfig(cwd);
-  let linkedCount = 0;
-  for (let i = 0; i < docs.length; i++) {
-    const doc = docs[i];
-    const relPath = created[i].relPath;
-    const count = await autoLink(relPath, doc.title, doc.tags, knowledgeDir, db);
-    if (count > 0) linkedCount++;
-  }
-  return linkedCount;
+function buildCitationErrorResponse(violations: CitationViolation[]): {
+  content: Array<{ type: "text"; text: string }>;
+  details: Record<string, unknown>;
+} {
+  const lines = violations
+    .map((v) => `  • "${v.title}": unresolved citekey(s) — ${v.missing.join(", ")}`)
+    .join("\n");
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text:
+          `❌ Citation validation failed — ${violations.length} document(s) have unresolved citations. ` +
+          `Call \`resolve_citation\` for each missing citekey before retrying.\n\n${lines}`,
+      },
+    ],
+    details: { error: "CITATION_VIOLATIONS", citationViolations: violations },
+  };
 }
 
 // ── Tool registration ─────────────────────────────────────────────────
@@ -132,13 +90,14 @@ export default function (pi: ExtensionAPI): void {
       "Each document follows: PARA classification — Resources (reference/theory), Areas (responsibilities/skills), " +
       "Projects (deliverables/practical work). " +
       "Atomic principle — one key idea per note, max 4 paragraphs, ≤100 lines. " +
+      "Validates atomicity (single topic, ≤4 paragraphs, ≤2 headings) and citation references for each doc before creation. " +
       "Filenames auto-generated as kebab-case slug from title. " +
       "Citations: Pandoc-style @citekey (narrative) or [@citekey] (parenthetical) from @ref.bib. " +
       "Run list_para_tags first and reuse existing tags. " +
       "Provide short description ≤ 200 chars for better BM25 search. " +
       "Recommended body: ## Summary (2-4 paragraphs), ## Key Points, ## Sources.",
     promptSnippet:
-      "Batch-create multiple PARA docs with auto-linking, following atomic principle and citation conventions",
+      "Batch-create multiple PARA docs with auto-linking, validating atomicity and following citation conventions",
     promptGuidelines: [
       "Use batch_create_para_docs when creating 3+ related documents to save tool calls and enable batch auto-linking.",
       "Each document in the array has: title, content, tags, area (Resources/Projects/Areas), optional description, optional source.",
@@ -146,6 +105,8 @@ export default function (pi: ExtensionAPI): void {
       "Follow PARA conventions: Resources for reference/theory, Areas for responsibilities, Projects for practical work.",
       "Use Pandoc-style citations (@citekey / [@citekey]) referencing @ref.bib for any sourced claims.",
       "Apply atomic principle: one key idea per document, max 4 paragraphs, keep concise.",
+      "Each document is validated for atomicity before creation; violating documents are rejected individually.",
+      "Citations are validated: all @citekey references must exist in notes.db. If any doc has unresolved citations, the entire batch is rejected.",
     ],
     parameters: Type.Object({
       documents: Type.Array(
@@ -175,40 +136,56 @@ export default function (pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      const docs = params.documents;
-      const autoLink = params.autoLink !== false;
+      const docs = params.documents as BatchDoc[];
+      const doAutoLink = params.autoLink !== false;
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
 
-      // Step 1: Create files on disk
-      let created: CreatedFile[];
-      try {
-        created = await createFilesOnDisk(docs, knowledgeDir);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
+      // Atomicity validation — each doc validated independently before any IO
+      const { validDocs, validationErrors } = validateDocuments(docs);
+
+      // If no valid docs remain, return errors immediately
+      if (validDocs.length === 0) {
+        const lines = validationErrors.map((e) => `  • "${e.title}": ${e.message}`).join("\n");
         return {
-          content: [{ type: "text", text: `❌ File creation failed: ${msg}` }],
-          details: { error: "CREATE_FAILED" },
+          content: [
+            {
+              type: "text",
+              text: `❌ All ${validationErrors.length} document(s) failed atomicity validation:\n\n${lines}`,
+            },
+          ],
+          details: {
+            error: "ALL_ATOMICITY_VIOLATIONS",
+            validationErrors,
+          },
         };
       }
 
-      onUpdate?.({
-        content: [
-          { type: "text", text: `📝 Created ${created.length} files. Indexing in notes.db…` },
-        ],
-        details: {},
-      });
+      // Citation validation — validate ALL documents (including atomicity-passing)
+      // If ANY doc has unresolved citations, reject the entire batch
+      const db = await ensureNotesDb(ctx.cwd);
+      const citationViolations = findCitationViolations(docs, db);
+      if (citationViolations.length > 0) {
+        return buildCitationErrorResponse(citationViolations);
+      }
 
-      // Step 2: Index in DuckDB (withDb handles lock retry + recovery)
+      // Step 1+2: Create files on disk and index in DB
+      let created;
       try {
-        await indexDocumentsInDb(docs, created, ctx.cwd);
+        created = await createAndIndexAll(validDocs, knowledgeDir, ctx.cwd);
+        onUpdate?.({
+          content: [
+            { type: "text", text: `📝 Created ${created.length} files. Indexing in notes.db…` },
+          ],
+          details: {},
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error("[batch-create] DuckDB indexing error:", msg);
+        console.error("[batch-create] Create/index error:", msg);
         onUpdate?.({
           content: [
             {
               type: "text",
-              text: `⚠️  Files created but DuckDB indexing failed: ${msg.slice(0, 200)}.`,
+              text: `⚠️  File creation or indexing failed: ${msg.slice(0, 200)}.`,
             },
           ],
           details: {},
@@ -217,50 +194,53 @@ export default function (pi: ExtensionAPI): void {
           content: [
             {
               type: "text",
-              text: `Created ${created.length} documents. DB indexing failed — will sync on next search.`,
+              text: `Created documents may exist. DB indexing failed — will sync on next search.`,
             },
           ],
-          details: { created: created.map((c) => c.path), autoLinked: false },
+          details: { error: "CREATE_OR_INDEX_FAILED" },
         };
       }
 
       // Step 3: Auto-link across the batch
       let linkedCount = 0;
-      if (autoLink) {
+      if (doAutoLink) {
         onUpdate?.({
           content: [{ type: "text", text: "🔗 Running batch semantic auto-linking…" }],
           details: {},
         });
 
         try {
-          linkedCount = await autoLinkBatch(docs, created, ctx.cwd);
+          linkedCount = await autoLinkBatch(validDocs, created, ctx.cwd);
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);
           console.error("[batch-create] Auto-link error:", msg);
           onUpdate?.({
-            content: [{ type: "text", text: `⚠️  Auto-linking error: ${msg.slice(0, 200)}.` }],
+            content: [
+              { type: "text" as const, text: `⚠️  Auto-linking error: ${msg.slice(0, 200)}.` },
+            ],
             details: {},
           });
         }
       }
 
-      const linkNote = autoLink
+      const skippedNote = buildSkippedNote(validationErrors);
+      const linkNote = doAutoLink
         ? `\n🔗 Auto-linked: ${linkedCount}/${created.length} documents received markdown links`
         : "";
-      const lines = created.map((c) => `  • ${c.relPath} — ${c.title}`).join("\n");
 
       return {
         content: [
           {
             type: "text",
-            text: `✅ Batch created and indexed ${created.length} documents:${linkNote}\n\n${lines}`,
+            text: buildCreatedSummary(created, linkNote, skippedNote),
           },
         ],
         details: {
           created: created.map((c) => ({ path: c.path, title: c.title, relPath: c.relPath })),
           count: created.length,
-          autoLinked: autoLink,
+          autoLinked: doAutoLink,
           linkedCount,
+          validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
         },
       };
     },

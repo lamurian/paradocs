@@ -12,8 +12,10 @@ import { resolve } from "node:path";
 import { Type } from "typebox";
 
 import { validateAtomicity } from "../../../common/atomicity.js";
+import { validateCitations } from "../../../common/citation-validation.js";
 import { createDocument } from "../../../common/createDocument.js";
 import { getKnowledgeConfig } from "../../../common/env.js";
+import { ensureNotesDb } from "../../../common/notesDb.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -29,7 +31,7 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
       "Conventions: PARA classification — Resources for reference/theory, Areas for responsibilities/skills, " +
       "Projects for deliverables/practical work. " +
       "Atomic principle — one key idea per note, max 4 paragraphs (or 2 heading sections), ≤100 lines total. " +
-      "Validates atomicity (single topic, ≤4 paragraphs, ≤2 headings) before creation. " +
+      "Validates atomicity (single topic, ≤4 paragraphs, ≤2 headings) and citation references before creation. " +
       "Filename auto-generated as kebab-case slug from title — keep titles concise. " +
       "Recommended body: ## Summary (2-4 paragraphs), ## Key Points, ## Sources. " +
       "Citations: Pandoc-style @citekey (narrative) or [@citekey] (parenthetical) from @ref.bib. " +
@@ -65,6 +67,27 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
             rule: validation.rule,
             count: validation.count,
             limit: validation.limit,
+          },
+        };
+      }
+
+      // Citation validation — after atomicity, before any IO
+      const db = await ensureNotesDb(ctx.cwd);
+      const citationResult = validateCitations(params.content, db);
+      if (!citationResult.valid) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `❌ Citation validation failed — ${citationResult.missing.length} unresolved citekey(s): ` +
+                citationResult.missing.join(", ") +
+                ". Call `resolve_citation` for each before retrying.",
+            },
+          ],
+          details: {
+            error: "CITATION_VIOLATION",
+            missing: citationResult.missing,
           },
         };
       }
