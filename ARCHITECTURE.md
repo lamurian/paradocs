@@ -160,3 +160,5 @@ All PARA cross-references use standard Markdown link syntax:
 
 See [README.md](README.md) for full usage, [docs/ADR/](docs/ADR/) for architecture
 decisions, and [docs/specs/](docs/specs/) for detailed specifications.
+- [D] @docs/ADR/012-mandatory-citation-resolution.md create_para_doc validates all @citekey references exist in citations table
+on
