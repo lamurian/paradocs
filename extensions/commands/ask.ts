@@ -1,10 +1,3 @@
-/**
- * /ask command — plan generator.
- * Evaluates PARA doc sufficiency via LLM, outputs answer or structured plan.
- *
- * @module extensions/commands/ask
- */
-
 import { complete } from "@earendil-works/pi-ai";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 
@@ -17,7 +10,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 export const description = "Ask a question and get an answer or research plan";
 
 const FALLBACK_PLAN = (q: string) =>
-  `## Research Plan\n\n**Question**: ${q}\n\n**Phase 1**: Sufficiency check — will search notes.db\n\n**Phase 2**: Web search — search for: ${q}\n\n**Phase 3**: Fetch and cite — fetch_url then resolve_citation\n\n**Phase 4**: Synthesize — create atomic notes using create_para_doc`;
+  `## Research Plan\n\n**Question**: ${q}\n\n**Phase 1**: Sufficiency check — search notes.db\n\n**Phase 2**: Web search — search for: ${q}\n\n**Phase 3**: Fetch and cite — fetch_url then resolve_citation\n\n**Phase 4**: Synthesize — create atomic notes using create_para_doc`;
 
 const PROMPT = `You evaluate sufficiency of knowledge base results. Return ONLY valid JSON.
 If sufficient: {"sufficient":true,"answer":"answer with @citekey citations"}
@@ -39,7 +32,6 @@ export function createHandler(pi: ExtensionAPI) {
       ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
       return;
     }
-
     ctx.ui.notify(`🔍 Checking: "${q.slice(0, 80)}…"`, "info");
 
     const result = await ctx.ui.custom<{
@@ -95,7 +87,6 @@ export function createHandler(pi: ExtensionAPI) {
           } catch {
             parsed = { sufficient: false, plan: FALLBACK_PLAN(q) };
           }
-
           done({
             sufficient: parsed.sufficient ?? false,
             answer: parsed.answer,
@@ -107,7 +98,6 @@ export function createHandler(pi: ExtensionAPI) {
           done(null);
         }
       };
-
       void run();
       return loader;
     });
