@@ -1,6 +1,7 @@
 import { complete } from "@earendil-works/pi-ai";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 
+import { createDocument } from "../../common/createDocument.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import { searchDocs } from "../para-knowledge/db-sqlite.js";
 
@@ -38,6 +39,10 @@ export function createHandler(pi: ExtensionAPI) {
       sufficient: boolean;
       answer?: string;
       plan?: string;
+      createNote?: boolean;
+      noteTitle?: string;
+      noteContent?: string;
+      noteTags?: string[];
     } | null>((tui, theme, _kb, done) => {
       const loader = new BorderedLoader(tui, theme, "Checking knowledge base...");
       loader.onAbort = () => done(null);
@@ -81,7 +86,15 @@ export function createHandler(pi: ExtensionAPI) {
             .map((c) => c.text)
             .join("\n")
             .trim();
-          let parsed: { sufficient: boolean; answer?: string; plan?: string };
+          let parsed: {
+            sufficient: boolean;
+            answer?: string;
+            plan?: string;
+            createNote?: boolean;
+            noteTitle?: string;
+            noteContent?: string;
+            noteTags?: string[];
+          };
           try {
             parsed = JSON.parse(text) as { sufficient: boolean; answer?: string; plan?: string };
           } catch {
@@ -91,6 +104,10 @@ export function createHandler(pi: ExtensionAPI) {
             sufficient: parsed.sufficient ?? false,
             answer: parsed.answer,
             plan: parsed.plan,
+            createNote: parsed.createNote,
+            noteTitle: parsed.noteTitle,
+            noteContent: parsed.noteContent,
+            noteTags: parsed.noteTags,
           });
         } catch (err) {
           console.error("[ask]", err);
@@ -104,9 +121,27 @@ export function createHandler(pi: ExtensionAPI) {
 
     if (result) {
       if (result.sufficient && result.answer) {
-        pi.sendUserMessage(
-          `## Answer: ${q}\n\n${result.answer}\n\n---\n*Based on existing knowledge — no new note created.*`,
-        );
+        if (result.createNote && result.noteTitle && result.noteContent) {
+          // Novel synthesis across multiple docs — save as new atomic note
+          const doc = await createDocument(
+            {
+              title: result.noteTitle,
+              content: result.noteContent,
+              tags: result.noteTags ?? ["generated"],
+              area: "Resources",
+              description: result.answer.slice(0, 200).replace(/\n/g, " "),
+            },
+            { cwd: ctx.cwd },
+          );
+          pi.sendUserMessage(
+            `## Answer: ${q}\n\n${result.answer}\n\n---\n📄 **New note created**: \`${doc.path}\`\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.`,
+          );
+        } else {
+          // Just answer from existing knowledge, no note needed
+          pi.sendUserMessage(
+            `## Answer: ${q}\n\n${result.answer}\n\n---\n*Based on existing knowledge — no new note created.*`,
+          );
+        }
       } else if (result.plan) {
         pi.sendUserMessage(result.plan);
       }

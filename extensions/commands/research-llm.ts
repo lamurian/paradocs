@@ -22,9 +22,12 @@ Return ONLY a JSON object with this exact structure:
   "answer": "If sufficient, a comprehensive answer synthesising the existing documents with @citekey citations. Empty string if insufficient."
 }
 
+Optionally, if the existing documents collectively provide enough information but your answer represents a novel synthesis not found in any single document, set "sufficient": true AND "createNote": true along with "noteTitle", "noteContent", and "noteTags" for a new atomic document that captures this synthesis.
+
 Evaluate carefully:
 - sufficient=true only if the documents collectively provide a complete, well-sourced answer
 - sufficient=false if major gaps exist, sources are weak, or the topic is only partially covered
+- createNote=true when your answer is a novel synthesis across multiple documents that should be saved as a new atomic note
 - In the answer, cite sources using @citekey notation from the document content`;
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -34,6 +37,14 @@ export interface SufficiencyResult {
   sufficient: boolean;
   rationale: string;
   answer: string;
+  /** When true, the answer is a novel synthesis worth saving as a new atomic note. */
+  createNote?: boolean;
+  /** Title for the new atomic note, required when createNote is true. */
+  noteTitle?: string;
+  /** Markdown body for the new atomic note (2-4 paragraphs, atomic), required when createNote is true. */
+  noteContent?: string;
+  /** Tags for the new note's frontmatter, required when createNote is true. */
+  noteTags?: string[];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────

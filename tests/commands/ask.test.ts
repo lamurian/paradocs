@@ -6,6 +6,18 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock createDocument to avoid file I/O in the createNote path.
+// Safe because existing tests only test guard conditions that exit before
+// document creation.
+vi.mock("../../common/createDocument.js", () => ({
+  createDocument: vi.fn().mockResolvedValue({
+    path: "Resources/test-synthesis.md",
+    title: "Test Synthesis",
+    linkCount: 3,
+    indexOk: true,
+  }),
+}));
+
 describe("ask command handler", () => {
   let sendUserMessage: ReturnType<typeof vi.fn>;
   let notify: ReturnType<typeof vi.fn>;
@@ -93,6 +105,39 @@ describe("ask command handler", () => {
     const handler = createHandler(mockPi as never);
 
     await expect(handler("What is dopamine?", mockCtx as never)).resolves.not.toThrow();
+  });
+
+  it("should create a new atomic note when createNote is true", async () => {
+    const { createHandler } = await import("../../extensions/commands/ask.js");
+    const handler = createHandler(mockPi as never);
+
+    await handler("living fence vs concrete wall durability", {
+      ...mockCtx,
+      ui: {
+        notify,
+        custom: vi.fn().mockResolvedValue({
+          sufficient: true,
+          answer: "Synthesis answer about living fences vs concrete walls...",
+          createNote: true,
+          noteTitle: "Comparing Living Fences vs Concrete Walls",
+          noteContent:
+            "## Summary\n\nNovel synthesis content.\n\n## Key Points\n\n- Point 1\n- Point 2",
+          noteTags: ["living-fence", "comparison"],
+        }),
+      },
+      model: { id: "test-model", provider: "test" },
+      modelRegistry: {
+        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
+      },
+    } as never);
+
+    // Should show note creation confirmation instead of "no new note created"
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      expect.stringContaining("📄 **New note created**"),
+    );
+    expect(sendUserMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining("no new note created"),
+    );
   });
 
   it("should truncate long question in notification", async () => {
