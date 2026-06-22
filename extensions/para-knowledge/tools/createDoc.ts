@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
+import { validateAtomicity } from "../../../common/atomicity.js";
 import { createDocument } from "../../../common/createDocument.js";
 import { getKnowledgeConfig } from "../../../common/env.js";
 
@@ -28,12 +29,13 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
       "Conventions: PARA classification — Resources for reference/theory, Areas for responsibilities/skills, " +
       "Projects for deliverables/practical work. " +
       "Atomic principle — one key idea per note, max 4 paragraphs (or 2 heading sections), ≤100 lines total. " +
+      "Validates atomicity (single topic, ≤4 paragraphs, ≤2 headings) before creation. " +
       "Filename auto-generated as kebab-case slug from title — keep titles concise. " +
       "Recommended body: ## Summary (2-4 paragraphs), ## Key Points, ## Sources. " +
       "Citations: Pandoc-style @citekey (narrative) or [@citekey] (parenthetical) from @ref.bib. " +
       "Run list_para_tags first and reuse existing tags. Provide short description ≤ 200 chars for BM25 search.",
     promptSnippet:
-      "Create a new knowledge document in the PARA directory structure — uses atomic principle, Pandoc citations",
+      "Create a new knowledge document in the PARA directory structure — validates atomicity, uses Pandoc citations",
     parameters: Type.Object({
       title: Type.String({ description: "Document title" }),
       content: Type.String({ description: "Markdown body content" }),
@@ -48,6 +50,25 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      // Atomicity validation — runs before any IO or DB operations
+      const validation = validateAtomicity(params.content, params.title);
+      if (!validation.valid) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `❌ ${validation.message}`,
+            },
+          ],
+          details: {
+            error: "ATOMICITY_VIOLATION",
+            rule: validation.rule,
+            count: validation.count,
+            limit: validation.limit,
+          },
+        };
+      }
+
       onUpdate?.({
         content: [{ type: "text" as const, text: "🗄️ Creating document…" }],
         details: {},
