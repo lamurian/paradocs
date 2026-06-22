@@ -10,6 +10,8 @@
 import { complete, type UserMessage } from "@earendil-works/pi-ai";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 
+import { ensureNotesDb } from "../../common/notesDb.js";
+
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 /** Human-readable description shown in /commands list */
@@ -95,6 +97,9 @@ export function createHandler(pi: ExtensionAPI) {
     try {
       // Capture model reference in a local const for type narrowing
       const model = ctx.model as Parameters<typeof complete>[0];
+
+      // Warm up the DB cache for downstream operations
+      await ensureNotesDb(ctx.cwd);
 
       // Show loader while LLM generates the question tree
       const questionTree = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
