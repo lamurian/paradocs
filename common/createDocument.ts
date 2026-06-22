@@ -7,6 +7,7 @@
  * @module common/createDocument
  */
 
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -15,6 +16,7 @@ import { configureEnv, getKnowledgeConfig } from "./env.js";
 import { slugify } from "./slug.js";
 import { formatFrontmatter } from "./yaml.js";
 import { createDb, initDb, indexFile } from "../extensions/para-knowledge/db-sqlite.js";
+import { rebuildDb } from "../extensions/para-knowledge/rebuild.js";
 
 import type { DocIndex } from "../extensions/para-knowledge/db-sqlite.js";
 
@@ -26,7 +28,7 @@ function getAutoDesc(params: { description?: string; content: string }): string 
   );
 }
 
-function indexDocInDb(
+async function indexDocInDb(
   relPath: string,
   params: {
     title: string;
@@ -36,10 +38,14 @@ function indexDocInDb(
   },
   autoDesc: string | null,
   now: string,
-): boolean {
+): Promise<boolean> {
   try {
     const { dir, db: dbName } = getKnowledgeConfig();
-    const db = createDb(resolve(dir, dbName));
+    const dbPath = resolve(dir, dbName);
+    if (!existsSync(dbPath)) {
+      await rebuildDb(dir);
+    }
+    const db = createDb(dbPath);
     initDb(db);
     const doc: DocIndex = {
       path: relPath,
@@ -147,7 +153,7 @@ export async function createDocument(
   await writeFile(filePath, fm + "\n" + params.content, "utf-8");
 
   // Index in SQLite
-  const indexOk = indexDocInDb(relPath, params, autoDesc, now);
+  const indexOk = await indexDocInDb(relPath, params, autoDesc, now);
 
   // Auto-link
   let linkCount = 0;

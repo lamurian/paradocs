@@ -4,6 +4,7 @@
  * FTS5 term index) inside a single transaction.
  */
 
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -12,6 +13,7 @@ import { Type } from "typebox";
 import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
 import { createDb, initDb, indexFile } from "../db-sqlite.js";
 import { parseFrontmatter, formatFrontmatter } from "../frontmatter.js";
+import { rebuildDb } from "../rebuild.js";
 
 import type { DocIndex } from "../db-sqlite.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -69,7 +71,7 @@ function buildUpdateFrontmatter(
 /**
  * Update the SQLite index row for a document.
  */
-function updateDocIndex(
+async function updateDocIndex(
   path: string,
   title: string,
   tags: string[],
@@ -79,10 +81,14 @@ function updateDocIndex(
   now: string,
   content: string,
   cwd?: string,
-): boolean {
+): Promise<boolean> {
   try {
     const { dir, db: dbName } = getKnowledgeConfig(cwd);
-    const db = createDb(resolve(dir, dbName));
+    const dbPath = resolve(dir, dbName);
+    if (!existsSync(dbPath)) {
+      await rebuildDb(dir);
+    }
+    const db = createDb(dbPath);
     initDb(db);
     const doc: DocIndex = {
       path,
@@ -162,7 +168,7 @@ export function registerUpdateDocTool(pi: ExtensionAPI): void {
       });
 
       const created = fm.date ?? fm.created ?? now;
-      const indexOk = updateDocIndex(
+      const indexOk = await updateDocIndex(
         params.path,
         newTitle,
         newTags,
