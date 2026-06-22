@@ -11,8 +11,10 @@
 import { appendFile, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { configureEnv, getKnowledgeConfig } from "./env.js";
-import { createDb, initDb, type SqliteDb } from "../extensions/para-knowledge/db-sqlite.js";
+import { getKnowledgeConfig } from "./env.js";
+import { ensureNotesDb } from "./notesDb.js";
+
+import type { SqliteDb } from "../extensions/para-knowledge/db-sqlite.js";
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -195,17 +197,12 @@ export async function resolveCitation(
   source_url: string | null;
   error?: string;
 }> {
-  // Ensure .env is loaded
-  configureEnv(options.cwd);
-
   const source = params.source.trim();
   const doi = extractDoi(source);
   const now = new Date().toISOString();
-  const { dir, db: dbName } = getKnowledgeConfig(options.cwd);
-  const dbPath = resolve(dir, dbName);
 
-  const db = createDb(dbPath);
-  initDb(db);
+  const db = await ensureNotesDb(options.cwd);
+  const { dir } = getKnowledgeConfig(options.cwd);
 
   try {
     // Check for existing citation
@@ -282,6 +279,6 @@ export async function resolveCitation(
       error: msg,
     };
   } finally {
-    db.close();
+    // DB handle is managed by ensureNotesDb singleton — no close needed
   }
 }
