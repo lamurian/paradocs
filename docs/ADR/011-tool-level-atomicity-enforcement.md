@@ -1,8 +1,8 @@
 ---
 title: Tool-Level Atomicity Enforcement
 description: create_para_doc and batch_create_para_docs validate atomicity at the tool level, rejecting content that exceeds limits
-status: proposed
-remaining: 1
+status: implemented
+remaining: 0
 date: 2026-06-22
 ---
 

@@ -1,8 +1,8 @@
 ---
 title: Atomicity Validation Rules
 description: Validation rules for atomicity in create_para_doc and batch_create_para_docs
-status: proposed
-remaining: 1
+status: implemented
+remaining: 0
 date: 2026-06-22
 ---
 
