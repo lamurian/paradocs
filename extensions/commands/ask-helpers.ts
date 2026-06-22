@@ -24,6 +24,13 @@ interface LlmOptions {
   signal?: AbortSignal;
 }
 
+/** Result of synthesizeAnswer — structured response with LLM-chosen title, tags, and body. */
+export interface SynthesisResult {
+  title: string;
+  tags: string[];
+  body: string;
+}
+
 /** Result of evaluateAndPlan — merges keyword generation and web-search need. */
 export interface EvaluateAndPlanResult {
   needWebSearch: boolean;
@@ -194,19 +201,34 @@ export async function synthesizeAnswer(
   question: string,
   sources: Array<{ title: string; content: string; citekey: string | null }>,
   opts: LlmOptions,
-): Promise<string> {
+  existingTags?: string[],
+): Promise<SynthesisResult> {
   const sourcesText = sources
     .map((s) => `---\nSource: @${s.citekey ?? "?"} — ${s.title}\n${s.content.slice(0, 3000)}`)
     .join("\n\n");
 
+  const tagsContext =
+    existingTags && existingTags.length > 0
+      ? `\nExisting tags in knowledge base: ${existingTags.join(", ")}\n` +
+        "Pick from these existing tags when relevant, or add new ones when needed."
+      : "";
+
   const systemPrompt =
     "You are a research synthesis expert. Synthesize a comprehensive answer to the question " +
-    "using the provided sources. Structure your response with:\n" +
-    "## Summary (2-4 paragraphs)\n" +
-    "## Key Points\n" +
-    "## Sources\n\n" +
-    "Use Pandoc-style citations (@citekey) for each claim from web sources. " +
-    "For claims from existing knowledge documents, use [Document Title](path).";
+    "using the provided sources.\n\n" +
+    "Return ONLY valid JSON with this exact structure:\n" +
+    "{\n" +
+    '  "title": "Concise descriptive title for the knowledge document",\n' +
+    '  "tags": ["relevant-tag-1", "relevant-tag-2"],\n' +
+    '  "body": "## Summary\\n\\n(2-4 paragraphs)... ## Key Points\\n... ## Sources\\n..."\n' +
+    "}\n\n" +
+    "Rules:\n" +
+    "1. Place Pandoc-style citations (@citekey) contextually — at the end of a sentence or paragraph " +
+    "that borrows from that source.\n" +
+    "2. Structure body with ## Summary, ## Key Points, and ## Sources sections.\n" +
+    "3. Pick tags from the provided existing tags list when relevant, or add new ones when needed.\n" +
+    "4. No markdown fences, no explanation outside the JSON." +
+    tagsContext;
 
   const userMessage: UserMessage = {
     role: "user",
@@ -225,5 +247,19 @@ export async function synthesizeAnswer(
     { apiKey: opts.apiKey, headers: opts.headers, signal: opts.signal },
   );
 
-  return extractText(response);
+  const text = extractText(response);
+  try {
+    const parsed = JSON.parse(text) as SynthesisResult;
+    return {
+      title: parsed.title ?? `Answer: ${question.slice(0, 60)}`,
+      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+      body: parsed.body ?? text,
+    };
+  } catch {
+    return {
+      title: `Answer: ${question.slice(0, 60)}`,
+      tags: [],
+      body: text,
+    };
+  }
 }

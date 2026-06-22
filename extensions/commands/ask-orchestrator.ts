@@ -11,7 +11,12 @@ import { resolve } from "node:path";
 
 import { complete } from "@earendil-works/pi-ai";
 
-import { evaluateAndPlan, planNextRound, synthesizeAnswer } from "./ask-helpers.js";
+import {
+  evaluateAndPlan,
+  planNextRound,
+  synthesizeAnswer,
+  type SynthesisResult,
+} from "./ask-helpers.js";
 import { resolveCitation } from "../../common/citation.js";
 import { createDocument } from "../../common/createDocument.js";
 import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
@@ -28,32 +33,29 @@ const URL_FETCH_TIMEOUT_MS = 10_000;
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function slugFromQuestion(question: string): string {
-  return question
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 40);
-}
-
 /**
- * Create an atomic knowledge note from the synthesis.
+ * Create an atomic knowledge note from LLM-chosen title, tags, and body.
+ *
+ * @param body   - Synthesis body with contextual @citekey citations.
+ * @param title  - LLM-chosen document title (used for filename slug).
+ * @param tags   - LLM-chosen tags (preferring existing tags).
+ * @param cwd    - Working directory for env resolution.
+ * @returns Relative path to the created document, or null on failure.
  */
 async function createAtomicNote(
-  synthesis: string,
-  question: string,
+  body: string,
+  title: string,
+  tags: string[],
   cwd: string,
 ): Promise<string | null> {
   try {
-    const title = `Answer: ${question.slice(0, 60)}`;
-    const topicSlug = slugFromQuestion(question);
     const doc = await createDocument(
       {
         title,
-        content: synthesis,
-        tags: ["research", ...topicSlug.split("-").slice(0, 3)],
+        content: body,
+        tags,
         area: "Resources",
-        description: `Research synthesis: ${question.slice(0, 100)}`,
+        description: `Research synthesis: ${title}`,
       },
       { cwd },
     );
@@ -72,6 +74,8 @@ async function createAtomicNote(
  * 3. Collect unique URLs, fetch in parallel with 10s timeout
  * 4. Resolve citations in parallel
  * 5. If plan says done → exit loop
+ *
+ * @returns SynthesisResult with LLM-chosen title, tags, and body.
  */
 export async function runWebSearchLoop(
   question: string,
@@ -84,7 +88,8 @@ export async function runWebSearchLoop(
   },
   cwd: string,
   notify?: (msg: string) => void,
-): Promise<string> {
+  existingTags?: string[],
+): Promise<SynthesisResult> {
   const webSources: Array<{
     title: string;
     content: string;
@@ -159,7 +164,7 @@ export async function runWebSearchLoop(
   ];
 
   notify?.("Synthesizing answer...");
-  return await synthesizeAnswer(question, allSources, llmOpts);
+  return await synthesizeAnswer(question, allSources, llmOpts, existingTags);
 }
 
 /**
@@ -192,6 +197,12 @@ export async function executeResearchLoop(
   const db = createDb(resolve(dir, dbName));
   initDb(db);
 
+  // ── Query existing tags for the synthesis LLM context ──
+  const existingTags = db
+    .prepare("SELECT DISTINCT tag FROM tags ORDER BY tag")
+    .all<{ tag: string }>()
+    .map((r) => r.tag);
+
   // ── Step 1: Search PARA docs ──
   notify?.("Searching local notes...");
   const paraResults: Array<{ title: string; path: string; snippet: string }> = [];
@@ -210,15 +221,22 @@ export async function executeResearchLoop(
   // ── Step 3: Fast path — docs sufficient ──
   if (!plan.needWebSearch && paraResults.length > 0) {
     notify?.("Synthesizing answer...");
-    const synthesis = await synthesizeAnswer(
+    const result = await synthesizeAnswer(
       question,
       paraResults.map((r) => ({ title: r.title, content: r.snippet, citekey: null })),
       llmOpts,
+      existingTags,
     );
-    return { synthesis, docPath: await createAtomicNote(synthesis, question, cwd) };
+    return {
+      synthesis: result.body,
+      docPath: await createAtomicNote(result.body, result.title, result.tags, cwd),
+    };
   }
 
   // ── Step 4: Web search loop ──
-  const synthesis = await runWebSearchLoop(question, paraResults, llmOpts, cwd, notify);
-  return { synthesis, docPath: await createAtomicNote(synthesis, question, cwd) };
+  const result = await runWebSearchLoop(question, paraResults, llmOpts, cwd, notify, existingTags);
+  return {
+    synthesis: result.body,
+    docPath: await createAtomicNote(result.body, result.title, result.tags, cwd),
+  };
 }

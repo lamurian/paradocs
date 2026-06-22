@@ -201,3 +201,99 @@ describe("planNextRound", () => {
     expect(result.queries).toEqual([]);
   });
 });
+
+describe("synthesizeAnswer", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("should return structured result with title, tags, and body", async () => {
+    vi.doMock("@earendil-works/pi-ai", () => ({
+      complete: vi.fn().mockResolvedValue({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              title: "Urticaria: Causes and Treatment",
+              tags: ["medicine", "dermatology"],
+              body: "## Summary\n\nUrticaria, commonly known as hives... @mayoclinic",
+            }),
+          },
+        ],
+      }),
+    }));
+
+    const { synthesizeAnswer } = await import("../../extensions/commands/ask-helpers.js");
+
+    const result = await synthesizeAnswer(
+      "what is urticaria?",
+      [{ title: "Mayo Clinic", content: "Urticaria is...", citekey: "mayoclinic" }],
+      { model: TEST_MODEL as never, apiKey: "sk-test" },
+      ["medicine", "dermatology", "allergy"],
+    );
+
+    expect(result.title).toBe("Urticaria: Causes and Treatment");
+    expect(result.tags).toContain("medicine");
+    expect(result.body).toContain("@mayoclinic");
+  });
+
+  it("should fall back to mechanical title on parse error", async () => {
+    vi.doMock("@earendil-works/pi-ai", () => ({
+      complete: vi.fn().mockResolvedValue({
+        content: [
+          {
+            type: "text",
+            text: "# Summary\n\nThis is not JSON at all...",
+          },
+        ],
+      }),
+    }));
+
+    const { synthesizeAnswer } = await import("../../extensions/commands/ask-helpers.js");
+
+    const result = await synthesizeAnswer(
+      "what is the difference between urticaria and angioedema?",
+      [],
+      { model: TEST_MODEL as never, apiKey: "sk-test" },
+    );
+
+    expect(result.title).toContain("Answer:");
+    expect(result.tags).toEqual([]);
+    expect(result.body).toContain("Summary");
+  });
+
+  it("should include existing tags in the prompt context", async () => {
+    const completeMock = vi.fn().mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            title: "Dopamine: Key Concepts",
+            tags: ["neuroscience", "psychology"],
+            body: "## Summary\n\nDopamine is a neurotransmitter...",
+          }),
+        },
+      ],
+    });
+
+    vi.doMock("@earendil-works/pi-ai", () => ({
+      complete: completeMock,
+    }));
+
+    const { synthesizeAnswer } = await import("../../extensions/commands/ask-helpers.js");
+
+    await synthesizeAnswer(
+      "What is dopamine?",
+      [{ title: "Source", content: "Content", citekey: "src2024" }],
+      { model: TEST_MODEL as never, apiKey: "sk-test" },
+      ["neuroscience", "biology", "psychology"],
+    );
+
+    // Verify the system prompt mentions existing tags
+    const callArgs = completeMock.mock.calls[0];
+    const params = callArgs[1] as { systemPrompt?: string };
+    const systemPrompt = params.systemPrompt ?? "";
+    expect(systemPrompt).toContain("existing tags");
+    expect(systemPrompt).toContain("neuroscience");
+  });
+});
