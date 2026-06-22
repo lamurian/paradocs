@@ -1,7 +1,7 @@
 ---
 title: Add citation validation to tools
 description: Add citation validation to tools
-status: {{status}}
+status: completed
 date: 2026-06-22
 ---
 
@@ -11,26 +11,26 @@ Add a `validateCitations(content, db)` function that scans content for @citekey 
 
 # Goals
 
-- [ ] validateCitations() function in common/citation.ts
-- [ ] Reject unresolved @? citekeys
-- [ ] Clear error messages listing missing citekeys
-- [ ] Integration in create_para_doc and batch_create_para_docs
-- [ ] Batch validation rejects entire batch if any doc has violations
+- [x] validateCitations() function in common/citation-validation.ts
+- [x] Reject unresolved @? citekeys
+- [x] Clear error messages listing missing citekeys
+- [x] Integration in create_para_doc and batch_create_para_docs
+- [x] Batch validation rejects entire batch if any doc has violations
 
 # Implementation Steps
 
-- [ ] Add `validateCitations(content: string, db: SqliteDb): { valid: boolean; missing: string[] }` to `common/citation.ts`
+- [x] Add `validateCitations(content: string, db: SqliteDb): { valid: boolean; missing: string[] }` to `common/citation-validation.ts`
   - Regex: matches @citekey patterns (both narrative and parenthetical) excluding code blocks
   - Skip internal PARA doc references (file paths, not @citekeys)
   - Query each citekey against citations table
   - Return list of missing/invalid citekeys
-- [ ] Integrate into `extensions/para-knowledge/tools/createDoc.ts`:
+- [x] Integrate into `extensions/para-knowledge/tools/createDoc.ts`:
   - Call after atomicity validation, before file write
   - If violations: return error with missing citekeys list
-- [ ] Integrate into `extensions/batch-create/index.ts`:
+- [x] Integrate into `extensions/batch-create/index.ts`:
   - Call for each document in batch
   - If ANY doc has violations, reject entire batch
-- [ ] Update tool descriptions to mention this validation
+- [x] Update tool descriptions to mention this validation
 
 # Risks
 
