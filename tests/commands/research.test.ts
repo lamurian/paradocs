@@ -96,7 +96,7 @@ describe("research command handler", () => {
 
 describe("formatResearchPlan", () => {
   it("should format a research plan with question tree", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research.js");
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const questionTree = JSON.stringify({
       why: {
@@ -130,7 +130,7 @@ describe("formatResearchPlan", () => {
   });
 
   it("should generate a safe slug from complex topic", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research.js");
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("Complex! Topic with @special #chars & more!!!", "{}");
 
@@ -138,7 +138,7 @@ describe("formatResearchPlan", () => {
   });
 
   it("should truncate slug to 40 characters", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research.js");
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan(
       "a very very very long research topic that should be truncated aggressively for filenames",
@@ -153,7 +153,7 @@ describe("formatResearchPlan", () => {
   });
 
   it("should include completion criteria checklist", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research.js");
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("test topic", "{}");
 
@@ -163,7 +163,7 @@ describe("formatResearchPlan", () => {
   });
 
   it("should include confidence scoring rubric", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research.js");
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("test topic", "{}");
 
@@ -174,7 +174,7 @@ describe("formatResearchPlan", () => {
   });
 
   it("should include atomic note naming convention", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research.js");
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("sleep and memory", "{}");
 
