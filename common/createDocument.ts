@@ -7,16 +7,15 @@
  * @module common/createDocument
  */
 
-import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { autoLink } from "./autoLink.js";
 import { configureEnv, getKnowledgeConfig } from "./env.js";
+import { ensureNotesDb } from "./notesDb.js";
 import { slugify } from "./slug.js";
 import { formatFrontmatter } from "./yaml.js";
-import { createDb, initDb, indexFile } from "../extensions/para-knowledge/db-sqlite.js";
-import { rebuildDb } from "../extensions/para-knowledge/rebuild.js";
+import { indexFile } from "../extensions/para-knowledge/db-sqlite.js";
 
 import type { DocIndex } from "../extensions/para-knowledge/db-sqlite.js";
 
@@ -38,15 +37,10 @@ async function indexDocInDb(
   },
   autoDesc: string | null,
   now: string,
+  cwd: string,
 ): Promise<boolean> {
   try {
-    const { dir, db: dbName } = getKnowledgeConfig();
-    const dbPath = resolve(dir, dbName);
-    if (!existsSync(dbPath)) {
-      await rebuildDb(dir);
-    }
-    const db = createDb(dbPath);
-    initDb(db);
+    const db = await ensureNotesDb(cwd);
     const doc: DocIndex = {
       path: relPath,
       title: params.title,
@@ -60,7 +54,6 @@ async function indexDocInDb(
       source_url: params.source || null,
     };
     indexFile(db, doc);
-    db.close();
     return true;
   } catch (e: unknown) {
     console.error("[createDocument] SQLite insert failed:", e);
@@ -73,16 +66,11 @@ async function runAutoLink(
   title: string,
   tags: string[],
   knowledgeDir: string,
-  dbName: string,
+  cwd: string,
 ): Promise<number> {
   try {
-    const linkDb = createDb(resolve(knowledgeDir, dbName));
-    initDb(linkDb);
-    try {
-      return await autoLink(relPath, title, tags, knowledgeDir, linkDb);
-    } finally {
-      linkDb.close();
-    }
+    const db = await ensureNotesDb(cwd);
+    return await autoLink(relPath, title, tags, knowledgeDir, db);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[createDocument] Auto-link failed:", msg);
@@ -153,13 +141,13 @@ export async function createDocument(
   await writeFile(filePath, fm + "\n" + params.content, "utf-8");
 
   // Index in SQLite
-  const indexOk = await indexDocInDb(relPath, params, autoDesc, now);
+  const indexOk = await indexDocInDb(relPath, params, autoDesc, now, options.cwd);
 
   // Auto-link
   let linkCount = 0;
   if (indexOk) {
-    const { dir: kd, db: dbName } = getKnowledgeConfig(options.cwd);
-    linkCount = await runAutoLink(relPath, params.title, params.tags, kd, dbName);
+    const { dir: kd } = getKnowledgeConfig(options.cwd);
+    linkCount = await runAutoLink(relPath, params.title, params.tags, kd, options.cwd);
   }
 
   return { path: relPath, title: params.title, linkCount, indexOk };
