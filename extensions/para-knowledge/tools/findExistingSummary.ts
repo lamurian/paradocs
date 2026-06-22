@@ -4,17 +4,18 @@
  * similarity using FTS5 BM25 + word-trigram Jaccard similarity.
  */
 
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
-import { createDb, initDb, searchDocs, type SqliteDb } from "../db-sqlite.js";
+import { getKnowledgeConfig } from "../../../common/env.js";
+import { ensureNotesDb } from "../../../common/notesDb.js";
+import { searchDocs, type SqliteDb } from "../db-sqlite.js";
 import { textSimilarity } from "../similarity.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
 const SIMILARITY_THRESHOLD = 0.9;
 
 interface MatchResult {
@@ -94,19 +95,7 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
-      configureEnv(ctx.cwd);
-
       const { url, content } = params;
-      const { dir, db } = getKnowledgeConfig(ctx.cwd);
-      const dbPath = resolve(dir, db);
-
-      if (!existsSync(dbPath)) {
-        return {
-          content: [{ type: "text" as const, text: "📭 No knowledge base found yet." }],
-          details: { found: false, notFoundReason: "no-db" },
-        };
-      }
 
       onUpdate?.({
         content: [{ type: "text" as const, text: `🔍 Checking for existing summary of ${url}...` }],
@@ -114,63 +103,60 @@ export function registerFindExistingSummaryTool(pi: ExtensionAPI): void {
       });
 
       try {
-        const db = createDb(dbPath);
-        initDb(db);
-        try {
-          // Check exact URL match first
-          const exact = findExactUrlMatch(db, url);
-          if (exact) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `✅ Found existing summary — Exact source_url match\n\n**Title:** ${exact.title}\n**Path:** ${exact.path}\n**URL:** ${url}\n\nNo need to re-summarise.`,
-                },
-              ],
-              details: {
-                found: true,
-                matchType: "exact_url",
-                path: exact.path,
-                title: exact.title,
-                similarity: 1.0,
-              },
-            };
-          }
+        const db = await ensureNotesDb(ctx.cwd);
+        const { dir } = getKnowledgeConfig(ctx.cwd);
 
-          // Check content similarity if content is provided
-          // Use dir (knowledge dir) not ctx.cwd for reading doc bodies
-          const similar = await findSimilarByContent(db, content ?? "", dir);
-          if (similar.found) {
-            const pct = (similar.similarity * 100).toFixed(1);
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `✅ Found existing summary — Content similarity ${pct}%\n\n**Title:** ${similar.title}\n**Path:** ${similar.path}\n**URL:** ${url}`,
-                },
-              ],
-              details: {
-                found: true,
-                matchType: "content_similarity",
-                path: similar.path,
-                title: similar.title,
-                similarity: similar.similarity,
-              },
-            };
-          }
-
+        // Check exact URL match first
+        const exact = findExactUrlMatch(db, url);
+        if (exact) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: `📭 No existing summary found for ${url}. Proceed with fetch_url.`,
+                text: `✅ Found existing summary — Exact source_url match\n\n**Title:** ${exact.title}\n**Path:** ${exact.path}\n**URL:** ${url}\n\nNo need to re-summarise.`,
               },
             ],
-            details: { found: false, notFoundReason: "no-match" },
+            details: {
+              found: true,
+              matchType: "exact_url",
+              path: exact.path,
+              title: exact.title,
+              similarity: 1.0,
+            },
           };
-        } finally {
-          db.close();
         }
+
+        // Check content similarity if content is provided
+        // Use dir (knowledge dir) not ctx.cwd for reading doc bodies
+        const similar = await findSimilarByContent(db, content ?? "", dir);
+        if (similar.found) {
+          const pct = (similar.similarity * 100).toFixed(1);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `✅ Found existing summary — Content similarity ${pct}%\n\n**Title:** ${similar.title}\n**Path:** ${similar.path}\n**URL:** ${url}`,
+              },
+            ],
+            details: {
+              found: true,
+              matchType: "content_similarity",
+              path: similar.path,
+              title: similar.title,
+              similarity: similar.similarity,
+            },
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `📭 No existing summary found for ${url}. Proceed with fetch_url.`,
+            },
+          ],
+          details: { found: false, notFoundReason: "no-match" },
+        };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[find_existing_summary] Error:", msg);

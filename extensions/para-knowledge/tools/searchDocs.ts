@@ -5,14 +5,11 @@
  * with optional tag filtering. Replaces the DuckDB-based implementation.
  */
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { Type } from "typebox";
 
-import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
-import { createDb, initDb, searchDocs, type SearchOptions } from "../db-sqlite.js";
-import { rebuildDb } from "../rebuild.js";
+import { configureEnv } from "../../../common/env.js";
+import { ensureNotesDb } from "../../../common/notesDb.js";
+import { searchDocs, type SearchOptions } from "../db-sqlite.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -43,45 +40,6 @@ export function registerSearchDocsTool(pi: ExtensionAPI): void {
       // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
       configureEnv(ctx.cwd);
 
-      const { dir, db } = getKnowledgeConfig(ctx.cwd);
-      const dbPath = resolve(dir, db);
-
-      if (!existsSync(dbPath)) {
-        onUpdate?.({
-          content: [
-            {
-              type: "text" as const,
-              text: "📚 notes.db not found — rebuilding from markdown files…",
-            },
-          ],
-          details: {},
-        });
-
-        const count = await rebuildDb(dir);
-
-        if (count === 0) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: "📭 No PARA documents found to index. Create a document first.",
-              },
-            ],
-            details: { results: [], count: 0 },
-          };
-        }
-
-        onUpdate?.({
-          content: [
-            {
-              type: "text" as const,
-              text: `✅ Rebuilt index from ${count} document(s). Searching…`,
-            },
-          ],
-          details: {},
-        });
-      }
-
       onUpdate?.({
         content: [{ type: "text" as const, text: "🗄️ notes.db — searching…" }],
         details: {},
@@ -91,46 +49,41 @@ export function registerSearchDocsTool(pi: ExtensionAPI): void {
       const filterTags = params.tags ?? [];
 
       try {
-        const db = createDb(dbPath);
-        initDb(db);
-        try {
-          const options: SearchOptions = {};
-          if (filterTags.length > 0) options.tags = filterTags;
-          const results = searchDocs(db, query, options);
+        const db = await ensureNotesDb(ctx.cwd);
+        const options: SearchOptions = {};
+        if (filterTags.length > 0) options.tags = filterTags;
+        const results = searchDocs(db, query, options);
 
-          if (results.length === 0) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `📭 No documents found for "${query}"${filterTags.length ? ` with tags [${filterTags.join(", ")}]` : ""}.`,
-                },
-              ],
-              details: { results: [], count: 0 },
-            };
-          }
-
-          const list = results
-            .map((r) => {
-              const rel = r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak";
-              const tagHint =
-                r.tagMatches.length > 0 ? ` 🏷️${r.tagMatches.slice(0, 3).join(", ")}` : "";
-              return `- [${r.title}](${r.path})  (score: ${r.score.toFixed(2)}, relevance: ${rel}${tagHint})`;
-            })
-            .join("\n");
-
+        if (results.length === 0) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: `🗄️ notes.db — ${results.length} result(s):\n\n${list}`,
+                text: `📭 No documents found for "${query}"${filterTags.length ? ` with tags [${filterTags.join(", ")}]` : ""}.`,
               },
             ],
-            details: { results, count: results.length },
+            details: { results: [], count: 0 },
           };
-        } finally {
-          db.close();
         }
+
+        const list = results
+          .map((r) => {
+            const rel = r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak";
+            const tagHint =
+              r.tagMatches.length > 0 ? ` 🏷️${r.tagMatches.slice(0, 3).join(", ")}` : "";
+            return `- [${r.title}](${r.path})  (score: ${r.score.toFixed(2)}, relevance: ${rel}${tagHint})`;
+          })
+          .join("\n");
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `🗄️ notes.db — ${results.length} result(s):\n\n${list}`,
+            },
+          ],
+          details: { results, count: results.length },
+        };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[search_para_docs] Error:", msg);

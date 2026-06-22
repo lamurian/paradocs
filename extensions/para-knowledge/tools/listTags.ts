@@ -7,13 +7,10 @@
  * returns an empty array (no tags indexed).
  */
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { Type } from "typebox";
 
-import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
-import { createDb, initDb } from "../db-sqlite.js";
+import { configureEnv } from "../../../common/env.js";
+import { ensureNotesDb } from "../../../common/notesDb.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -31,7 +28,6 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
     promptSnippet: "List all existing unique tags in the PARA knowledge base",
     parameters: Type.Object({}),
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_toolCallId, _params, _signal, onUpdate, ctx) {
       // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
       configureEnv(ctx.cwd);
@@ -41,27 +37,11 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
         details: {},
       });
 
-      const { dir, db } = getKnowledgeConfig(ctx.cwd);
-      const dbPath = resolve(dir, db);
-      if (!existsSync(dbPath)) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "📭 No documents indexed yet. Create a document first to populate the knowledge base.",
-            },
-          ],
-          details: { tags: [], count: 0 },
-        };
-      }
-
       try {
-        const db = createDb(dbPath);
-        initDb(db);
+        const db = await ensureNotesDb(ctx.cwd);
         const rows = db
           .prepare("SELECT DISTINCT tag FROM tags ORDER BY tag")
           .all<{ tag: string }>();
-        db.close();
 
         const tags = rows.map((r) => r.tag);
 
