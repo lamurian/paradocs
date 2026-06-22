@@ -1,8 +1,8 @@
 ---
 title: Citation Validation in Tools
 description: Citation validation step in create_para_doc that rejects unresolved citekeys
-status: proposed
-remaining: 1
+status: completed
+remaining: 0
 date: 2026-06-22
 ---
 
