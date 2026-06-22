@@ -280,7 +280,7 @@ function buildFts5Query(rawQuery: string): string {
   // Replace FTS5-special characters with spaces to prevent syntax errors.
   // FTS5 interprets `.` as column-prefix syntax, `"` for phrase queries,
   // `()` for grouping, `+` `~` `^` `*` for operators, `-` as NOT operator.
-  const cleaned = rawQuery.replace(/[."()+~^*/-]/g, " ");
+  const cleaned = rawQuery.replace(/\W/g, " ");
   const terms = cleaned
     .toLowerCase()
     .trim()

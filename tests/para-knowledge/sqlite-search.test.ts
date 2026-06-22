@@ -163,6 +163,19 @@ describe("searchDocs", () => {
     expect(() => searchDocs(db, "*special.chars(test)")).not.toThrow();
   });
 
+  it("should handle question mark in query without error", async () => {
+    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.js");
+    // Question mark is not a valid FTS5 operator; should be stripped
+    expect(() => searchDocs(db, "what is urticaria?")).not.toThrow();
+    expect(() => searchDocs(db, "how? why?")).not.toThrow();
+  });
+
+  it("should handle exclamation mark in query without error", async () => {
+    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.js");
+    expect(() => searchDocs(db, "hello world!")).not.toThrow();
+    expect(() => searchDocs(db, "amazing! incredible!")).not.toThrow();
+  });
+
   it("should handle query with mixed-case text (case-insensitive)", async () => {
     const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.js");
     const results = searchDocs(db, "Programming");
