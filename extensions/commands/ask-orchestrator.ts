@@ -7,8 +7,6 @@
  * @module extensions/commands/ask-orchestrator
  */
 
-import { resolve } from "node:path";
-
 import { complete } from "@earendil-works/pi-ai";
 
 import {
@@ -19,10 +17,10 @@ import {
 } from "./ask-helpers.js";
 import { resolveCitation } from "../../common/citation.js";
 import { createDocument } from "../../common/createDocument.js";
-import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
 import { fetchUrlWithTimeout } from "../../common/fetchUrl.js";
+import { ensureNotesDb } from "../../common/notesDb.js";
 import { searchWeb } from "../../common/webSearch.js";
-import { createDb, initDb, searchDocs } from "../para-knowledge/db-sqlite.js";
+import { searchDocs } from "../para-knowledge/db-sqlite.js";
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -192,10 +190,7 @@ export async function executeResearchLoop(
   cwd: string,
   notify?: (msg: string) => void,
 ): Promise<{ synthesis: string; docPath: string | null }> {
-  configureEnv(cwd);
-  const { dir, db: dbName } = getKnowledgeConfig(cwd);
-  const db = createDb(resolve(dir, dbName));
-  initDb(db);
+  const db = await ensureNotesDb(cwd);
 
   // ── Query existing tags for the synthesis LLM context ──
   const existingTags = db
@@ -212,8 +207,6 @@ export async function executeResearchLoop(
       paraResults.push({ title: r.title, path: r.path, snippet: r.body.slice(0, 200) });
     }
   }
-  db.close();
-
   // ── Step 2: evaluateAndPlan (one LLM call) ──
   notify?.("Evaluating sources...");
   const plan = await evaluateAndPlan(question, paraResults, llmOpts);
