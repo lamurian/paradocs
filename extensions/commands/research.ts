@@ -11,7 +11,12 @@
 import { complete } from "@earendil-works/pi-ai";
 
 import { DECOMPOSITION_PROMPT, formatResearchPlan } from "./research-format.js";
-import { callLlmWithLoader, SUFFICIENCY_PROMPT, type SufficiencyResult } from "./research-llm.js";
+import {
+  callLlmWithLoader,
+  RESEARCH_SUFFICIENCY_PROMPT,
+  type SufficiencyResult,
+} from "./research-llm.js";
+import { createDocument } from "../../common/createDocument.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import { searchDocs } from "../para-knowledge/db-sqlite.js";
 
@@ -22,6 +27,78 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 export const description = "Run iterative academic research on a topic";
 
 /**
+ * Handle a sufficiency result by creating notes or outputting an inline answer.
+ *
+ * Extracted to reduce cyclomatic complexity of the main handler.
+ *
+ * @returns true if the result was handled (sufficient), false if research plan needed.
+ */
+async function handleSufficiencyResult(
+  sufficiencyResult: SufficiencyResult,
+  topic: string,
+  cwd: string,
+  pi: ExtensionAPI,
+): Promise<boolean> {
+  if (!sufficiencyResult.sufficient) return false;
+
+  // Multi-note creation path
+  if (sufficiencyResult.createNote && sufficiencyResult.notes?.length) {
+    const created: Array<{ path: string; linkCount: number }> = [];
+    for (const note of sufficiencyResult.notes) {
+      const doc = await createDocument(
+        {
+          title: note.title,
+          content: note.content,
+          tags: note.tags,
+          area: "Resources",
+          description: note.content.replace(/\n+/g, " ").slice(0, 200).replace(/@\w+/g, "").trim(),
+        },
+        { cwd },
+      );
+      created.push(doc);
+    }
+    pi.sendUserMessage(
+      `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
+        `📄 Created ${created.length} atomic notes covering this topic.`,
+    );
+    return true;
+  }
+
+  // Legacy single-note creation path
+  if (sufficiencyResult.createNote && sufficiencyResult.noteContent) {
+    const doc = await createDocument(
+      {
+        title: sufficiencyResult.noteTitle ?? topic,
+        content: sufficiencyResult.noteContent,
+        tags: sufficiencyResult.noteTags ?? ["generated"],
+        area: "Resources",
+        description: sufficiencyResult.answer
+          .replace(/\n+/g, " ")
+          .slice(0, 200)
+          .replace(/@\w+/g, "")
+          .trim(),
+      },
+      { cwd },
+    );
+    pi.sendUserMessage(
+      `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
+        `📄 New note created: \`${doc.path}\`` +
+        (doc.linkCount > 0
+          ? `\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.`
+          : ""),
+    );
+    return true;
+  }
+
+  // No note: inline answer only
+  pi.sendUserMessage(
+    `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
+      `*Based on existing knowledge — no new note created.*`,
+  );
+  return true;
+}
+
+/**
  * Create the /research command handler.
  *
  * Factory pattern: captures the ExtensionAPI reference so the handler
@@ -30,8 +107,11 @@ export const description = "Run iterative academic research on a topic";
  *
  * Flow:
  * 1. Search existing PARA docs for the topic
- * 2. LLM evaluates sufficiency of existing knowledge
- * 3. If sufficient: output inline answer with @citekey citations (no note)
+ * 2. LLM evaluates sufficiency of existing knowledge (strict prompt)
+ * 3. If sufficient:
+ *    a. If createNote + notes[] → create multiple atomic documents
+ *    b. If createNote + noteContent → create single atomic document (legacy)
+ *    c. Else → output inline answer with @citekey citations, no new note
  * 4. If insufficient: WHY/HOW/WHAT decomposition + structured research plan
  *
  * @param pi  The pi extension API instance.
@@ -56,19 +136,26 @@ export function createHandler(pi: ExtensionAPI) {
       return;
     }
 
+    const model = ctx.model as Parameters<typeof complete>[0];
+    let authResult: {
+      ok: boolean;
+      apiKey?: string;
+      headers?: Record<string, string>;
+      error?: string;
+    };
     try {
-      const model = ctx.model as Parameters<typeof complete>[0];
-      const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-      if (!auth.ok || !auth.apiKey) {
-        throw new Error(
-          auth.ok ? `No API key for ${(model as { provider: string }).provider}` : auth.error,
-        );
-      }
-
+      authResult = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    } catch (e) {
+      ctx.ui.notify(`❌ Auth error: ${e instanceof Error ? e.message : String(e)}`, "error");
+      return;
+    }
+    if (!authResult.ok || !authResult.apiKey) {
+      ctx.ui.notify(`❌ No API key for ${(model as { provider: string }).provider}`, "error");
+      return;
+    }
+    try {
       const db = await ensureNotesDb(ctx.cwd);
       const existingDocs: SearchResult[] = searchDocs(db, topic);
-      const apiKey = auth.apiKey;
-      const headers = auth.headers;
       const docsCtx: string =
         existingDocs.length > 0
           ? existingDocs
@@ -85,8 +172,8 @@ export function createHandler(pi: ExtensionAPI) {
             done,
             "🔍 Evaluating existing knowledge...",
             model,
-            { apiKey, headers },
-            SUFFICIENCY_PROMPT,
+            { apiKey: authResult.apiKey!, headers: authResult.headers },
+            RESEARCH_SUFFICIENCY_PROMPT,
             [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
             (text) => {
               try {
@@ -103,9 +190,7 @@ export function createHandler(pi: ExtensionAPI) {
         return;
       }
 
-      if (sufficiencyResult.sufficient) {
-        pi.sendUserMessage(`## Research Answer: ${topic}\n\n${sufficiencyResult.answer}`);
-        await Promise.resolve();
+      if (await handleSufficiencyResult(sufficiencyResult, topic, ctx.cwd, pi)) {
         return;
       }
 
@@ -117,7 +202,7 @@ export function createHandler(pi: ExtensionAPI) {
           done,
           "🔬 Decomposing research topic...",
           model,
-          { apiKey, headers },
+          { apiKey: authResult.apiKey!, headers: authResult.headers },
           DECOMPOSITION_PROMPT,
           [{ type: "text", text: topic }],
           (text) => text,

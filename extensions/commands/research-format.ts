@@ -102,8 +102,12 @@ export function formatResearchPlan(topic: string, questionTree: string): string 
     `- [ ] Atomic notes created in \`Resources/research-${topicSlug}-*/\``,
     "- [ ] Executive summary note created linking all atomic notes\n",
     `### Atomic Note Naming\n`,
-    `- \`Resources/research-${topicSlug}-{idea-slug}.md\` for each atomic note (one key idea, ≤4 paragraphs)`,
+    `- \`Resources/research-${topicSlug}-{idea-slug}.md\` for each atomic note (one key idea, ≤6 paragraphs, ≤3 headings)`,
     `- \`Resources/research-${topicSlug}-executive-summary.md\` for the synthesis, linking to all atomic notes\n`,
+    `### Note Creation Tips\n`,
+    "- Use **`batch_create_para_docs`** for creating multiple notes in one call — this auto-links all notes to each other.",
+    "- If a finding exceeds 6 paragraphs or 3 headings, split it into multiple atomic notes using `batch_create_para_docs`.",
+    "- Each atomic note should cover exactly one key idea/theme. Decompose broad findings into separate notes.\n",
     "Start by calling `search_para_docs` with the topic to check for any additional existing knowledge before searching the web.",
   ].join("\n");
 }

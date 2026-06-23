@@ -181,4 +181,63 @@ describe("formatResearchPlan", () => {
     expect(plan).toContain("research-sleep-and-memory-{idea-slug}.md");
     expect(plan).toContain("research-sleep-and-memory-executive-summary.md");
   });
+
+  it("should include batch creation guidance in the plan", async () => {
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
+
+    const plan = formatResearchPlan("integrated farming", "{}");
+
+    expect(plan).toContain("batch_create_para_docs");
+  });
+
+  it("should include atomicity split guidance in the plan", async () => {
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
+
+    const plan = formatResearchPlan("integrated farming", "{}");
+
+    expect(plan).toContain("split it into multiple atomic notes");
+  });
+});
+
+// ── RESEARCH_SUFFICIENCY_PROMPT content ────────────────────────────
+
+describe("RESEARCH_SUFFICIENCY_PROMPT", () => {
+  it("should be stricter than the generic sufficiency prompt", async () => {
+    const { RESEARCH_SUFFICIENCY_PROMPT } =
+      await import("../../extensions/commands/research-llm.js");
+
+    // Must use stricter language about exhaustive coverage
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("exhaustive");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("partial");
+  });
+
+  it("should instruct multi-note decomposition via notes[]", async () => {
+    const { RESEARCH_SUFFICIENCY_PROMPT } =
+      await import("../../extensions/commands/research-llm.js");
+
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("notes[]");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("6 paragraphs");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("3 headings");
+  });
+});
+
+// ── SufficiencyResult type shape ──────────────────────────────────
+
+describe("SufficiencyResult type", () => {
+  it("should export notes-aware types and strict prompt", async () => {
+    const mod = await import("../../extensions/commands/research-llm.js");
+
+    // Runtime check: verify the module exports the expected items
+    expect(mod.SUFFICIENCY_PROMPT).toBeDefined();
+    expect(mod.RESEARCH_SUFFICIENCY_PROMPT).toBeDefined();
+  });
+
+  it("should preserve legacy single-note fields for backward compat", async () => {
+    const mod = await import("../../extensions/commands/research-llm.js");
+
+    // Check that the SUFFICIENCY_PROMPT still mentions createNote
+    expect(mod.SUFFICIENCY_PROMPT).toContain("createNote");
+    expect(mod.SUFFICIENCY_PROMPT).toContain("noteTitle");
+    expect(mod.SUFFICIENCY_PROMPT).toContain("noteContent");
+  });
 });

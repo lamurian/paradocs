@@ -30,20 +30,66 @@ Evaluate carefully:
 - createNote=true when your answer is a novel synthesis across multiple documents that should be saved as a new atomic note
 - In the answer, cite sources using @citekey notation from the document content`;
 
+/**
+ * Stricter sufficiency prompt for /research command.
+ *
+ * Unlike the generic SUFFICIENCY_PROMPT (also used by /ask), this prompt
+ * raises the bar: sufficient=true ONLY if existing docs exhaustively cover
+ * ALL major facets of the topic. Partial or related coverage is NOT sufficient.
+ * Also instructs the LLM to decompose novel syntheses into multiple atomic
+ * notes via the notes[] field.
+ */
+export const RESEARCH_SUFFICIENCY_PROMPT = `You are a research analyst. Given a research topic and existing knowledge base documents, determine whether the existing documents exhaustively answer the topic.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "sufficient": true,
+  "rationale": "Brief explanation of the assessment",
+  "answer": "If sufficient, a comprehensive answer synthesising the existing documents with @citekey citations. Empty string if insufficient."
+}
+
+If sufficient AND your answer represents a novel synthesis not found in any single existing document, set "createNote": true and decompose into atomic notes:
+- If multiple distinct sub-topics emerged, use "notes": [{"title": "...", "content": "...", "tags": ["..."]}]
+  Each note must cover exactly one key idea, max 6 paragraphs or 3 headings.
+- For a single focused synthesis, use legacy fields: "noteTitle", "noteContent", "noteTags"
+
+EVALUATE STRICTLY:
+- sufficient=true ONLY if the existing documents collectively and EXHAUSTIVELY answer ALL major facets of the topic
+- sufficient=false if any major aspect is missing, sources are weak, or coverage is only partial or related
+- Related or partial coverage is NOT sufficient — only complete, multi-faceted coverage counts
+- createNote=true when your answer is a novel synthesis across multiple documents
+- Decompose into notes[] when the synthesis covers multiple distinct sub-topics
+- In the answer, cite sources using @citekey notation from the document content`;
+
 // ── Types ──────────────────────────────────────────────────────────
 
 /** Result of the sufficiency evaluation LLM call. */
+/**
+ * Result of the sufficiency evaluation LLM call.
+ *
+ * Supports both legacy single-note creation (noteTitle/noteContent/noteTags)
+ * and multi-note creation (notes[]) for decomposing syntheses into atomic chunks.
+ */
 export interface SufficiencyResult {
   sufficient: boolean;
   rationale: string;
   answer: string;
   /** When true, the answer is a novel synthesis worth saving as a new atomic note. */
   createNote?: boolean;
-  /** Title for the new atomic note, required when createNote is true. */
+  /**
+   * Multi-note output: decompose the synthesis into atomic notes.
+   * Each note covers exactly one key idea.
+   */
+  notes?: Array<{
+    title: string;
+    content: string;
+    tags: string[];
+  }>;
+  /** Title for the new atomic note, required when createNote is true (legacy single-note path). */
   noteTitle?: string;
-  /** Markdown body for the new atomic note (2-4 paragraphs, atomic), required when createNote is true. */
+  /** Markdown body for the new atomic note, required when createNote is true (legacy single-note path). */
   noteContent?: string;
-  /** Tags for the new note's frontmatter, required when createNote is true. */
+  /** Tags for the new note's frontmatter, required when createNote is true (legacy single-note path). */
   noteTags?: string[];
 }
 
