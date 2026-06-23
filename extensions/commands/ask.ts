@@ -2,6 +2,7 @@ import { complete } from "@earendil-works/pi-ai";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 
 import { createDocument } from "../../common/createDocument.js";
+import { extractJson } from "../../common/extractJson.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import { searchDocs } from "../para-knowledge/db-sqlite.js";
 
@@ -95,9 +96,10 @@ export function createHandler(pi: ExtensionAPI) {
             noteContent?: string;
             noteTags?: string[];
           };
-          try {
-            parsed = JSON.parse(text) as { sufficient: boolean; answer?: string; plan?: string };
-          } catch {
+          const extracted = extractJson(text);
+          if (extracted !== null) {
+            parsed = extracted as { sufficient: boolean; answer?: string; plan?: string };
+          } else {
             parsed = { sufficient: false, plan: FALLBACK_PLAN(q) };
           }
           done({

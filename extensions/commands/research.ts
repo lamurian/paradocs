@@ -14,6 +14,7 @@ import { DECOMPOSITION_PROMPT, formatResearchPlan } from "./research-format.js";
 import {
   callLlmWithLoader,
   RESEARCH_SUFFICIENCY_PROMPT,
+  type LlmCallResult,
   type SufficiencyResult,
 } from "./research-llm.js";
 import { createDocument } from "../../common/createDocument.js";
@@ -117,6 +118,42 @@ async function handleSufficiencyResult(
  * @param pi  The pi extension API instance.
  * @returns   The command handler function.
  */
+/**
+ * Resolve auth for the selected model.
+ *
+ * Returns { ok: true, apiKey, headers } if authentication succeeds,
+ * or notifies the user and returns { ok: false } on failure.
+ */
+async function resolveAuth(
+  ctx: ExtensionCommandContext,
+): Promise<
+  | {
+      ok: true;
+      apiKey: string;
+      headers?: Record<string, string>;
+      model: Parameters<typeof complete>[0];
+    }
+  | { ok: false }
+> {
+  if (!ctx.model) {
+    ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
+    return { ok: false };
+  }
+
+  const model = ctx.model as Parameters<typeof complete>[0];
+  try {
+    const result = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (!result.ok || !result.apiKey) {
+      ctx.ui.notify(`❌ No API key for ${(model as { provider: string }).provider}`, "error");
+      return { ok: false };
+    }
+    return { ok: true, apiKey: result.apiKey, headers: result.headers, model };
+  } catch (e) {
+    ctx.ui.notify(`❌ Auth error: ${e instanceof Error ? e.message : String(e)}`, "error");
+    return { ok: false };
+  }
+}
+
 export function createHandler(pi: ExtensionAPI) {
   return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
     const topic = args.trim();
@@ -126,33 +163,15 @@ export function createHandler(pi: ExtensionAPI) {
       return;
     }
 
-    if (!ctx.model) {
-      ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
-      return;
-    }
-
     if (typeof ctx.ui.custom !== "function") {
       ctx.ui.notify("/research requires interactive (TUI) mode.", "error");
       return;
     }
 
-    const model = ctx.model as Parameters<typeof complete>[0];
-    let authResult: {
-      ok: boolean;
-      apiKey?: string;
-      headers?: Record<string, string>;
-      error?: string;
-    };
-    try {
-      authResult = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-    } catch (e) {
-      ctx.ui.notify(`❌ Auth error: ${e instanceof Error ? e.message : String(e)}`, "error");
-      return;
-    }
-    if (!authResult.ok || !authResult.apiKey) {
-      ctx.ui.notify(`❌ No API key for ${(model as { provider: string }).provider}`, "error");
-      return;
-    }
+    const auth = await resolveAuth(ctx);
+    if (!auth.ok) return;
+    const { model, apiKey, headers } = auth;
+
     try {
       const db = await ensureNotesDb(ctx.cwd);
       const existingDocs: SearchResult[] = searchDocs(db, topic);
@@ -164,7 +183,7 @@ export function createHandler(pi: ExtensionAPI) {
           : "No existing documents found for this topic.";
 
       // Step 1: Evaluate sufficiency of existing knowledge
-      const sufficiencyResult = await ctx.ui.custom<SufficiencyResult | null>(
+      const sufficiencyResult = await ctx.ui.custom<LlmCallResult<SufficiencyResult>>(
         (tui, theme, _kb, done) =>
           callLlmWithLoader(
             tui,
@@ -172,7 +191,7 @@ export function createHandler(pi: ExtensionAPI) {
             done,
             "🔍 Evaluating existing knowledge...",
             model,
-            { apiKey: authResult.apiKey!, headers: authResult.headers },
+            { apiKey, headers },
             RESEARCH_SUFFICIENCY_PROMPT,
             [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
             (text) => {
@@ -185,36 +204,44 @@ export function createHandler(pi: ExtensionAPI) {
           ),
       );
 
-      if (sufficiencyResult === null) {
-        ctx.ui.notify("Research cancelled.", "info");
+      if (!sufficiencyResult.ok) {
+        if (sufficiencyResult.type === "cancelled") {
+          ctx.ui.notify("Research cancelled.", "info");
+        } else {
+          ctx.ui.notify(`❌ Research failed: ${sufficiencyResult.message}`, "error");
+        }
         return;
       }
 
-      if (await handleSufficiencyResult(sufficiencyResult, topic, ctx.cwd, pi)) {
+      if (await handleSufficiencyResult(sufficiencyResult.value, topic, ctx.cwd, pi)) {
         return;
       }
 
       // Step 2: Decompose into WHY/HOW/WHAT question tree
-      const questionTree = await ctx.ui.custom<string | null>((tui, theme, _kb, done) =>
+      const questionTree = await ctx.ui.custom<LlmCallResult<string>>((tui, theme, _kb, done) =>
         callLlmWithLoader(
           tui,
           theme,
           done,
           "🔬 Decomposing research topic...",
           model,
-          { apiKey: authResult.apiKey!, headers: authResult.headers },
+          { apiKey, headers },
           DECOMPOSITION_PROMPT,
           [{ type: "text", text: topic }],
           (text) => text,
         ),
       );
 
-      if (questionTree === null) {
-        ctx.ui.notify("Research plan generation cancelled.", "info");
+      if (!questionTree.ok) {
+        if (questionTree.type === "cancelled") {
+          ctx.ui.notify("Research plan generation cancelled.", "info");
+        } else {
+          ctx.ui.notify(`❌ Research plan generation failed: ${questionTree.message}`, "error");
+        }
         return;
       }
 
-      pi.sendUserMessage(formatResearchPlan(topic, questionTree));
+      pi.sendUserMessage(formatResearchPlan(topic, questionTree.value));
       await Promise.resolve();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

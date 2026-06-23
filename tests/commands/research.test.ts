@@ -58,6 +58,7 @@ describe("research command handler", () => {
 
     await handler("dopamine and motivation", {
       ...mockCtx,
+      ui: { notify, custom: vi.fn() },
       model: undefined,
     } as never);
 
@@ -219,6 +220,24 @@ describe("RESEARCH_SUFFICIENCY_PROMPT", () => {
     expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("6 paragraphs");
     expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("3 headings");
   });
+
+  it("should forbid markdown code fences with negative examples", async () => {
+    const { RESEARCH_SUFFICIENCY_PROMPT } =
+      await import("../../extensions/commands/research-llm.js");
+
+    // Must explicitly tell the LLM not to use markdown code fences
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("DO NOT");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("```");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("❌ Bad");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("✅ Good");
+  });
+
+  it("should forbid any explanatory text before or after JSON", async () => {
+    const { RESEARCH_SUFFICIENCY_PROMPT } =
+      await import("../../extensions/commands/research-llm.js");
+
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("explanatory text");
+  });
 });
 
 // ── SufficiencyResult type shape ──────────────────────────────────
@@ -239,5 +258,13 @@ describe("SufficiencyResult type", () => {
     expect(mod.SUFFICIENCY_PROMPT).toContain("createNote");
     expect(mod.SUFFICIENCY_PROMPT).toContain("noteTitle");
     expect(mod.SUFFICIENCY_PROMPT).toContain("noteContent");
+  });
+
+  it("should also forbid markdown code fences in generic SUFFICIENCY_PROMPT", async () => {
+    const { SUFFICIENCY_PROMPT } = await import("../../extensions/commands/research-llm.js");
+
+    expect(SUFFICIENCY_PROMPT).toContain("DO NOT");
+    expect(SUFFICIENCY_PROMPT).toContain("✅ Good");
+    expect(SUFFICIENCY_PROMPT).toContain("❌ Bad");
   });
 });

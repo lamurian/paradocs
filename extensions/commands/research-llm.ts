@@ -15,6 +15,13 @@ import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 /** System prompt for sufficiency evaluation of existing knowledge. */
 export const SUFFICIENCY_PROMPT = `You are a research analyst. Given a research topic and existing knowledge base documents, determine whether the existing documents fully and satisfactorily answer the topic.
 
+CRITICAL: Return ONLY raw JSON. DO NOT wrap in markdown fences (no \`\`\`json).
+DO NOT add any explanatory text before or after the JSON.
+
+✅ Good: {"sufficient": false, "rationale": "...", "answer": ""}
+❌ Bad: \`\`\`json\n{"sufficient": false...}\n\`\`\`  (NO!)
+❌ Bad: Here is the JSON: {"sufficient": false...}  (NO!)
+
 Return ONLY a JSON object with this exact structure:
 {
   "sufficient": true,
@@ -41,6 +48,13 @@ Evaluate carefully:
  */
 export const RESEARCH_SUFFICIENCY_PROMPT = `You are a research analyst. Given a research topic and existing knowledge base documents, determine whether the existing documents exhaustively answer the topic.
 
+CRITICAL: Return ONLY raw JSON. DO NOT wrap in markdown fences (no \`\`\`json).
+DO NOT add any explanatory text before or after the JSON.
+
+✅ Good: {"sufficient": false, "rationale": "...", "answer": ""}
+❌ Bad: \`\`\`json\n{"sufficient": false...}\n\`\`\`  (NO!)
+❌ Bad: Here is the JSON: {"sufficient": false...}  (NO!)
+
 Return ONLY a JSON object with this exact structure:
 {
   "sufficient": true,
@@ -63,7 +77,22 @@ EVALUATE STRICTLY:
 
 // ── Types ──────────────────────────────────────────────────────────
 
-/** Result of the sufficiency evaluation LLM call. */
+// ── Result type ───────────────────────────────────────────────────────
+
+/**
+ * Tagged union for LLM call results.
+ *
+ * Distinguishes successful parsing, user cancellation, and errors
+ * so callers can show appropriate messages instead of conflating
+ * all failures as "cancelled."
+ */
+export type LlmCallResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; type: "cancelled" }
+  | { ok: false; type: "error"; message: string };
+
+// ── Types ──────────────────────────────────────────────────────────
+
 /**
  * Result of the sufficiency evaluation LLM call.
  *
@@ -113,7 +142,7 @@ export interface SufficiencyResult {
 export function callLlmWithLoader<T>(
   tui: unknown,
   theme: unknown,
-  done: (value: T | null) => void,
+  done: (value: LlmCallResult<T>) => void,
   loaderText: string,
   model: Parameters<typeof complete>[0],
   auth: { apiKey: string; headers?: Record<string, string> },
@@ -122,7 +151,7 @@ export function callLlmWithLoader<T>(
   parseFn: (text: string) => T | null,
 ): BorderedLoader {
   const loader = new BorderedLoader(tui as never, theme as never, loaderText);
-  loader.onAbort = () => done(null);
+  loader.onAbort = () => done({ ok: false, type: "cancelled" });
 
   void (async () => {
     try {
@@ -137,16 +166,22 @@ export function callLlmWithLoader<T>(
         { apiKey: auth.apiKey, headers: auth.headers, signal: loader.signal },
       );
       if (response.stopReason === "aborted") {
-        done(null);
+        done({ ok: false, type: "cancelled" });
         return;
       }
       const text = response.content
         .filter((c): c is { type: "text"; text: string } => c.type === "text")
         .map((c) => c.text)
         .join("\n");
-      done(parseFn(text));
-    } catch {
-      done(null);
+      const parsed = parseFn(text);
+      if (parsed === null) {
+        done({ ok: false, type: "error", message: "LLM returned invalid JSON" });
+        return;
+      }
+      done({ ok: true, value: parsed });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      done({ ok: false, type: "error", message });
     }
   })();
 

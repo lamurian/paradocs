@@ -69,15 +69,18 @@ describe("research handler — sufficiency flow", () => {
 
   it("should create multiple documents when createNote with notes[] is returned", async () => {
     custom.mockResolvedValue({
-      sufficient: true,
-      rationale: "Novel synthesis across docs.",
-      answer: "Comprehensive answer about the topic.",
-      createNote: true,
-      notes: [
-        { title: "Note One", content: "Content one.", tags: ["tag1"] },
-        { title: "Note Two", content: "Content two.", tags: ["tag2"] },
-        { title: "Note Three", content: "Content three.", tags: ["tag3"] },
-      ],
+      ok: true,
+      value: {
+        sufficient: true,
+        rationale: "Novel synthesis across docs.",
+        answer: "Comprehensive answer about the topic.",
+        createNote: true,
+        notes: [
+          { title: "Note One", content: "Content one.", tags: ["tag1"] },
+          { title: "Note Two", content: "Content two.", tags: ["tag2"] },
+          { title: "Note Three", content: "Content three.", tags: ["tag3"] },
+        ],
+      },
     });
 
     const { createHandler } = await import("../../extensions/commands/research.js");
@@ -98,13 +101,16 @@ describe("research handler — sufficiency flow", () => {
 
   it("should create single document when legacy createNote with noteContent is returned", async () => {
     custom.mockResolvedValue({
-      sufficient: true,
-      rationale: "Novel synthesis.",
-      answer: "Answer about topic.",
-      createNote: true,
-      noteTitle: "Single Note",
-      noteContent: "Single note content.",
-      noteTags: ["tag1"],
+      ok: true,
+      value: {
+        sufficient: true,
+        rationale: "Novel synthesis.",
+        answer: "Answer about topic.",
+        createNote: true,
+        noteTitle: "Single Note",
+        noteContent: "Single note content.",
+        noteTags: ["tag1"],
+      },
     });
 
     const { createHandler } = await import("../../extensions/commands/research.js");
@@ -125,9 +131,12 @@ describe("research handler — sufficiency flow", () => {
 
   it("should not create any document when createNote is false/undefined", async () => {
     custom.mockResolvedValue({
-      sufficient: true,
-      rationale: "Existing docs cover it.",
-      answer: "Answer from existing knowledge.",
+      ok: true,
+      value: {
+        sufficient: true,
+        rationale: "Existing docs cover it.",
+        answer: "Answer from existing knowledge.",
+      },
     });
 
     const { createHandler } = await import("../../extensions/commands/research.js");
@@ -138,14 +147,84 @@ describe("research handler — sufficiency flow", () => {
     expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("no new note created"));
   });
 
-  it("should handle cancelled sufficiency check (null result)", async () => {
-    custom.mockResolvedValue(null);
+  it("should handle cancelled sufficiency check", async () => {
+    custom.mockResolvedValue({ ok: false, type: "cancelled" });
 
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("cancelled topic", mockCtx as never);
 
     expect(notify).toHaveBeenCalledWith("Research cancelled.", "info");
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("should handle error from LLM sufficiency check", async () => {
+    custom.mockResolvedValue({
+      ok: false,
+      type: "error",
+      message: "LLM returned invalid JSON",
+    });
+
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler(mockPi as never);
+    await handler("error topic", mockCtx as never);
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("Research failed"), "error");
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("should handle error from question tree decomposition step", async () => {
+    // First call (sufficiency) returns insufficient → triggers decomposition
+    custom
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          sufficient: false,
+          rationale: "Not covered.",
+          answer: "",
+        },
+      })
+      // Second call (decomposition) returns error
+      .mockResolvedValueOnce({
+        ok: false,
+        type: "error",
+        message: "LLM returned invalid JSON",
+      });
+
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler(mockPi as never);
+    await handler("error topic", mockCtx as never);
+
+    // Should show error for the decomposition step
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("Research plan generation failed"),
+      "error",
+    );
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("should handle cancelled question tree decomposition step", async () => {
+    // First call (sufficiency) returns insufficient → triggers decomposition
+    custom
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          sufficient: false,
+          rationale: "Not covered.",
+          answer: "",
+        },
+      })
+      // Second call (decomposition) returns cancelled
+      .mockResolvedValueOnce({
+        ok: false,
+        type: "cancelled",
+      });
+
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler(mockPi as never);
+    await handler("cancelled topic", mockCtx as never);
+
+    expect(notify).toHaveBeenCalledWith("Research plan generation cancelled.", "info");
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 });
