@@ -162,9 +162,12 @@ describe("create_para_doc path resolution", () => {
     rmSync(envKnowledgeDir, { recursive: true, force: true });
   });
 
-  it("should fall back to ctx.cwd when KNOWLEDGE_DIR is not set", async () => {
+  it("should fall back to default when KNOWLEDGE_DIR is not set, ignoring cwd", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
+
+    // Create the default Cognoscere directory in the mocked home directory
+    const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
 
     const { registerCreateDocTool } =
       await import("../../extensions/para-knowledge/tools/createDoc.js");
@@ -193,31 +196,30 @@ describe("create_para_doc path resolution", () => {
 
     const result = await execute(
       "call-2",
-      { title: "Fallback Doc", content: "Falls back to cwd.", tags: ["test"] },
+      { title: "Fallback Doc", content: "Falls back to default.", tags: ["test"] },
       undefined,
       undefined,
       { cwd: projectDir } as ExtensionContext,
     );
 
-    // File should exist in projectDir/Resources/
+    // File should exist in default path, NOT in projectDir
+    const defaultPath = join(defaultDir, "Resources", "fallback-doc.md");
     const projectPath = join(projectDir, "Resources", "fallback-doc.md");
 
-    expect(existsSync(projectPath)).toBe(true);
-    expect(result.details.path).toBe(projectPath);
+    expect(existsSync(defaultPath)).toBe(true);
+    expect(existsSync(projectPath)).toBe(false);
+    expect(result.details.path).toBe(defaultPath);
 
-    // Cleanup created file
-    rmSync(projectPath, { force: true });
-    // Cleanup empty directory if it was created
-    try {
-      rmSync(join(projectDir, "Resources"), { recursive: true, force: true });
-    } catch {
-      /* directory may not exist */
-    }
+    // Cleanup created files
+    rmSync(defaultPath, { force: true });
   });
 
   it("should handle empty content (autoDesc falls back to null)", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
+
+    // Create the default Cognoscere directory in the mocked home directory
+    const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
 
     const { registerCreateDocTool } =
       await import("../../extensions/para-knowledge/tools/createDoc.js");
@@ -260,15 +262,12 @@ describe("create_para_doc path resolution", () => {
     // autoDesc should be null since both description and content are empty
     expect(result.details.description).toBeNull();
 
-    // File should still be created
+    // File should still be created in default path, not projectDir
+    const defaultPath = join(defaultDir, "Resources", "empty-content-doc.md");
     const projectPath = join(projectDir, "Resources", "empty-content-doc.md");
-    expect(existsSync(projectPath)).toBe(true);
+    expect(existsSync(defaultPath)).toBe(true);
+    expect(existsSync(projectPath)).toBe(false);
 
-    rmSync(projectPath, { force: true });
-    try {
-      rmSync(join(projectDir, "Resources"), { recursive: true, force: true });
-    } catch {
-      /* directory may not exist */
-    }
+    rmSync(defaultPath, { force: true });
   });
 });

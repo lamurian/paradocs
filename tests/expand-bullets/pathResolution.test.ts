@@ -107,17 +107,18 @@ tags: [test]
     expect(content).toContain("bullet two");
   });
 
-  it("should fall back to ctx.cwd when KNOWLEDGE_DIR is not set", async () => {
+  it("should fall back to default when KNOWLEDGE_DIR is not set, ignoring cwd", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
 
-    // Create a doc in projectDir
-    const resourcesDir = join(projectDir, "Resources");
+    // Create a doc in the default Cognoscere location
+    const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
+    const resourcesDir = join(defaultDir, "Resources");
     mkdirSync(resourcesDir, { recursive: true });
     writeFileSync(
-      join(resourcesDir, "cwd-bullets.md"),
+      join(resourcesDir, "default-bullets.md"),
       `---
-title: "CWD Bullets"
+title: "Default Bullets"
 tags: [test]
 ---
 
@@ -153,7 +154,7 @@ tags: [test]
     const result = await execute(
       "call-2",
       {
-        docPath: "Resources/cwd-bullets.md",
+        docPath: "Resources/default-bullets.md",
       },
       undefined,
       undefined,

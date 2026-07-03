@@ -114,10 +114,12 @@ describe("batch_create_para_docs path resolution", () => {
     expect(existsSync(projectDb), `DB should NOT exist at ${projectDb}`).toBe(false);
   });
 
-  it("should fall back to ctx.cwd when KNOWLEDGE_DIR is not set", async () => {
+  it("should fall back to default when KNOWLEDGE_DIR is not set, ignoring cwd", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
     delete process.env.KNOWLEDGE_DB;
+
+    const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
 
     const mod = await import("../../extensions/batch-create/index.js");
 
@@ -154,7 +156,12 @@ describe("batch_create_para_docs path resolution", () => {
       { cwd: projectDir } as ExtensionContext,
     );
 
+    const defaultPath = join(defaultDir, "Resources", "cwd-doc.md");
     const projectPath = join(projectDir, "Resources", "cwd-doc.md");
-    expect(existsSync(projectPath)).toBe(true);
+    expect(existsSync(defaultPath)).toBe(true);
+    expect(existsSync(projectPath)).toBe(false);
+
+    // Cleanup
+    rmSync(defaultPath, { force: true });
   });
 });

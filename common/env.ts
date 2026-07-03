@@ -174,15 +174,19 @@ const DEFAULT_OBSCURA_VERSION = "latest";
  * Get the PARA knowledge base configuration.
  *
  * Reads KNOWLEDGE_DIR (tilde-expanded) and KNOWLEDGE_DB from the
- * environment, falling back to `cwd` (if provided) then to a sensible
- * default (`~/data/personal/Documents/Cognoscere`).
+ * environment, falling back to a sensible default
+ * (`~/data/personal/Documents/Cognoscere`).
  *
- * @param cwd - Fallback working directory when KNOWLEDGE_DIR is unset.
+ * Note: `_cwd` is retained for backward compatibility but no longer used
+ * in the fallback chain. Set the `KNOWLEDGE_DIR` env var or rely on the
+ * hardcoded default.
+ *
+ * @param _cwd - Deprecated, kept for API compatibility.
  * @returns The current knowledge base configuration.
  */
-export function getKnowledgeConfig(cwd?: string): KnowledgeConfig {
+export function getKnowledgeConfig(_cwd?: string): KnowledgeConfig {
   return {
-    dir: expandTilde(process.env.KNOWLEDGE_DIR ?? cwd ?? DEFAULT_KNOWLEDGE_DIR),
+    dir: expandTilde(process.env.KNOWLEDGE_DIR ?? DEFAULT_KNOWLEDGE_DIR),
     db: process.env.KNOWLEDGE_DB ?? DEFAULT_KNOWLEDGE_DB,
   };
 }

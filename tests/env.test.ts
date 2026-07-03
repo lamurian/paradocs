@@ -199,15 +199,15 @@ describe("getKnowledgeConfig", () => {
     expect(config.dir).toBe("/custom/knowledge");
   });
 
-  it("should fall back to cwd when KNOWLEDGE_DIR is unset", async () => {
+  it("should fall back to default when KNOWLEDGE_DIR is unset, ignoring cwd", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
     const { getKnowledgeConfig } = await import("../common/env.js");
     const config = getKnowledgeConfig("/my/project");
-    expect(config.dir).toBe("/my/project");
+    expect(config.dir).toBe(resolve(homedir(), "data/personal/Documents/Cognoscere"));
   });
 
-  it("should fall back to default when neither KNOWLEDGE_DIR nor cwd is set", async () => {
+  it("should fall back to default when KNOWLEDGE_DIR is unset", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
     const { getKnowledgeConfig } = await import("../common/env.js");
@@ -240,14 +240,5 @@ describe("getKnowledgeConfig", () => {
     const { getKnowledgeConfig } = await import("../common/env.js");
     const config = getKnowledgeConfig();
     expect(config.dir).toBe(resolve(homedir(), "my-knowledge"));
-  });
-
-  it("should use cwd as-is without tilde expansion", async () => {
-    vi.resetModules();
-    delete process.env.KNOWLEDGE_DIR;
-    const { getKnowledgeConfig } = await import("../common/env.js");
-    const config = getKnowledgeConfig("./relative/path");
-    // cwd is used as-is, no tilde expansion applied
-    expect(config.dir).toBe("./relative/path");
   });
 });

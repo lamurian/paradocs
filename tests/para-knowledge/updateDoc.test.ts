@@ -166,18 +166,19 @@ describe("update_para_doc path resolution", () => {
     rmSync(piEnvDir, { recursive: true, force: true });
   });
 
-  it("should fall back to ctx.cwd when KNOWLEDGE_DIR is not set", async () => {
+  it("should fall back to default when KNOWLEDGE_DIR is not set, ignoring cwd", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
     delete process.env.KNOWLEDGE_DB;
 
-    // Create a doc in projectDir (since that's where it would live without KNOWLEDGE_DIR)
-    const projectResources = join(projectDir, "Resources");
-    mkdirSync(projectResources, { recursive: true });
-    const projectDocPath = join(projectResources, "cwd-doc.md");
+    // Create a doc in the default Cognoscere location
+    const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
+    const defaultResources = join(defaultDir, "Resources");
+    mkdirSync(defaultResources, { recursive: true });
+    const defaultDocPath = join(defaultResources, "default-doc.md");
     writeFileSync(
-      projectDocPath,
-      '---\ntitle: "CWD Doc"\nauthor: pi\neditor: lam\ndate: 2026-01-01T00:00:00.000Z\ntags: [test]\n---\nOriginal.',
+      defaultDocPath,
+      '---\ntitle: "Default Doc"\nauthor: pi\neditor: lam\ndate: 2026-01-01T00:00:00.000Z\ntags: [test]\n---\nOriginal.',
       "utf-8",
     );
 
@@ -208,15 +209,15 @@ describe("update_para_doc path resolution", () => {
     await execute(
       "call-2",
       {
-        path: "Resources/cwd-doc.md",
-        content: "Updated in cwd fallback.",
+        path: "Resources/default-doc.md",
+        content: "Updated in default fallback.",
       },
       undefined,
       undefined,
       { cwd: projectDir } as ExtensionContext,
     );
 
-    const content = readFileSync(projectDocPath, "utf-8");
-    expect(content).toContain("Updated in cwd fallback.");
+    const content = readFileSync(defaultDocPath, "utf-8");
+    expect(content).toContain("Updated in default fallback.");
   });
 });
