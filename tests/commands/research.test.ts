@@ -29,6 +29,7 @@ describe("research command handler", () => {
     mockPi = {
       sendUserMessage,
       registerCommand: vi.fn(),
+      registerTool: vi.fn(),
     };
   });
 

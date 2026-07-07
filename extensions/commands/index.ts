@@ -18,11 +18,12 @@ import {
   createHandler as createSummarizeHandler,
   description as summarizeDescription,
 } from "./summarize.js";
+import { registerAskTool } from "./tools/ask.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /**
- * Register all slash commands with the pi runtime.
+ * Register all slash commands and tools with the pi runtime.
  *
  * @param pi  The pi extension API instance.
  */
@@ -41,4 +42,6 @@ export default function (pi: ExtensionAPI): void {
     description: summarizeDescription,
     handler: createSummarizeHandler(pi),
   });
+
+  registerAskTool(pi);
 }

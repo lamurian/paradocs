@@ -64,7 +64,7 @@ describe("research handler — sufficiency flow", () => {
       },
       cwd: "/tmp/test-cwd",
     };
-    mockPi = { sendUserMessage, registerCommand: vi.fn() };
+    mockPi = { sendUserMessage, registerCommand: vi.fn(), registerTool: vi.fn() };
   });
 
   it("should create multiple documents when createNote with notes[] is returned", async () => {
