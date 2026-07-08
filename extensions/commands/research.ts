@@ -58,9 +58,11 @@ async function handleSufficiencyResult(
       );
       created.push(doc);
     }
+    const safeTopic = topic.slice(0, 50).replace(/`/g, "");
     pi.sendUserMessage(
       `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
-        `📄 Created ${created.length} atomic notes covering this topic.`,
+        `📄 Created ${created.length} atomic notes covering this topic.\n\n` +
+        `**Next**: Run \`commit_changes\` with \`docs: research ${safeTopic}\`. If the last commit was a related docs commit, use \`commit_amend\` instead.`,
     );
     return true;
   }
@@ -81,12 +83,15 @@ async function handleSufficiencyResult(
       },
       { cwd },
     );
+    const safeTopic = topic.slice(0, 50).replace(/`/g, "");
+    const linkMsg =
+      doc.linkCount > 0
+        ? `\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.`
+        : "";
     pi.sendUserMessage(
       `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
-        `📄 New note created: \`${doc.path}\`` +
-        (doc.linkCount > 0
-          ? `\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.`
-          : ""),
+        `📄 New note created: \`${doc.path}\`${linkMsg}\n\n` +
+        `**Next**: Run \`commit_changes\` with \`docs: research ${safeTopic}\`. If the last commit was a related docs commit, use \`commit_amend\` instead.`,
     );
     return true;
   }
@@ -124,9 +129,7 @@ async function handleSufficiencyResult(
  * Returns { ok: true, apiKey, headers } if authentication succeeds,
  * or notifies the user and returns { ok: false } on failure.
  */
-async function resolveAuth(
-  ctx: ExtensionCommandContext,
-): Promise<
+async function resolveAuth(ctx: ExtensionCommandContext): Promise<
   | {
       ok: true;
       apiKey: string;

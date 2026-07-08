@@ -67,7 +67,13 @@ export function createHandler(pi: ExtensionAPI) {
  * @param url  The normalized URL to summarise.
  * @returns    The formatted prompt string.
  */
-function formatSummarizePrompt(url: string): string {
+/**
+ * Public export for testing.
+ *
+ * @param url - The URL to summarise.
+ * @returns The formatted prompt string.
+ */
+export function formatSummarizePrompt(url: string): string {
   return [
     `Please summarise the following URL into a knowledge document:\n`,
     `URL: ${url}\n`,
@@ -91,6 +97,9 @@ function formatSummarizePrompt(url: string): string {
     `     - \`## Key Points\` (bulleted list)`,
     `     - \`## Relevance\` (why this matters or how to use it)`,
     `7. **Auto-link** — Auto-linking runs automatically after document creation.`,
+    `8. **Commit** — Call \`commit_changes\` with a \`docs:\` message (e.g., \`docs: add summary for <short title>\`).`,
+    `   - Check \`git log -1 --oneline\` — if the last commit message starts with \`docs:\` and relates`,
+    `     to this session's work, use \`commit_amend\` instead to add the new files.`,
     ``,
     `Proceed step by step.`,
   ].join("\n");

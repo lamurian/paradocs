@@ -203,6 +203,46 @@ describe("research handler — sufficiency flow", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
+  it("should include commit instruction in multi-note creation output", async () => {
+    custom.mockResolvedValue({
+      ok: true,
+      value: {
+        sufficient: true,
+        rationale: "Novel synthesis across docs.",
+        answer: "Comprehensive answer about the topic.",
+        createNote: true,
+        notes: [{ title: "Note One", content: "Content one.", tags: ["tag1"] }],
+      },
+    });
+
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler(mockPi as never);
+    await handler("integrated farming", mockCtx as never);
+
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+  });
+
+  it("should include commit instruction in single-note creation output", async () => {
+    custom.mockResolvedValue({
+      ok: true,
+      value: {
+        sufficient: true,
+        rationale: "Novel synthesis.",
+        answer: "Answer about topic.",
+        createNote: true,
+        noteTitle: "Single Note",
+        noteContent: "Single note content.",
+        noteTags: ["tag1"],
+      },
+    });
+
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler(mockPi as never);
+    await handler("some topic", mockCtx as never);
+
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+  });
+
   it("should handle cancelled question tree decomposition step", async () => {
     // First call (sufficiency) returns insufficient → triggers decomposition
     custom

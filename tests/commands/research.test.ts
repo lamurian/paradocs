@@ -192,6 +192,16 @@ describe("formatResearchPlan", () => {
     expect(plan).toContain("batch_create_para_docs");
   });
 
+  it("should include commit step with commit_changes", async () => {
+    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
+
+    const plan = formatResearchPlan("dopamine and motivation", "{}");
+
+    expect(plan).toContain("commit_changes");
+    expect(plan).toContain("commit_amend");
+    expect(plan).toContain("docs:");
+  });
+
   it("should include atomicity split guidance in the plan", async () => {
     const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 

@@ -1,3 +1,13 @@
+/**
+ * /ask command — knowledge base sufficiency check with plan generation.
+ *
+ * Searches existing PARA docs for a question, evaluates sufficiency via LLM,
+ * and either answers from existing knowledge or generates a structured research
+ * plan for the agent to execute.
+ *
+ * @module extensions/commands/ask
+ */
+
 import { complete } from "@earendil-works/pi-ai";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 
@@ -11,12 +21,12 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 
 export const description = "Ask a question and get an answer or research plan";
 
-const FALLBACK_PLAN = (q: string) =>
-  `## Research Plan\n\n**Question**: ${q}\n\n**Phase 1**: Sufficiency check — search notes.db\n\n**Phase 2**: Web search — search for: ${q}\n\n**Phase 3**: Fetch and cite — fetch_url then resolve_citation\n\n**Phase 4**: Synthesize — create atomic notes using create_para_doc`;
+export const FALLBACK_PLAN = (q: string) =>
+  `## Research Plan\n\n**Question**: ${q}\n\n**Phase 1**: Sufficiency check — search notes.db\n\n**Phase 2**: Web search — search for: ${q}\n\n**Phase 3**: Fetch and cite — fetch_url then resolve_citation\n\n**Phase 4**: Synthesize — create atomic notes using create_para_doc\n\n**Phase 5**: Commit — \`commit_changes\` with \`docs: answer <topic>\`. Check \`git log -1 --oneline\` — if the last commit message starts with \`docs:\` and relates to this session's work, use \`commit_amend\` instead.`;
 
-const PROMPT = `You evaluate sufficiency of knowledge base results. Return ONLY valid JSON.
+export const PROMPT = `You evaluate sufficiency of knowledge base results. Return ONLY valid JSON.
 If sufficient: {"sufficient":true,"answer":"answer with @citekey citations"}
-If insufficient: {"sufficient":false,"plan":"## Research Plan\\n**Question**: {q}\\n**Phase 1**: Sufficiency check\\n**Phase 2**: Web search\\n**Phase 3**: Fetch and cite\\n**Phase 4**: Synthesize — create atomic notes using create_para_doc"}
+If insufficient: {"sufficient":false,"plan":"## Research Plan\\n**Question**: {q}\\n**Phase 1**: Sufficiency check\\n**Phase 2**: Web search\\n**Phase 3**: Fetch and cite\\n**Phase 4**: Synthesize — create atomic notes using create_para_doc\\n**Phase 5**: Commit — \`commit_changes\` with \`docs: answer <topic>\`. Check \`git log -1 --oneline\` — if the last commit message starts with \`docs:\` and relates to this session's work, use \`commit_amend\` instead."}
 Cite sources with @citekey when sufficient.`;
 
 export function createHandler(pi: ExtensionAPI) {
@@ -136,7 +146,7 @@ export function createHandler(pi: ExtensionAPI) {
             { cwd: ctx.cwd },
           );
           pi.sendUserMessage(
-            `## Answer: ${q}\n\n${result.answer}\n\n---\n📄 **New note created**: \`${doc.path}\`\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.`,
+            `## Answer: ${q}\n\n${result.answer}\n\n---\n📄 **New note created**: \`${doc.path}\`\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.\n\n**Next**: Run \`commit_changes\` with \`docs: answer ${q.slice(0, 50).replace(/`/g, "")}\`. If the last commit was a related docs commit, use \`commit_amend\` instead.`,
           );
         } else {
           // Just answer from existing knowledge, no note needed

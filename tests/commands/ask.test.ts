@@ -140,6 +140,76 @@ describe("ask command handler", () => {
     );
   });
 
+  it("should include commit step in the fallback plan", async () => {
+    const { FALLBACK_PLAN } = await import("../../extensions/commands/ask.js");
+
+    const plan = FALLBACK_PLAN("test question");
+
+    expect(plan).toContain("commit_changes");
+    expect(plan).toContain("commit_amend");
+    expect(plan).toContain("docs:");
+  });
+
+  it("should include commit step in the PROMPT template", async () => {
+    const { PROMPT } = await import("../../extensions/commands/ask.js");
+
+    expect(PROMPT).toContain("commit_changes");
+    expect(PROMPT).toContain("commit_amend");
+    expect(PROMPT).toContain("docs:");
+  });
+
+  it("should include Phase 5 (Commit) after Phase 4 in FALLBACK_PLAN", async () => {
+    const { FALLBACK_PLAN } = await import("../../extensions/commands/ask.js");
+
+    const plan = FALLBACK_PLAN("test question");
+    expect(plan).toContain("Phase 4");
+    expect(plan).toContain("Phase 5");
+
+    // Phase 5 should appear after Phase 4
+    const phase4Index = plan.indexOf("Phase 4");
+    const phase5Index = plan.indexOf("Phase 5");
+    expect(phase5Index).toBeGreaterThan(phase4Index);
+  });
+
+  it("should include Phase 5 (Commit) after Phase 4 in PROMPT", async () => {
+    const { PROMPT } = await import("../../extensions/commands/ask.js");
+
+    expect(PROMPT).toContain("Phase 4");
+    expect(PROMPT).toContain("Phase 5");
+
+    const phase4Index = PROMPT.indexOf("Phase 4");
+    const phase5Index = PROMPT.indexOf("Phase 5");
+    expect(phase5Index).toBeGreaterThan(phase4Index);
+  });
+
+  it("should show commit instruction in note creation output", async () => {
+    const { createHandler } = await import("../../extensions/commands/ask.js");
+    const handler = createHandler(mockPi as never);
+
+    await handler("living fence vs concrete wall durability", {
+      ...mockCtx,
+      ui: {
+        notify,
+        custom: vi.fn().mockResolvedValue({
+          sufficient: true,
+          answer: "Synthesis answer about living fences vs concrete walls...",
+          createNote: true,
+          noteTitle: "Comparing Living Fences vs Concrete Walls",
+          noteContent:
+            "## Summary\n\nNovel synthesis content.\n\n## Key Points\n\n- Point 1\n- Point 2",
+          noteTags: ["living-fence", "comparison"],
+        }),
+      },
+      model: { id: "test-model", provider: "test" },
+      modelRegistry: {
+        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
+      },
+    } as never);
+
+    // Should include commit instruction after note creation
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+  });
+
   it("should truncate long question in notification", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
     const handler = createHandler(mockPi as never);
