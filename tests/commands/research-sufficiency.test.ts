@@ -126,7 +126,7 @@ describe("research handler — sufficiency flow", () => {
       }),
       { cwd: "/tmp/test-cwd" },
     );
-    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("New note created"));
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Note saved"));
   });
 
   it("should not create any document when createNote is false/undefined", async () => {
@@ -203,7 +203,7 @@ describe("research handler — sufficiency flow", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should include commit instruction in multi-note creation output", async () => {
+  it("should not include commit instruction in multi-note creation output", async () => {
     custom.mockResolvedValue({
       ok: true,
       value: {
@@ -219,10 +219,12 @@ describe("research handler — sufficiency flow", () => {
     const handler = createHandler(mockPi as never);
     await handler("integrated farming", mockCtx as never);
 
-    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+    expect(sendUserMessage).not.toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Created"));
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("atomic notes"));
   });
 
-  it("should include commit instruction in single-note creation output", async () => {
+  it("should not include commit instruction in single-note creation output", async () => {
     custom.mockResolvedValue({
       ok: true,
       value: {
@@ -240,7 +242,8 @@ describe("research handler — sufficiency flow", () => {
     const handler = createHandler(mockPi as never);
     await handler("some topic", mockCtx as never);
 
-    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+    expect(sendUserMessage).not.toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Note saved"));
   });
 
   it("should handle cancelled question tree decomposition step", async () => {

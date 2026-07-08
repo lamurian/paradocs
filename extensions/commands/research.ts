@@ -18,6 +18,7 @@ import {
   type SufficiencyResult,
 } from "./research-llm.js";
 import { createDocument } from "../../common/createDocument.js";
+import { commitKnowledgeBase } from "../../common/gitCommit.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import { searchDocs } from "../para-knowledge/db-sqlite.js";
 
@@ -40,6 +41,10 @@ async function handleSufficiencyResult(
   cwd: string,
   pi: ExtensionAPI,
 ): Promise<boolean> {
+  // Auto-commit helper after document creation
+  if (sufficiencyResult.commitMessage) {
+    await commitKnowledgeBase(sufficiencyResult.commitMessage, cwd);
+  }
   if (!sufficiencyResult.sufficient) return false;
 
   // Multi-note creation path
@@ -58,11 +63,12 @@ async function handleSufficiencyResult(
       );
       created.push(doc);
     }
-    const safeTopic = topic.slice(0, 50).replace(/`/g, "");
+    const commitStr = sufficiencyResult.commitMessage
+      ? `\n💾 Committed: \`${sufficiencyResult.commitMessage}\``
+      : "";
     pi.sendUserMessage(
       `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
-        `📄 Created ${created.length} atomic notes covering this topic.\n\n` +
-        `**Next**: Run \`commit_changes\` with \`docs: research ${safeTopic}\`. If the last commit was a related docs commit, use \`commit_amend\` instead.`,
+        `📄 Created ${created.length} atomic notes covering this topic.${commitStr}`,
     );
     return true;
   }
@@ -83,15 +89,16 @@ async function handleSufficiencyResult(
       },
       { cwd },
     );
-    const safeTopic = topic.slice(0, 50).replace(/`/g, "");
     const linkMsg =
       doc.linkCount > 0
         ? `\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.`
         : "";
+    const commitStr = sufficiencyResult.commitMessage
+      ? `\n💾 Committed: \`${sufficiencyResult.commitMessage}\``
+      : "";
     pi.sendUserMessage(
       `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
-        `📄 New note created: \`${doc.path}\`${linkMsg}\n\n` +
-        `**Next**: Run \`commit_changes\` with \`docs: research ${safeTopic}\`. If the last commit was a related docs commit, use \`commit_amend\` instead.`,
+        `📄 Note saved to knowledge base: \`${doc.path}\`${linkMsg}${commitStr}`,
     );
     return true;
   }

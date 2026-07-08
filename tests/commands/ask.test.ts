@@ -133,56 +133,46 @@ describe("ask command handler", () => {
 
     // Should show note creation confirmation instead of "no new note created"
     expect(sendUserMessage).toHaveBeenCalledWith(
-      expect.stringContaining("📄 **New note created**"),
+      expect.stringContaining("📄 Note saved to knowledge base"),
     );
     expect(sendUserMessage).not.toHaveBeenCalledWith(
       expect.stringContaining("no new note created"),
     );
   });
 
-  it("should include commit step in the fallback plan", async () => {
+  it("should not include commit step in the fallback plan", async () => {
     const { FALLBACK_PLAN } = await import("../../extensions/commands/ask.js");
 
     const plan = FALLBACK_PLAN("test question");
 
-    expect(plan).toContain("commit_changes");
-    expect(plan).toContain("commit_amend");
-    expect(plan).toContain("docs:");
+    expect(plan).not.toContain("commit_changes");
+    expect(plan).not.toContain("commit_amend");
+    expect(plan).not.toContain("docs:");
   });
 
-  it("should include commit step in the PROMPT template", async () => {
+  it("should not include commit step in the PROMPT template", async () => {
     const { PROMPT } = await import("../../extensions/commands/ask.js");
 
-    expect(PROMPT).toContain("commit_changes");
-    expect(PROMPT).toContain("commit_amend");
-    expect(PROMPT).toContain("docs:");
+    expect(PROMPT).not.toContain("commit_changes");
+    expect(PROMPT).not.toContain("commit_amend");
   });
 
-  it("should include Phase 5 (Commit) after Phase 4 in FALLBACK_PLAN", async () => {
+  it("should not include Phase 5 in FALLBACK_PLAN", async () => {
     const { FALLBACK_PLAN } = await import("../../extensions/commands/ask.js");
 
     const plan = FALLBACK_PLAN("test question");
     expect(plan).toContain("Phase 4");
-    expect(plan).toContain("Phase 5");
-
-    // Phase 5 should appear after Phase 4
-    const phase4Index = plan.indexOf("Phase 4");
-    const phase5Index = plan.indexOf("Phase 5");
-    expect(phase5Index).toBeGreaterThan(phase4Index);
+    expect(plan).not.toContain("Phase 5");
   });
 
-  it("should include Phase 5 (Commit) after Phase 4 in PROMPT", async () => {
+  it("should not include Phase 5 in PROMPT", async () => {
     const { PROMPT } = await import("../../extensions/commands/ask.js");
 
     expect(PROMPT).toContain("Phase 4");
-    expect(PROMPT).toContain("Phase 5");
-
-    const phase4Index = PROMPT.indexOf("Phase 4");
-    const phase5Index = PROMPT.indexOf("Phase 5");
-    expect(phase5Index).toBeGreaterThan(phase4Index);
+    expect(PROMPT).not.toContain("Phase 5");
   });
 
-  it("should show commit instruction in note creation output", async () => {
+  it("should not show commit instruction in note creation output", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
     const handler = createHandler(mockPi as never);
 
@@ -206,8 +196,11 @@ describe("ask command handler", () => {
       },
     } as never);
 
-    // Should include commit instruction after note creation
-    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+    // Should not include commit instruction; should show note saved message
+    expect(sendUserMessage).not.toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      expect.stringContaining("Note saved to knowledge base"),
+    );
   });
 
   it("should truncate long question in notification", async () => {

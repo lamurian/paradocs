@@ -109,9 +109,5 @@ export function formatResearchPlan(topic: string, questionTree: string): string 
     "- If a finding exceeds 6 paragraphs or 3 headings, split it into multiple atomic notes using `batch_create_para_docs`.",
     "- Each atomic note should cover exactly one key idea/theme. Decompose broad findings into separate notes.\n",
     "Start by calling `search_para_docs` with the topic to check for any additional existing knowledge before searching the web.",
-    "",
-    "### After Creating Notes",
-    "Call `commit_changes` with `docs: research <topic>`. Check `git log -1 --oneline` — if the last commit message",
-    "starts with `docs:` and relates to this research session, use `commit_amend` instead to add the new files.",
   ].join("\n");
 }

@@ -62,26 +62,27 @@ describe("formatSummarizePrompt", () => {
     formatSummarizePrompt = module.formatSummarizePrompt;
   });
 
-  it("should include a commit step with commit_changes", () => {
+  it("should not include a commit step with commit_changes", () => {
     const prompt = formatSummarizePrompt("https://example.com/article");
-    expect(prompt).toContain("commit_changes");
+    expect(prompt).not.toContain("commit_changes");
   });
 
-  it("should include commit_amend guideline for iterative work", () => {
+  it("should not include commit_amend guideline for iterative work", () => {
     const prompt = formatSummarizePrompt("https://example.com/article");
-    expect(prompt).toContain("commit_amend");
+    expect(prompt).not.toContain("commit_amend");
   });
 
-  it("should use docs: prefix in the commit message", () => {
+  it("should not use docs: prefix in the commit message", () => {
     const prompt = formatSummarizePrompt("https://example.com/article");
-    expect(prompt).toContain("docs:");
+    expect(prompt).not.toContain("docs:");
   });
 
-  it("should include commit as the final step after auto-link", () => {
+  it("should have auto-link as the last step before proceeding", () => {
     const prompt = formatSummarizePrompt("https://example.com/article");
 
-    // The commit step should reference step 8 (after the existing 7 steps)
-    expect(prompt).toContain("8. **Commit**");
+    // Step 7 (auto-link) should be the last numbered step, no step 8
+    expect(prompt).toContain("7. **Auto-link**");
+    expect(prompt).not.toContain("8. **Commit**");
     expect(prompt).toContain("Proceed step by step");
   });
 });
