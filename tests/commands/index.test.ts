@@ -89,7 +89,7 @@ describe("commands index", () => {
     expect(toolDef.promptGuidelines).toBeInstanceOf(Array);
   });
 
-  it("should create /ask handler that handles TUI guard gracefully", async () => {
+  it("should create /ask handler that works without TUI mode", async () => {
     const mod = await import("../../extensions/commands/index.js");
     mod.default(mockPi as never);
 
@@ -102,11 +102,9 @@ describe("commands index", () => {
     const mockCtx = { ui: { notify }, cwd: "/test" };
     await handler("What is dopamine?", mockCtx);
 
-    // Without TUI mode, the handler notifies about TUI requirement
-    expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining("requires interactive (TUI) mode"),
-      "error",
-    );
+    // Without TUI mode, the handler no longer errors about TUI requirement.
+    // Instead it hits the model guard if no model is selected.
+    expect(notify).not.toHaveBeenCalledWith(expect.stringContaining("requires interactive"));
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 });

@@ -58,17 +58,24 @@ describe("ask command handler", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should require TUI mode (ctx.ui.custom must be a function)", async () => {
+  it("should work in RPC mode without ctx.ui.custom", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
     const handler = createHandler(mockPi as never);
 
-    await handler("What is dopamine?", mockCtx as never);
+    // Simulate RPC mode: mode is not "tui", no custom(), but model is set
+    await handler("What is dopamine?", {
+      ...mockCtx,
+      mode: "rpc",
+      model: { id: "test-model", provider: "test" },
+      modelRegistry: {
+        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
+      },
+    } as never);
 
-    expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining("requires interactive (TUI) mode"),
-      "error",
-    );
-    expect(sendUserMessage).not.toHaveBeenCalled();
+    // Should not error about TUI mode — proceeds to LLM call path
+    expect(notify).not.toHaveBeenCalledWith(expect.stringContaining("requires interactive"));
+    // Should notify about checking
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍"), "info");
   });
 
   it("should require a selected model", async () => {
@@ -77,6 +84,7 @@ describe("ask command handler", () => {
 
     await handler("What is dopamine?", {
       ...mockCtx,
+      mode: "tui",
       ui: { notify, custom: vi.fn() },
     } as never);
 
@@ -90,6 +98,7 @@ describe("ask command handler", () => {
 
     await handler("What is dopamine?", {
       ...mockCtx,
+      mode: "tui",
       ui: { notify, custom: vi.fn() },
       model: { id: "test-model", provider: "test" },
       modelRegistry: {
@@ -113,6 +122,7 @@ describe("ask command handler", () => {
 
     await handler("living fence vs concrete wall durability", {
       ...mockCtx,
+      mode: "tui",
       ui: {
         notify,
         custom: vi.fn().mockResolvedValue({
@@ -178,6 +188,7 @@ describe("ask command handler", () => {
 
     await handler("living fence vs concrete wall durability", {
       ...mockCtx,
+      mode: "tui",
       ui: {
         notify,
         custom: vi.fn().mockResolvedValue({
@@ -210,6 +221,7 @@ describe("ask command handler", () => {
     const longQuestion = "What is ".repeat(20) + "?";
     await handler(longQuestion, {
       ...mockCtx,
+      mode: "tui",
       ui: { notify, custom: vi.fn() },
       model: { id: "test-model", provider: "test" },
       modelRegistry: {

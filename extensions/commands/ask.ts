@@ -20,6 +20,18 @@ import { searchDocs } from "../para-knowledge/db-sqlite.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
+/** Result shape for sufficiency checks in both TUI and RPC modes. */
+interface SufficiencyResult {
+  sufficient: boolean;
+  answer?: string;
+  plan?: string;
+  createNote?: boolean;
+  noteTitle?: string;
+  noteContent?: string;
+  noteTags?: string[];
+  commitMessage?: string;
+}
+
 export const description = "Ask a question and get an answer or research plan";
 
 export const FALLBACK_PLAN = (q: string) =>
@@ -31,15 +43,85 @@ If insufficient: {"sufficient":false,"plan":"## Research Plan\\n**Question**: {q
 Cite sources with @citekey when sufficient.
 Optional "commitMessage": descriptive git commit message for the new note, e.g. "docs: add synthesis of dopamine's role in wanting vs liking"`;
 
+/**
+ * Run the sufficiency check without TUI components.
+ *
+ * Extracted so both TUI (via BorderedLoader callback) and RPC (direct await)
+ * code paths can share the same LLM + search logic.
+ *
+ * @param ctx - The extension command context.
+ * @param question - The user's question.
+ * @param signal - Optional AbortSignal for cancellation.
+ * @returns The sufficiency result, or null on error/cancellation.
+ */
+async function runAskSufficiency(
+  ctx: ExtensionCommandContext,
+  question: string,
+  signal?: AbortSignal,
+): Promise<SufficiencyResult | null> {
+  try {
+    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model! as Model<Api>);
+    if (!auth.ok || !auth.apiKey) {
+      ctx.ui.notify(`❌ No API key for ${(ctx.model! as Model<Api>).provider}`, "error");
+      return null;
+    }
+
+    const db = await ensureNotesDb(ctx.cwd);
+    const docs = searchDocs(db, question, {}, 10);
+    const ctxStr =
+      docs.length === 0
+        ? "No existing PARA documents found."
+        : docs.map((r) => `- **${r.title}** (\`${r.path}\`): ${r.body.slice(0, 300)}`).join("\n");
+
+    const response = await complete(
+      ctx.model!,
+      {
+        systemPrompt: PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: `Question: ${question}\n\nExisting PARA docs:\n${ctxStr}` },
+            ],
+            timestamp: Date.now(),
+          },
+        ],
+      },
+      { apiKey: auth.apiKey, headers: auth.headers, signal },
+    );
+
+    const text = response.content
+      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .map((c) => c.text)
+      .join("\n")
+      .trim();
+    const extracted = extractJson(text);
+    if (extracted !== null) {
+      const parsed = extracted as SufficiencyResult;
+      return {
+        sufficient: parsed.sufficient ?? false,
+        answer: parsed.answer,
+        plan: parsed.plan,
+        createNote: parsed.createNote,
+        noteTitle: parsed.noteTitle,
+        noteContent: parsed.noteContent,
+        noteTags: parsed.noteTags,
+        commitMessage: parsed.commitMessage,
+      };
+    }
+    return { sufficient: false, plan: FALLBACK_PLAN(question) };
+  } catch (err) {
+    console.error("[ask]", err);
+    ctx.ui.notify(`❌ Error: ${err instanceof Error ? err.message : String(err)}`, "error");
+    return null;
+  }
+}
+
 export function createHandler(pi: ExtensionAPI) {
   return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
     const q = args.trim();
     if (!q) {
       ctx.ui.notify("Usage: /ask <question> — please provide a question.", "warning");
-      return;
-    }
-    if (typeof ctx.ui.custom !== "function") {
-      ctx.ui.notify("/ask requires interactive (TUI) mode.", "error");
       return;
     }
     if (!ctx.model) {
@@ -48,93 +130,23 @@ export function createHandler(pi: ExtensionAPI) {
     }
     ctx.ui.notify(`🔍 Checking: "${q.slice(0, 80)}…"`, "info");
 
-    const result = await ctx.ui.custom<{
-      sufficient: boolean;
-      answer?: string;
-      plan?: string;
-      createNote?: boolean;
-      noteTitle?: string;
-      noteContent?: string;
-      noteTags?: string[];
-      commitMessage?: string;
-    } | null>((tui, theme, _kb, done) => {
-      const loader = new BorderedLoader(tui, theme, "Checking knowledge base...");
-      loader.onAbort = () => done(null);
+    let result: SufficiencyResult | null;
 
-      const run = async () => {
-        try {
-          const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model! as Model<Api>);
-          if (!auth.ok || !auth.apiKey) {
-            done(null);
-            return;
-          }
-
-          const db = await ensureNotesDb(ctx.cwd);
-          const docs = searchDocs(db, q, {}, 10);
-          const ctxStr =
-            docs.length === 0
-              ? "No existing PARA documents found."
-              : docs
-                  .map((r) => `- **${r.title}** (\`${r.path}\`): ${r.body.slice(0, 300)}`)
-                  .join("\n");
-
-          const response = await complete(
-            ctx.model!,
-            {
-              systemPrompt: PROMPT,
-              messages: [
-                {
-                  role: "user",
-                  content: [
-                    { type: "text", text: `Question: ${q}\n\nExisting PARA docs:\n${ctxStr}` },
-                  ],
-                  timestamp: Date.now(),
-                },
-              ],
-            },
-            { apiKey: auth.apiKey, headers: auth.headers, signal: loader.signal },
-          );
-
-          const text = response.content
-            .filter((c): c is { type: "text"; text: string } => c.type === "text")
-            .map((c) => c.text)
-            .join("\n")
-            .trim();
-          let parsed: {
-            sufficient: boolean;
-            answer?: string;
-            plan?: string;
-            createNote?: boolean;
-            noteTitle?: string;
-            noteContent?: string;
-            noteTags?: string[];
-            commitMessage?: string;
-          };
-          const extracted = extractJson(text);
-          if (extracted !== null) {
-            parsed = extracted as { sufficient: boolean; answer?: string; plan?: string };
-          } else {
-            parsed = { sufficient: false, plan: FALLBACK_PLAN(q) };
-          }
-          done({
-            sufficient: parsed.sufficient ?? false,
-            answer: parsed.answer,
-            plan: parsed.plan,
-            createNote: parsed.createNote,
-            noteTitle: parsed.noteTitle,
-            noteContent: parsed.noteContent,
-            noteTags: parsed.noteTags,
-            commitMessage: parsed.commitMessage,
-          });
-        } catch (err) {
-          console.error("[ask]", err);
-          ctx.ui.notify(`❌ Error: ${err instanceof Error ? err.message : String(err)}`, "error");
-          done(null);
-        }
-      };
-      void run();
-      return loader;
-    });
+    if (ctx.mode === "tui") {
+      // TUI path: BorderedLoader with cancellation via loader.signal
+      result = await ctx.ui.custom<SufficiencyResult | null>((tui, theme, _kb, done) => {
+        const loader = new BorderedLoader(tui, theme, "Checking knowledge base...");
+        loader.onAbort = () => done(null);
+        void runAskSufficiency(ctx, q, loader.signal)
+          .then(done)
+          .catch(() => done(null));
+        return loader;
+      });
+    } else {
+      // RPC / non-TUI path: direct call, no BorderedLoader
+      ctx.ui.notify("⏳ Checking knowledge base...", "info");
+      result = await runAskSufficiency(ctx, q);
+    }
 
     if (result) {
       await handleSufficiencyResult(result, q, ctx.cwd, pi);
@@ -148,16 +160,7 @@ export function createHandler(pi: ExtensionAPI) {
  * Extracted to reduce complexity of the main handler.
  */
 async function handleSufficiencyResult(
-  result: {
-    sufficient: boolean;
-    answer?: string;
-    plan?: string;
-    createNote?: boolean;
-    noteTitle?: string;
-    noteContent?: string;
-    noteTags?: string[];
-    commitMessage?: string;
-  },
+  result: SufficiencyResult,
   question: string,
   cwd: string,
   pi: ExtensionAPI,

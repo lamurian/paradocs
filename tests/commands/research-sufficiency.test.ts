@@ -53,6 +53,7 @@ describe("research handler — sufficiency flow", () => {
     custom = vi.fn();
 
     mockCtx = {
+      mode: "tui",
       ui: { notify, custom },
       model: { id: "gpt-4o", provider: "openai" },
       modelRegistry: {

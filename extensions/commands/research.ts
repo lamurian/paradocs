@@ -12,6 +12,7 @@ import { complete } from "@earendil-works/pi-ai";
 
 import { DECOMPOSITION_PROMPT, formatResearchPlan } from "./research-format.js";
 import {
+  callLlmDirect,
   callLlmWithLoader,
   RESEARCH_SUFFICIENCY_PROMPT,
   type LlmCallResult,
@@ -173,11 +174,6 @@ export function createHandler(pi: ExtensionAPI) {
       return;
     }
 
-    if (typeof ctx.ui.custom !== "function") {
-      ctx.ui.notify("/research requires interactive (TUI) mode.", "error");
-      return;
-    }
-
     const auth = await resolveAuth(ctx);
     if (!auth.ok) return;
     const { model, apiKey, headers } = auth;
@@ -193,26 +189,45 @@ export function createHandler(pi: ExtensionAPI) {
           : "No existing documents found for this topic.";
 
       // Step 1: Evaluate sufficiency of existing knowledge
-      const sufficiencyResult = await ctx.ui.custom<LlmCallResult<SufficiencyResult>>(
-        (tui, theme, _kb, done) =>
-          callLlmWithLoader(
-            tui,
-            theme,
-            done,
-            "🔍 Evaluating existing knowledge...",
-            model,
-            { apiKey, headers },
-            RESEARCH_SUFFICIENCY_PROMPT,
-            [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
-            (text) => {
-              try {
-                return JSON.parse(text) as SufficiencyResult;
-              } catch {
-                return null;
-              }
-            },
-          ),
-      );
+      let sufficiencyResult: LlmCallResult<SufficiencyResult>;
+
+      if (ctx.mode === "tui") {
+        sufficiencyResult = await ctx.ui.custom<LlmCallResult<SufficiencyResult>>(
+          (tui, theme, _kb, done) =>
+            callLlmWithLoader(
+              tui,
+              theme,
+              done,
+              "🔍 Evaluating existing knowledge...",
+              model,
+              { apiKey, headers },
+              RESEARCH_SUFFICIENCY_PROMPT,
+              [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
+              (text) => {
+                try {
+                  return JSON.parse(text) as SufficiencyResult;
+                } catch {
+                  return null;
+                }
+              },
+            ),
+        );
+      } else {
+        ctx.ui.notify("⏳ Evaluating existing knowledge...", "info");
+        sufficiencyResult = await callLlmDirect<SufficiencyResult>(
+          model,
+          { apiKey, headers },
+          RESEARCH_SUFFICIENCY_PROMPT,
+          [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
+          (text) => {
+            try {
+              return JSON.parse(text) as SufficiencyResult;
+            } catch {
+              return null;
+            }
+          },
+        );
+      }
 
       if (!sufficiencyResult.ok) {
         if (sufficiencyResult.type === "cancelled") {
@@ -228,19 +243,32 @@ export function createHandler(pi: ExtensionAPI) {
       }
 
       // Step 2: Decompose into WHY/HOW/WHAT question tree
-      const questionTree = await ctx.ui.custom<LlmCallResult<string>>((tui, theme, _kb, done) =>
-        callLlmWithLoader(
-          tui,
-          theme,
-          done,
-          "🔬 Decomposing research topic...",
+      let questionTree: LlmCallResult<string>;
+
+      if (ctx.mode === "tui") {
+        questionTree = await ctx.ui.custom<LlmCallResult<string>>((tui, theme, _kb, done) =>
+          callLlmWithLoader(
+            tui,
+            theme,
+            done,
+            "🔬 Decomposing research topic...",
+            model,
+            { apiKey, headers },
+            DECOMPOSITION_PROMPT,
+            [{ type: "text", text: topic }],
+            (text) => text,
+          ),
+        );
+      } else {
+        ctx.ui.notify("⏳ Decomposing research topic...", "info");
+        questionTree = await callLlmDirect<string>(
           model,
           { apiKey, headers },
           DECOMPOSITION_PROMPT,
           [{ type: "text", text: topic }],
           (text) => text,
-        ),
-      );
+        );
+      }
 
       if (!questionTree.ok) {
         if (questionTree.type === "cancelled") {

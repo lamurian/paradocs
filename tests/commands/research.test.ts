@@ -59,6 +59,7 @@ describe("research command handler", () => {
 
     await handler("dopamine and motivation", {
       ...mockCtx,
+      mode: "tui",
       ui: { notify, custom: vi.fn() },
       model: undefined,
     } as never);
@@ -67,17 +68,24 @@ describe("research command handler", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should show error when ctx.ui.custom is unavailable (non-TUI mode)", async () => {
+  it("should work in RPC mode without ctx.ui.custom", async () => {
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
 
+    // RPC mode: mode is not "tui", no custom(), direct LLM path
     await handler("dopamine and motivation", {
       ...mockCtx,
+      mode: "rpc",
       ui: { notify },
     } as never);
 
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("requires interactive"), "error");
-    expect(sendUserMessage).not.toHaveBeenCalled();
+    // Should not error about TUI mode
+    expect(notify).not.toHaveBeenCalledWith(expect.stringContaining("requires interactive"));
+    // Should notify about evaluating existing knowledge
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("Evaluating existing knowledge"),
+      "info",
+    );
   });
 
   it("should register /research command with description", async () => {
