@@ -136,33 +136,26 @@ describe("formatResearchPlan", () => {
     expect(plan).toContain("fetch_url");
     expect(plan).toContain("atomic note");
     expect(plan).toContain("Completion Criteria");
-    expect(plan).toContain("research-dopamine-and-motivation");
+    expect(plan).toContain("dopamine and motivation");
   });
 
-  it("should generate a safe slug from complex topic", async () => {
+  it("should include topic name in plan header even with special chars", async () => {
     const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("Complex! Topic with @special #chars & more!!!", "{}");
 
-    expect(plan).toContain("research-complex-topic-with-special-chars-more-");
+    expect(plan).toContain("Research Plan: Complex! Topic with @special #chars & more!!!");
   });
 
-  it("should truncate slug to 40 characters", async () => {
+  it("should include topic name in plan header", async () => {
     const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
-    const plan = formatResearchPlan(
-      "a very very very long research topic that should be truncated aggressively for filenames",
-      "{}",
-    );
+    const plan = formatResearchPlan("a very very very long research topic", "{}");
 
-    // The slug should be at most 40 chars
-    const slugMatch = plan.match(/research-([\w-]+)-\{/);
-    expect(slugMatch).not.toBeNull();
-    const slug = slugMatch![1];
-    expect(slug.length).toBeLessThanOrEqual(40);
+    expect(plan).toContain("Research Plan: a very very very long research topic");
   });
 
-  it("should include completion criteria checklist", async () => {
+  it("should include completion criteria checklist without subdirectory reference", async () => {
     const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("test topic", "{}");
@@ -170,6 +163,9 @@ describe("formatResearchPlan", () => {
     expect(plan).toContain("- [ ] WHY question has ≥1 sourced answer");
     expect(plan).toContain("- [ ] HOW question has ≥1 sourced answer");
     expect(plan).toContain("- [ ] ≤5 search rounds used");
+    // Should not prescribe a subdirectory convention
+    expect(plan).not.toContain("atomic notes created in");
+    expect(plan).not.toContain("research-test-topic-");
   });
 
   it("should include confidence scoring rubric", async () => {
@@ -183,13 +179,21 @@ describe("formatResearchPlan", () => {
     expect(plan).toContain("peer-reviewed");
   });
 
-  it("should include atomic note naming convention", async () => {
+  it("should include flat atomic note guidance without subdirectory convention", async () => {
     const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("sleep and memory", "{}");
 
-    expect(plan).toContain("research-sleep-and-memory-{idea-slug}.md");
-    expect(plan).toContain("research-sleep-and-memory-executive-summary.md");
+    // Should not prescribe a subdirectory per topic
+    expect(plan).not.toContain("research-sleep-and-memory-");
+    expect(plan).not.toContain("-executive-summary");
+    // Should still mention atomic notes generally
+    expect(plan).toContain("atomic note");
+    // Should mention the agent decides the PARA directory per note
+    expect(plan).toContain("PARA");
+    expect(plan).toContain("Resources");
+    expect(plan).toContain("Areas");
+    expect(plan).toContain("Projects");
   });
 
   it("should include batch creation guidance in the plan", async () => {
@@ -210,12 +214,14 @@ describe("formatResearchPlan", () => {
     expect(plan).not.toContain("docs:");
   });
 
-  it("should include atomicity split guidance in the plan", async () => {
+  it("should include atomicity split guidance and flat PARA guidance in the plan", async () => {
     const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
 
     const plan = formatResearchPlan("integrated farming", "{}");
 
     expect(plan).toContain("split it into multiple atomic notes");
+    // Should guide the agent to decide per-note which directory fits
+    expect(plan).toContain("decides per-note");
   });
 });
 

@@ -67,12 +67,6 @@ Return ONLY the JSON object. No markdown, no explanation, no code fences.`;
  * @returns             The formatted research plan prompt.
  */
 export function formatResearchPlan(topic: string, questionTree: string): string {
-  const topicSlug = topic
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 40);
-
   return [
     `## Research Plan: ${topic}\n`,
     `I've analysed existing PARA documents and determined that this topic needs fresh research. Here is a structured research plan.\n`,
@@ -99,15 +93,12 @@ export function formatResearchPlan(topic: string, questionTree: string): string 
     "- [ ] Both supporting and conflicting evidence checked",
     "- [ ] ≤5 search rounds used",
     "- [ ] All 8 questions addressed (WHY + 3 WHAT + HOW + 3 WHAT)",
-    `- [ ] Atomic notes created in \`Resources/research-${topicSlug}-*/\``,
-    "- [ ] Executive summary note created linking all atomic notes\n",
-    `### Atomic Note Naming\n`,
-    `- \`Resources/research-${topicSlug}-{idea-slug}.md\` for each atomic note (one key idea, ≤6 paragraphs, ≤3 headings)`,
-    `- \`Resources/research-${topicSlug}-executive-summary.md\` for the synthesis, linking to all atomic notes\n`,
+    "- [ ] Atomic notes created for each distinct finding\n",
     `### Note Creation Tips\n`,
     "- Use **`batch_create_para_docs`** for creating multiple notes in one call — this auto-links all notes to each other.",
     "- If a finding exceeds 6 paragraphs or 3 headings, split it into multiple atomic notes using `batch_create_para_docs`.",
-    "- Each atomic note should cover exactly one key idea/theme. Decompose broad findings into separate notes.\n",
+    "- Each atomic note should cover exactly one key idea/theme. Decompose broad findings into separate notes.",
+    "- The agent **decides per-note** which PARA directory fits best: **Resources** for reference/theory, **Areas** for skills/responsibilities, **Projects** for deliverables/practical work.\n",
     "Start by calling `search_para_docs` with the topic to check for any additional existing knowledge before searching the web.",
   ].join("\n");
 }
