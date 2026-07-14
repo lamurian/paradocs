@@ -140,8 +140,8 @@ export default function (pi: ExtensionAPI): void {
       const doAutoLink = params.autoLink !== false;
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
 
-      // Atomicity validation — each doc validated independently before any IO
-      const { validDocs, validationErrors } = validateDocuments(docs);
+      // Atomicity validation with auto-expansion
+      const { validDocs, validationErrors, expandedCount } = await validateDocuments(docs);
 
       // If no valid docs remain, return errors immediately
       if (validDocs.length === 0) {
@@ -224,6 +224,10 @@ export default function (pi: ExtensionAPI): void {
       }
 
       const skippedNote = buildSkippedNote(validationErrors);
+      const expansionNote =
+        expandedCount > 0
+          ? `\n📐 Decomposed ${validationErrors.length} document(s) into ${expandedCount} atomic notes`
+          : "";
       const linkNote = doAutoLink
         ? `\n🔗 Auto-linked: ${linkedCount}/${created.length} documents received markdown links`
         : "";
@@ -232,7 +236,7 @@ export default function (pi: ExtensionAPI): void {
         content: [
           {
             type: "text",
-            text: buildCreatedSummary(created, linkNote, skippedNote),
+            text: buildCreatedSummary(created, linkNote, skippedNote + expansionNote),
           },
         ],
         details: {
@@ -240,6 +244,7 @@ export default function (pi: ExtensionAPI): void {
           count: created.length,
           autoLinked: doAutoLink,
           linkedCount,
+          expandedCount,
           validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
         },
       };

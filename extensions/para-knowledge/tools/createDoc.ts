@@ -17,7 +17,48 @@ import { createDocument } from "../../../common/createDocument.js";
 import { getKnowledgeConfig } from "../../../common/env.js";
 import { ensureNotesDb } from "../../../common/notesDb.js";
 
+import type { AtomicityResult } from "../../../common/atomicity.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+/**
+ * Build the error response for an atomicity violation.
+ */
+function buildAtomicityError(validation: AtomicityResult): {
+  content: Array<{ type: "text"; text: string }>;
+  details: Record<string, unknown>;
+} {
+  const splits = validation.suggestedSplits;
+  if (splits && splits.length > 0) {
+    const splitLines = splits
+      .map((s, i) => `  ${i + 1}. **${s.title}** (${s.area}) — tags: ${s.tags.join(", ")}`)
+      .join("\n");
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text:
+            `❌ Atomicity violation. Found ${splits.length} distinct Q&A pairs in your content.\n` +
+            `Use batch_create_para_docs with these ${splits.length} documents instead:\n\n${splitLines}`,
+        },
+      ],
+      details: {
+        error: "ATOMICITY_VIOLATION",
+        suggestedSplits: splits,
+      },
+    };
+  }
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `❌ ${validation.message}`,
+      },
+    ],
+    details: {
+      error: "ATOMICITY_VIOLATION",
+    },
+  };
+}
 
 /**
  * Register the create_para_doc tool.
@@ -53,22 +94,9 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       // Atomicity validation — runs before any IO or DB operations
-      const validation = validateAtomicity(params.content, params.title);
+      const validation = await validateAtomicity(params.content, params.title);
       if (!validation.valid) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `❌ ${validation.message}`,
-            },
-          ],
-          details: {
-            error: "ATOMICITY_VIOLATION",
-            rule: validation.rule,
-            count: validation.count,
-            limit: validation.limit,
-          },
-        };
+        return buildAtomicityError(validation);
       }
 
       // Citation validation — after atomicity, before any IO

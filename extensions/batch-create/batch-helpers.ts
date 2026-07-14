@@ -11,7 +11,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { slugify, formatFrontmatter } from "./yaml.js";
-import { validateAtomicity } from "../../common/atomicity.js";
+import { validateDocumentsAtomicity } from "../../common/atomicity.js";
 import { autoLink } from "../../common/autoLink.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import { indexFile } from "../para-knowledge/db-sqlite.js";
@@ -37,9 +37,6 @@ export interface CreatedFile {
 
 export interface ValidationError {
   title: string;
-  rule: string;
-  count: number;
-  limit: number;
   message: string;
 }
 
@@ -52,39 +49,66 @@ export interface CitationViolation {
 
 /**
  * Validate all documents for atomicity and separate valid from invalid.
+ *
+ * Documents that fail atomicity with suggested splits are automatically
+ * expanded: the failed doc is replaced by its suggested splits in the
+ * valid docs array. Documents that fail without splits are moved to
+ * validationErrors.
+ *
+ * @param docs - Array of documents to validate.
+ * @returns Valid docs (possibly expanded), errors, and expansion stats.
  */
-export function validateDocuments(docs: BatchDoc[]): {
+export async function validateDocuments(docs: BatchDoc[]): Promise<{
   validDocs: BatchDoc[];
   validationErrors: ValidationError[];
-} {
+  expandedCount: number;
+}> {
+  const results = await validateDocumentsAtomicity(docs);
+
   const validDocs: BatchDoc[] = [];
   const validationErrors: ValidationError[] = [];
+  let expandedCount = 0;
 
-  for (const doc of docs) {
-    const vr = validateAtomicity(doc.content, doc.title);
-    if (vr.valid) {
-      validDocs.push(doc);
+  for (let i = 0; i < docs.length; i++) {
+    const result = results[i];
+
+    if (result.valid) {
+      validDocs.push(docs[i]);
+    } else if (result.suggestedSplits && result.suggestedSplits.length > 0) {
+      // Expand: replace the failed doc with its suggested splits
+      for (const split of result.suggestedSplits) {
+        if (split.content.trim()) {
+          validDocs.push({
+            title: split.title,
+            content: split.content,
+            tags: split.tags,
+            area: split.area,
+          });
+        }
+      }
+      expandedCount += result.suggestedSplits.length;
     } else {
+      // Failed without splits — move to errors
       validationErrors.push({
-        title: doc.title,
-        rule: vr.rule,
-        count: vr.count,
-        limit: vr.limit,
-        message: vr.message,
+        title: docs[i].title,
+        message: result.message,
       });
     }
   }
 
-  return { validDocs, validationErrors };
+  return { validDocs, validationErrors, expandedCount };
 }
 
 /**
  * Build a human-readable note about skipped documents.
+ *
+ * @param errors - Validation errors from documents that couldn't be expanded.
+ * @returns Formatted string, empty if no errors.
  */
 export function buildSkippedNote(errors: ValidationError[]): string {
   if (errors.length === 0) return "";
   return (
-    `\n⚠️  ${errors.length} document(s) skipped due to atomicity violations:\n` +
+    `\n⚠️  ${errors.length} document(s) skipped — could not be expanded:\n` +
     errors.map((e) => `  • "${e.title}": ${e.message}`).join("\n")
   );
 }
