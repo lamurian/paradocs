@@ -1,19 +1,19 @@
 ---
 title: Tool-Level Atomicity Enforcement
-description: create_para_doc and batch_create_para_docs validate atomicity at the tool level, rejecting content that exceeds limits
+description: Atomicity is enforced via LLM-driven Q&A decomposition at the command level, with a single-topic keyword heuristic as a tool-level safety net
 status: implemented
 remaining: 0
-date: 2026-06-22
+date: 2026-07-14
 ---
 
 # Context
 
-The atomicity principle (one topic per note, ≤4 paragraphs, ≤2 headings) is currently documented in tool descriptions but not enforced. Agents can create notes with multiple topics, excessive paragraphs, or more than 2 heading sections without any guardrail. This leads to knowledge base bloat, semantic duplication, and reduced search precision. Options considered: (a) document-only guidance — fragile, no enforcement; (b) tool-level validation with rejection — deterministic guardrail; (c) post-creation warnings — too late, note already created. Manual review of existing notes shows ~30% violate the 4-paragraph limit and ~15% cover multiple topics.
+The atomicity principle requires each note to have one clear research question and one indicative answer. Previously, quantitative limits (paragraph/heading counts) were enforced at the tool level, but these caused false rejections of legitimate complex notes and did not capture the qualitative nature of atomicity. Agents need guidance on composing atomic notes, but the enforcement should be flexible enough to accommodate varying depths of treatment. Options considered: (a) quantitative limits (paragraphs, headings) — simple but causes false rejections; (b) qualitative Q&A criterion at the LLM level with a lightweight tool-level heuristic — more flexible, LLM-driven, minimal false rejections; (c) no tool-level enforcement — risks multi-topic notes entering the knowledge base.
 
 # Decision
 
-Enforce atomicity at the tool level in both create_para_doc and batch_create_para_docs. Validate content against three rules before writing: (1) exactly one coherent topic inferred from title and body, (2) maximum 4 paragraphs (separated by blank lines), (3) maximum 2 heading sections (## H2 or ### H3). On violation, return a clear error message specifying which rule was broken and guidance on how to fix (split into multiple notes or condense). The auto-link step only runs after successful creation. This replaces the current 'documentation-only' approach with a hard deterministic guardrail.
+Shift from quantitative to qualitative atomicity enforcement. The primary atomicity gate is LLM decomposition at the command level: each note must have one research question and one indicative answer. A lightweight single-topic heuristic (keyword overlap between heading sections and the title) acts as a tool-level safety net, flagging content where 2+ headings share no keywords with the title. Paragraph limits and heading limits are removed from the tool-level validation. Tool descriptions instruct agents to compose notes using the Q&A criterion.
 
 # Impact
 
-Benefits: eliminates multi-topic notes from the knowledge base; forces agents to properly structure knowledge; improves BM25 search precision. Costs: tool may reject legitimate complex notes — agent must learn the constraint and split accordingly; existing notes in the DB are not retroactively validated (only new creations). Migration: clear error messages reference the atomicity rules so agents can self-correct. Risk: agent may try to circumvent by merging paragraphs with line breaks — the paragraph check counts blank-line-separated blocks, not visual lines.
+Benefits: eliminates false rejections on paragraph/heading counts; more flexible for complex topics that naturally require depth; the Q&A criterion is semantically meaningful and easy for LLMs to reason about. Costs: the tool-level safety net cannot catch all multi-topic violations — it relies on the LLM to decompose correctly. Migration: legacy quantitative limits removed from tool code and descriptions; existing notes in the DB are not retroactively validated. Risk: agents may create overly long notes, but this is preferable to false rejections that break workflow.

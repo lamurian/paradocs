@@ -1,21 +1,18 @@
 /**
  * Atomicity validation for PARA knowledge documents.
  *
- * Enforces the atomic principle: one key idea per document.
- * Standard limits: max 6 paragraphs, max 3 headings (## or ###).
- * In-depth (deep): max 10 paragraphs, max 4 headings.
- * The primary semantic atomicity gate runs at the command level
- * (LLM decomposition). Tool-level mechanical checks act as a safety net.
+ * The primary atomicity gate is LLM decomposition at the command level:
+ * each note must have one clear research question and one indicative answer.
+ * The tool-level single-topic heuristic (keyword overlap between title and
+ * heading sections) acts as a secondary safety net.
+ *
+ * Paragraph counts and heading counts are not enforced at the tool level.
  *
  * @module common/atomicity
  */
 
 // ── Constants ─────────────────────────────────────────────────────────
 
-const MAX_PARAGRAPHS = 6;
-const MAX_HEADINGS = 3;
-const MAX_PARAGRAPHS_DEEP = 10;
-const MAX_HEADINGS_DEEP = 4;
 const UNRELATED_SECTION_THRESHOLD = 2;
 
 const STOP_WORDS = new Set([
@@ -131,43 +128,10 @@ export interface AtomicityResult {
 
 /**
  * Strip fenced code blocks from content to avoid false positives
- * when counting paragraphs and headings.
+ * in keyword analysis.
  */
 function stripFencedCodeBlocks(content: string): string {
   return content.replace(/```[\s\S]*?```/g, "");
-}
-
-/**
- * Count paragraph blocks in content.
- *
- * Blocks are separated by one or more blank lines.
- * Fenced code blocks are normalised to a single placeholder so that
- * internal blank lines don't inflate the count.
- * Each code block, list, or blockquote counts as one paragraph block.
- */
-function countParagraphBlocks(content: string): number {
-  const trimmed = content.trim();
-  if (!trimmed) return 0;
-
-  // Normalise fenced code blocks to avoid blank lines inside fences
-  // being counted as paragraph separators
-  const normalized = trimmed.replace(/```[\s\S]*?```/g, "CODE_BLOCK");
-
-  // Split by two or more consecutive newlines (blank line separator)
-  const blocks = normalized.split(/\n{2,}/).filter((b) => b.trim().length > 0);
-  return blocks.length;
-}
-
-/**
- * Count ## (H2) and ### (H3) headings.
- *
- * #### and below are not counted as heading sections.
- * Headings inside fenced code blocks are ignored.
- */
-function countRelevantHeadings(content: string): number {
-  const withoutCode = stripFencedCodeBlocks(content);
-  const matches = withoutCode.match(/^#{2,3}\s+.+/gm);
-  return matches ? matches.length : 0;
 }
 
 /**
@@ -226,57 +190,17 @@ function validateSingleTopic(content: string, title: string): boolean {
 /**
  * Validate markdown content against the atomicity principle.
  *
- * Three rules checked in order (most objective first):
- * 1. **Heading limit** (## or ###) — standard {@link MAX_HEADINGS}, deep {@link MAX_HEADINGS_DEEP}.
- * 2. **Paragraph limit** — standard {@link MAX_PARAGRAPHS}, deep {@link MAX_PARAGRAPHS_DEEP}.
- * 3. **Single topic** — content addresses one coherent topic (heuristic safety net).
- *
- * The primary semantic atomicity gate is LLM decomposition at the command level.
- * The tool-level mechanical checks (headings, paragraphs, keyword overlap) act as
- * a secondary safety net.
+ * The only tool-level check is the single-topic heuristic:
+ * content heading sections must share keyword overlap with the title.
+ * The primary atomicity gate is LLM decomposition at the command level
+ * (one research question + one indicative answer per note).
  *
  * @param content - Markdown body content (without YAML frontmatter).
  * @param title   - Document title used for topic focus comparison.
- * @param options - Optional settings. Set `deep: true` for in-depth focused notes
- *                  with relaxed limits (10 paragraphs, 4 headings).
  * @returns The first {@link AtomicityResult} violation or a valid result.
  */
-export function validateAtomicity(
-  content: string,
-  title: string,
-  options?: { deep?: boolean },
-): AtomicityResult {
-  const maxHeadings = options?.deep ? MAX_HEADINGS_DEEP : MAX_HEADINGS;
-  const maxParagraphs = options?.deep ? MAX_PARAGRAPHS_DEEP : MAX_PARAGRAPHS;
-  // Rule 3: Heading limit (most objective — check first)
-  const headingCount = countRelevantHeadings(content);
-  if (headingCount > maxHeadings) {
-    return {
-      valid: false,
-      rule: "heading-limit",
-      count: headingCount,
-      limit: maxHeadings,
-      message:
-        `Atomicity violation: heading-limit. Found ${headingCount}, max ${maxHeadings}. ` +
-        `Condense into fewer sections or split into separate notes.`,
-    };
-  }
-
-  // Rule 2: Paragraph limit
-  const paraCount = countParagraphBlocks(content);
-  if (paraCount > maxParagraphs) {
-    return {
-      valid: false,
-      rule: "paragraph-limit",
-      count: paraCount,
-      limit: maxParagraphs,
-      message:
-        `Atomicity violation: paragraph-limit. Found ${paraCount}, max ${maxParagraphs}. ` +
-        `Condense the content or split into multiple notes.`,
-    };
-  }
-
-  // Rule 1: Single topic (most heuristic — check last, conservatively)
+export function validateAtomicity(content: string, title: string): AtomicityResult {
+  // Single-topic heuristic (conservative safety net)
   if (!validateSingleTopic(content, title)) {
     return {
       valid: false,

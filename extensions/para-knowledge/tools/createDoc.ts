@@ -30,8 +30,8 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
       "Create a new PARA knowledge document (markdown + YAML frontmatter) and index it in notes.db. " +
       "Conventions: PARA classification — Resources for reference/theory, Areas for responsibilities/skills, " +
       "Projects for deliverables/practical work. " +
-      "Atomic principle — one key idea per note, max 6 paragraphs (or 3 heading sections), ≤100 lines total. " +
-      "Validates atomicity (single topic, ≤6 paragraphs, ≤3 headings) and citation references before creation. " +
+      "Atomic principle — one key idea per note (one research question + one indicative answer). " +
+      "Validates atomicity (single coherent topic — one research question and one indicative answer) and citation references before creation. " +
       "Filename auto-generated as kebab-case slug from title — keep titles concise. " +
       "Recommended body: ## Summary (2-4 paragraphs), ## Key Points, ## Sources. " +
       "Citations: Pandoc-style @citekey (narrative) or [@citekey] (parenthetical) from @ref.bib. " +

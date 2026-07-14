@@ -89,8 +89,8 @@ export default function (pi: ExtensionAPI): void {
       "index all of them in notes.db, and run batch auto-linking across them. " +
       "Each document follows: PARA classification — Resources (reference/theory), Areas (responsibilities/skills), " +
       "Projects (deliverables/practical work). " +
-      "Atomic principle — one key idea per note, max 6 paragraphs, ≤100 lines. " +
-      "Validates atomicity (single topic, ≤6 paragraphs, ≤3 headings) and citation references for each doc before creation. " +
+      "Atomic principle — one key idea per note (one research question + one indicative answer). " +
+      "Validates atomicity (single coherent topic — one research question and one indicative answer) and citation references for each doc before creation. " +
       "Filenames auto-generated as kebab-case slug from title. " +
       "Citations: Pandoc-style @citekey (narrative) or [@citekey] (parenthetical) from @ref.bib. " +
       "Run list_para_tags first and reuse existing tags. " +
@@ -104,7 +104,7 @@ export default function (pi: ExtensionAPI): void {
       "After creation, the tool auto-links all documents in the batch to each other using BM25 semantic similarity.",
       "Follow PARA conventions: Resources for reference/theory, Areas for responsibilities, Projects for practical work.",
       "Use Pandoc-style citations (@citekey / [@citekey]) referencing @ref.bib for any sourced claims.",
-      "Apply atomic principle: one key idea per document, max 6 paragraphs, keep concise.",
+      "Apply atomic principle: one key idea per document (one research question + one indicative answer), keep concise.",
       "Each document is validated for atomicity before creation; violating documents are rejected individually.",
       "Citations are validated: all @citekey references must exist in notes.db. If any doc has unresolved citations, the entire batch is rejected.",
     ],
