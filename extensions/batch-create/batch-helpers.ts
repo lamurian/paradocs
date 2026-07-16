@@ -17,6 +17,10 @@ import { ensureNotesDb } from "../../common/notesDb.js";
 import { indexFile } from "../para-knowledge/db-sqlite.js";
 
 import type { DocIndex } from "../para-knowledge/db-sqlite.js";
+import type { CreateAgentSessionOptions } from "@earendil-works/pi-coding-agent";
+
+/** Model type used by pi SDK for LLM configuration. */
+type Model = NonNullable<CreateAgentSessionOptions["model"]>;
 
 // ── Exported Types ────────────────────────────────────────────────────
 
@@ -58,12 +62,15 @@ export interface CitationViolation {
  * @param docs - Array of documents to validate.
  * @returns Valid docs (possibly expanded), errors, and expansion stats.
  */
-export async function validateDocuments(docs: BatchDoc[]): Promise<{
+export async function validateDocuments(
+  docs: BatchDoc[],
+  model: Model,
+): Promise<{
   validDocs: BatchDoc[];
   validationErrors: ValidationError[];
   expandedCount: number;
 }> {
-  const results = await validateDocumentsAtomicity(docs);
+  const results = await validateDocumentsAtomicity(docs, model);
 
   const validDocs: BatchDoc[] = [];
   const validationErrors: ValidationError[] = [];

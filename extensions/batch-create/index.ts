@@ -141,7 +141,10 @@ export default function (pi: ExtensionAPI): void {
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
 
       // Atomicity validation with auto-expansion
-      const { validDocs, validationErrors, expandedCount } = await validateDocuments(docs);
+      const { validDocs, validationErrors, expandedCount } = await validateDocuments(
+        docs,
+        ctx.model!,
+      );
 
       // If no valid docs remain, return errors immediately
       if (validDocs.length === 0) {

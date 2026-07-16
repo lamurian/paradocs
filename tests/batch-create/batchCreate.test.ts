@@ -112,7 +112,7 @@ describe("batch_create_para_docs path resolution", () => {
     const projectDb = join(projectDir, "notes.db");
     expect(existsSync(knowledgeDb), `DB should exist at ${knowledgeDb}`).toBe(true);
     expect(existsSync(projectDb), `DB should NOT exist at ${projectDb}`).toBe(false);
-  });
+  }, 120_000);
 
   it("should fall back to default when KNOWLEDGE_DIR is not set, ignoring cwd", async () => {
     vi.resetModules();
@@ -163,5 +163,5 @@ describe("batch_create_para_docs path resolution", () => {
 
     // Cleanup
     rmSync(defaultPath, { force: true });
-  });
+  }, 120_000);
 });

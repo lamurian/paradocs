@@ -94,7 +94,7 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       // Atomicity validation — runs before any IO or DB operations
-      const validation = await validateAtomicity(params.content, params.title);
+      const validation = await validateAtomicity(params.content, params.title, ctx.model!);
       if (!validation.valid) {
         return buildAtomicityError(validation);
       }

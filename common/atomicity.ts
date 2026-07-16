@@ -1,25 +1,34 @@
 /**
- * AI-based atomicity validation for PARA knowledge documents.
+ * Sub-agent atomicity validation for PARA knowledge documents.
  *
- * Atomicity is measured by whether the content serves exactly one
- * question (implicit or explicit) and one answer that synthesizes
- * into one coherent topic. An LLM call evaluates this.
+ * Spawns an ephemeral pi sub-agent via createAgentSession() to evaluate
+ * whether content serves exactly one question (implicit or explicit)
+ * and one answer on a single coherent topic.
  *
- * If the content fails atomicity, the LLM decomposes it into
- * distinct Q&A pairs, each proposed as a separate atomic note.
+ * The sub-agent is created with the default ResourceLoader and its system
+ * prompt is set directly on session.agent.state to avoid file I/O from
+ * custom ResourceLoader configuration.
  *
- * On LLM failure or cancellation, the check fails open (passes
- * content through) to avoid blocking document creation when the
- * LLM is unavailable.
+ * On sub-agent creation failure (infrastructure issue), fails closed
+ * (rejects). On JSON parse error (LLM produced non-JSON), fails open
+ * (accepts) to avoid blocking document creation.
  *
  * @module common/atomicity
  */
 
+import {
+  AuthStorage,
+  createAgentSession,
+  type CreateAgentSessionOptions,
+  ModelRegistry,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 
-import { ATOMICITY_SYSTEM_PROMPT, BATCH_ATOMICITY_SYSTEM_PROMPT } from "./atomicity-prompts.js";
-import { callLlmDirect } from "./llm.js";
+import { parseAtomicityResult, parseAtomicityResultsArray } from "./atomicity-parse.js";
+import { ATOMICITY_SYSTEM_PROMPT } from "./atomicity-prompts.js";
 
-import type { complete } from "@earendil-works/pi-ai";
+/** Model type used by pi SDK for LLM configuration. */
+type Model = NonNullable<CreateAgentSessionOptions["model"]>;
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -49,18 +58,6 @@ export interface AtomicityResult {
 }
 
 /**
- * Optional context for the LLM call used by atomicity validation.
- */
-export interface AtomicityContext {
-  /** The LLM model to use for evaluation. */
-  model?: Parameters<typeof complete>[0];
-  /** API key for the LLM provider. */
-  apiKey?: string;
-  /** Optional AbortSignal for cancellation. */
-  signal?: AbortSignal;
-}
-
-/**
  * A document to validate in batch mode.
  */
 export interface BatchDoc {
@@ -69,50 +66,62 @@ export interface BatchDoc {
   tags: string[];
 }
 
-// ── Constants ─────────────────────────────────────────────────────────
-
-const DEFAULT_MODEL: Parameters<typeof complete>[0] = {
-  id: "gpt-4o",
-  provider: "openai",
-  name: "gpt-4o",
-  api: "openai-responses",
-  baseUrl: "https://api.openai.com/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 2.5, output: 10, cacheRead: 1.25, cacheWrite: 2.5 },
-  contextWindow: 128000,
-  maxTokens: 16384,
-};
-const DEFAULT_API_KEY = "sk-placeholder";
-
-// ── Helpers ─────────────────────────────────────────────────────────
+// ── Sub-agent helper ────────────────────────────────────────────────
 
 /**
- * Build the user message content for an atomicity check.
+ * Spawn an ephemeral sub-agent to evaluate atomicity.
+ *
+ * Creates a minimal session using the default ResourceLoader (no custom
+ * extensions or skills needed), then immediately sets the system prompt
+ * on the agent state. This avoids file I/O dependencies from
+ * DefaultResourceLoader configuration.
+ *
+ * The sub-agent receives the document title and content as a user
+ * message and returns JSON via text deltas in the event stream.
+ *
+ * @param model   - The LLM model to use (inherited from parent).
+ * @param userMessage - The message to send (title + content).
+ * @returns The accumulated response text, or null on failure.
  */
-function buildAtomicityMessage(title: string, content: string): { type: "text"; text: string }[] {
-  return [
-    {
-      type: "text" as const,
-      text: `Title: ${title}\n\nContent:\n${content}`,
-    },
-  ];
-}
+async function spawnAtomicitySubAgent(model: Model, userMessage: string): Promise<string | null> {
+  const authStorage = AuthStorage.create();
+  const modelRegistry = ModelRegistry.create(authStorage);
 
-/**
- * Build the user message for a batch atomicity check.
- */
-function buildBatchAtomicityMessage(docs: BatchDoc[]): { type: "text"; text: string }[] {
-  const docTexts = docs
-    .map((d, i) => `[Document ${i + 1}]\nTitle: ${d.title}\nContent:\n${d.content}`)
-    .join("\n\n---\n\n");
+  let session;
+  try {
+    const result = await createAgentSession({
+      sessionManager: SessionManager.inMemory(),
+      model,
+      noTools: "all",
+      authStorage,
+      modelRegistry,
+    });
+    session = result.session;
+  } catch {
+    return null;
+  }
 
-  return [
-    {
-      type: "text" as const,
-      text: `Evaluate the following ${docs.length} document(s) for atomicity:\n\n${docTexts}`,
-    },
-  ];
+  try {
+    // Set the system prompt directly on the agent state.
+    // This is the simplest way to override the prompt without a
+    // custom ResourceLoader.
+    session.agent.state.systemPrompt = ATOMICITY_SYSTEM_PROMPT;
+
+    let fullText = "";
+    const unsubscribe = session.subscribe((event) => {
+      if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
+        fullText += event.assistantMessageEvent.delta;
+      }
+    });
+
+    await session.prompt(userMessage);
+    unsubscribe();
+    return fullText || null;
+  } catch {
+    return null;
+  } finally {
+    session.dispose();
+  }
 }
 
 // ── Main exports ─────────────────────────────────────────────────────
@@ -120,119 +129,91 @@ function buildBatchAtomicityMessage(docs: BatchDoc[]): { type: "text"; text: str
 /**
  * Validate that markdown content satisfies the atomicity principle.
  *
- * Uses an LLM call to evaluate whether the content serves exactly
- * one question (implicit/explicit) and one answer. If not, the LLM
- * decomposes the content into suggested atomic note splits.
+ * Spawns a minimal sub-agent to evaluate whether the content serves
+ * exactly one question (implicit/explicit) and one answer. If not,
+ * the sub-agent decomposes the content into suggested atomic splits.
  *
- * On LLM failure or cancellation, the check fails open (returns
- * valid=true) to avoid blocking document creation.
+ * Fails closed on sub-agent creation failure (infrastructure issue).
+ * Fails open on JSON parse error (LLM produced unparseable output).
  *
  * @param content - Markdown body content (without YAML frontmatter).
  * @param title   - Document title for context.
- * @param ctx     - Optional LLM context (model, apiKey, signal).
+ * @param model   - The LLM model to use (from parent session).
+ * @param options - Optional settings (e.g., abort signal).
  * @returns A promise resolving to an {@link AtomicityResult}.
  */
 export async function validateAtomicity(
   content: string,
   title: string,
-  ctx?: AtomicityContext,
+  model: Model,
+  options?: { signal?: AbortSignal },
 ): Promise<AtomicityResult> {
-  const model = ctx?.model ?? DEFAULT_MODEL;
-  const apiKey = ctx?.apiKey ?? DEFAULT_API_KEY;
+  if (options?.signal?.aborted) {
+    return { valid: true, message: "Atomicity check cancelled — content accepted." };
+  }
 
-  const result = await callLlmDirect<AtomicityResult>(
-    model,
-    { apiKey },
-    ATOMICITY_SYSTEM_PROMPT,
-    buildAtomicityMessage(title, content),
-    (text) => {
-      try {
-        const parsed = JSON.parse(text) as AtomicityResult;
-        if (typeof parsed.valid === "boolean" && typeof parsed.message === "string") {
-          return parsed;
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    },
-    ctx?.signal,
-  );
+  const userMessage = `Title: ${title}\n\nContent:\n${content}`;
+  const response = await spawnAtomicitySubAgent(model, userMessage);
 
-  if (!result.ok) {
-    if (result.type === "cancelled") {
-      return { valid: true, message: "LLM check cancelled — content accepted." };
-    }
+  if (response === null) {
     return {
-      valid: true,
-      message: `LLM check unavailable (${result.message}) — content accepted.`,
+      valid: false,
+      message: "Sub-agent unavailable — atomicity check could not run.",
     };
   }
 
-  return result.value;
+  const result = parseAtomicityResult(response);
+  if (result === null) {
+    return {
+      valid: true,
+      message: "Atomicity check could not be parsed — content accepted.",
+    };
+  }
+
+  return result;
 }
 
 /**
- * Validate multiple documents for atomicity in a single LLM call.
+ * Validate multiple documents for atomicity in a single sub-agent call.
  *
- * More efficient than calling {@link validateAtomicity} N times since
- * the LLM evaluates all documents at once.
+ * The sub-agent evaluates all documents at once and returns an array
+ * of per-document results.
  *
- * On LLM failure, all documents fail open (return valid=true).
+ * Fails closed on sub-agent creation failure (infrastructure issue).
+ * Fails open on JSON parse error (unparseable output).
  *
- * @param docs - Array of documents to validate.
- * @param ctx  - Optional LLM context (model, apiKey, signal).
+ * @param docs  - Array of documents to validate.
+ * @param model - The LLM model to use (from parent session).
  * @returns A promise resolving to an array of {@link AtomicityResult},
  *          one per document in the same order.
  */
 export async function validateDocumentsAtomicity(
   docs: BatchDoc[],
-  ctx?: AtomicityContext,
+  model: Model,
 ): Promise<AtomicityResult[]> {
   if (docs.length === 0) return [];
 
-  const model = ctx?.model ?? DEFAULT_MODEL;
-  const apiKey = ctx?.apiKey ?? DEFAULT_API_KEY;
+  const docTexts = docs
+    .map((d, i) => `[Document ${i + 1}]\nTitle: ${d.title}\nContent:\n${d.content}`)
+    .join("\n\n---\n\n");
 
-  const result = await callLlmDirect<AtomicityResult[]>(
-    model,
-    { apiKey },
-    BATCH_ATOMICITY_SYSTEM_PROMPT,
-    buildBatchAtomicityMessage(docs),
-    (text) => {
-      try {
-        const parsed: unknown = JSON.parse(text);
-        if (Array.isArray(parsed)) {
-          const valid = parsed.every(
-            (r: unknown) =>
-              typeof (r as AtomicityResult).valid === "boolean" &&
-              typeof (r as AtomicityResult).message === "string",
-          );
-          if (valid) return parsed as AtomicityResult[];
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    },
-    ctx?.signal,
-  );
+  const userMessage = `Evaluate the following ${docs.length} document(s) for atomicity:\n\n${docTexts}`;
+  const response = await spawnAtomicitySubAgent(model, userMessage);
 
-  if (!result.ok) {
-    // Fail-open: all docs pass
-    return docs.map(() => ({
-      valid: true,
-      message: "LLM check unavailable — content accepted.",
-    }));
-  }
-
-  // Validate the response has the right length
-  if (result.value.length !== docs.length) {
+  if (response === null) {
     return docs.map(() => ({
       valid: false,
-      message: `Unexpected response length: expected ${docs.length}, got ${result.value.length}.`,
+      message: "Sub-agent unavailable — atomicity check could not run.",
     }));
   }
 
-  return result.value;
+  const results = parseAtomicityResultsArray(response, docs.length);
+  if (results === null) {
+    return docs.map(() => ({
+      valid: true,
+      message: "Atomicity check could not be parsed — content accepted.",
+    }));
+  }
+
+  return results;
 }

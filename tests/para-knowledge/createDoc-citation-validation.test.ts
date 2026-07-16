@@ -13,6 +13,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.js";
 
+// Mock atomicity validation — always passes to avoid sub-agent spawning
+vi.mock("../../common/atomicity.js", () => ({
+  validateAtomicity: vi.fn().mockResolvedValue({ valid: true, message: "Mocked pass." }),
+  validateDocumentsAtomicity: vi.fn(),
+  AtomicityResult: {},
+  BatchDoc: {},
+}));
+
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 vi.mock("node:os", async (importOriginal) => {

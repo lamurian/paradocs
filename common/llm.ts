@@ -3,10 +3,6 @@
  *
  * Provides:
  * - `callLlmDirect<T>()` — direct LLM call without TUI dependencies
- * - `parseJsonResponse<T>()` — strips markdown fences and parses JSON
- *
- * The TUI-specific `callLlmWithLoader` stays in the command layer
- * because it depends on `BorderedLoader` from `@earendil-works/pi-coding-agent`.
  *
  * @module common/llm
  */
@@ -27,51 +23,7 @@ export type LlmCallResult<T> =
   | { ok: false; type: "cancelled" }
   | { ok: false; type: "error"; message: string };
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Strip markdown code fences from an LLM response and parse as JSON.
- *
- * LLMs sometimes wrap JSON output in ```json ... ``` fences.
- * This handles that common case gracefully.
- *
- * @typeParam T - The expected parsed type.
- * @param text - The raw text from the LLM response.
- * @returns Parsed object, or `null` if parsing fails.
- */
-export function parseJsonResponse<T>(text: string): T | null {
-  const trimmed = text.trim();
-
-  // Try parsing as-is first (most common when properly instructed)
-  try {
-    return JSON.parse(trimmed) as T;
-  } catch {
-    // Fall through to fence stripping
-  }
-
-  // Strip markdown code fences
-  // Matches ```json ... ```, ``` ... ```, or ```...\n...```
-  const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
-  if (fenceMatch) {
-    try {
-      return JSON.parse(fenceMatch[1].trim()) as T;
-    } catch {
-      return null;
-    }
-  }
-
-  // Try to find JSON object/array in the text (for cases with leading/trailing prose)
-  const jsonMatch = trimmed.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[1]) as T;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
+// ── Exports ──────────────────────────────────────────────────────────
 
 /**
  * Run an LLM call directly without TUI components.
