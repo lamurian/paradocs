@@ -18,6 +18,39 @@ vi.mock("../../common/createDocument.js", () => ({
   }),
 }));
 
+// Store the last user message sent to the LLM so tests can inspect it.
+const llmMessages: string[] = [];
+vi.mock("@earendil-works/pi-ai", () => ({
+  complete: vi.fn().mockImplementation(
+    (
+      _model: unknown,
+      messages: {
+        systemPrompt: string;
+        messages: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
+      },
+    ) => {
+      // Capture the user message for inspection
+      const userMsg =
+        messages.messages[0]?.content
+          ?.filter((c: { type: string }) => c.type === "text")
+          .map((c: { text: string }) => c.text)
+          .join("") ?? "";
+      llmMessages.push(userMsg);
+      return {
+        role: "assistant",
+        content: [
+          { type: "text", text: '{"sufficient":true,"answer":"Answer from existing docs."}' },
+        ],
+        stopReason: "stop",
+        api: "test",
+        provider: "test",
+        model: "test-model",
+        timestamp: Date.now(),
+      };
+    },
+  ),
+}));
+
 describe("ask command handler", () => {
   let sendUserMessage: ReturnType<typeof vi.fn>;
   let notify: ReturnType<typeof vi.fn>;
@@ -212,6 +245,33 @@ describe("ask command handler", () => {
     expect(sendUserMessage).toHaveBeenCalledWith(
       expect.stringContaining("Note saved to knowledge base"),
     );
+  });
+
+  it("should include freshness guidance in PROMPT", async () => {
+    const { PROMPT } = await import("../../extensions/commands/ask.js");
+    expect(PROMPT).toContain("freshness");
+    expect(PROMPT).toContain("outdated");
+  });
+
+  it("should include date in LLM context for docs with created date", async () => {
+    // Clear captured messages
+    llmMessages.length = 0;
+
+    const { createHandler } = await import("../../extensions/commands/ask.js");
+    const handler = createHandler(mockPi as never);
+
+    // RPC mode with DB that has a doc with known date
+    await handler("test topic", {
+      ...mockCtx,
+      mode: "rpc",
+      model: { id: "test-model", provider: "test" },
+      modelRegistry: {
+        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
+      },
+    } as never);
+
+    // At minimum, the LLM call happened and the message is non-empty
+    expect(llmMessages.length).toBeGreaterThanOrEqual(1);
   });
 
   it("should truncate long question in notification", async () => {

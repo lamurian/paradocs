@@ -6,37 +6,28 @@
  *
  * @module tests/commands/research-sufficiency.test
  */
-
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
 // ── Module-level mocks ────────────────────────────────────────────
-
 const mockCreateDocument = vi.fn().mockResolvedValue({
   path: "Resources/test.md",
   title: "Test",
   linkCount: 1,
   indexOk: true,
 });
-
 const mockEnsureNotesDb = vi.fn().mockResolvedValue({
   exec: vi.fn(),
   close: vi.fn(),
 });
-
 const mockSearchDocs = vi.fn().mockReturnValue([]);
-
 vi.mock("../../common/createDocument.js", () => ({
   createDocument: mockCreateDocument,
 }));
-
 vi.mock("../../common/notesDb.js", () => ({
   ensureNotesDb: mockEnsureNotesDb,
 }));
-
 vi.mock("../../extensions/para-knowledge/db-sqlite.js", () => ({
   searchDocs: mockSearchDocs,
 }));
-
 // ── Tests ─────────────────────────────────────────────────────────
 
 describe("research handler — sufficiency flow", () => {
@@ -45,23 +36,19 @@ describe("research handler — sufficiency flow", () => {
   let custom: ReturnType<typeof vi.fn>;
   let mockPi: Record<string, unknown>;
   let mockCtx: Record<string, unknown>;
-
   beforeEach(() => {
     vi.clearAllMocks();
     sendUserMessage = vi.fn();
     notify = vi.fn();
     custom = vi.fn();
-
     mockCtx = {
       mode: "tui",
       ui: { notify, custom },
       model: { id: "gpt-4o", provider: "openai" },
       modelRegistry: {
-        getApiKeyAndHeaders: vi.fn().mockResolvedValue({
-          ok: true,
-          apiKey: "sk-test",
-          headers: {},
-        }),
+        getApiKeyAndHeaders: vi
+          .fn()
+          .mockResolvedValue({ ok: true, apiKey: "sk-test", headers: {} }),
       },
       cwd: "/tmp/test-cwd",
     };
@@ -83,11 +70,9 @@ describe("research handler — sufficiency flow", () => {
         ],
       },
     });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("integrated farming", mockCtx as never);
-
     expect(mockCreateDocument).toHaveBeenCalledTimes(3);
     expect(mockCreateDocument).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -113,11 +98,9 @@ describe("research handler — sufficiency flow", () => {
         noteTags: ["tag1"],
       },
     });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("some topic", mockCtx as never);
-
     expect(mockCreateDocument).toHaveBeenCalledTimes(1);
     expect(mockCreateDocument).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -139,22 +122,18 @@ describe("research handler — sufficiency flow", () => {
         answer: "Answer from existing knowledge.",
       },
     });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("existing topic", mockCtx as never);
-
     expect(mockCreateDocument).not.toHaveBeenCalled();
     expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("no new note created"));
   });
 
   it("should handle cancelled sufficiency check", async () => {
     custom.mockResolvedValue({ ok: false, type: "cancelled" });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("cancelled topic", mockCtx as never);
-
     expect(notify).toHaveBeenCalledWith("Research cancelled.", "info");
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
@@ -165,11 +144,9 @@ describe("research handler — sufficiency flow", () => {
       type: "error",
       message: "LLM returned invalid JSON",
     });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("error topic", mockCtx as never);
-
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("Research failed"), "error");
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
@@ -191,11 +168,9 @@ describe("research handler — sufficiency flow", () => {
         type: "error",
         message: "LLM returned invalid JSON",
       });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("error topic", mockCtx as never);
-
     // Should show error for the decomposition step
     expect(notify).toHaveBeenCalledWith(
       expect.stringContaining("Research plan generation failed"),
@@ -215,11 +190,9 @@ describe("research handler — sufficiency flow", () => {
         notes: [{ title: "Note One", content: "Content one.", tags: ["tag1"] }],
       },
     });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("integrated farming", mockCtx as never);
-
     expect(sendUserMessage).not.toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
     expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Created"));
     expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("atomic notes"));
@@ -238,13 +211,41 @@ describe("research handler — sufficiency flow", () => {
         noteTags: ["tag1"],
       },
     });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("some topic", mockCtx as never);
-
     expect(sendUserMessage).not.toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
     expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Note saved"));
+  });
+
+  it("should include date in docsCtx when docs have created date", async () => {
+    mockSearchDocs.mockReturnValue([
+      {
+        path: "Resources/test-doc.md",
+        title: "Test Document",
+        body: "This is test content about the topic.",
+        author: "test",
+        editor: "",
+        file_mtime: "2026-01-01T00:00:00.000Z",
+        created: "2024-06-15T00:00:00.000Z",
+        modified: "2024-06-15T00:00:00.000Z",
+        source_url: null,
+        description: null,
+        tags: ["test"],
+        score: -2.0,
+        matchedByTag: false,
+        tagMatches: [],
+      },
+    ]);
+    custom.mockResolvedValue({
+      ok: true,
+      value: { sufficient: true, rationale: "Doc covers it.", answer: "Answer." },
+    });
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler(mockPi as never);
+    await handler("test topic", mockCtx as never);
+    expect(mockSearchDocs).toHaveBeenCalledWith(expect.anything(), "test topic");
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Answer"));
   });
 
   it("should handle cancelled question tree decomposition step", async () => {
@@ -263,11 +264,9 @@ describe("research handler — sufficiency flow", () => {
         ok: false,
         type: "cancelled",
       });
-
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("cancelled topic", mockCtx as never);
-
     expect(notify).toHaveBeenCalledWith("Research plan generation cancelled.", "info");
     expect(sendUserMessage).not.toHaveBeenCalled();
   });

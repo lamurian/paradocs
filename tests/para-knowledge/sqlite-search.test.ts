@@ -247,4 +247,51 @@ describe("searchDocs", () => {
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results[0].source_url).toBeNull();
   });
+
+  // ── Freshness metadata ──
+
+  it("should return created date in text search results", async () => {
+    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.js");
+    const results = searchDocs(db, "typescript");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].created).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("should return modified date in text search results", async () => {
+    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.js");
+    const results = searchDocs(db, "typescript");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].modified).toBe("2026-01-02T00:00:00.000Z");
+  });
+
+  it("should return created and modified in tag-only search results", async () => {
+    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.js");
+    const results = searchDocs(db, "", { tags: ["travel"] });
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].created).toBe("2026-01-01T00:00:00.000Z");
+    expect(results[0].modified).toBe("2026-01-02T00:00:00.000Z");
+  });
+
+  it("should handle null created field", async () => {
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.js");
+
+    // Index a doc with no created/modified
+    indexFile(
+      db,
+      makeDoc({
+        path: "Projects/null-dates.md",
+        title: "Null Dates",
+        body: "Document with null dates for freshness test.",
+        tags: ["test"],
+        // created and modified fall back to now in indexFile
+        source_url: null,
+      }),
+    );
+
+    const results = searchDocs(db, "Null Dates");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    // created should be a non-null string (indexFile sets it to now when null)
+    expect(results[0].created).toBeTruthy();
+  });
 });

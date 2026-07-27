@@ -121,6 +121,19 @@ describe("callLlmDirect", () => {
     }
   });
 
+  it("SUFFICIENCY_PROMPT should include freshness guidance", async () => {
+    const { SUFFICIENCY_PROMPT } = await import("../../extensions/commands/research-llm.js");
+    expect(SUFFICIENCY_PROMPT).toContain("freshness");
+    expect(SUFFICIENCY_PROMPT).toContain("outdated");
+  });
+
+  it("RESEARCH_SUFFICIENCY_PROMPT should include freshness guidance", async () => {
+    const { RESEARCH_SUFFICIENCY_PROMPT } =
+      await import("../../extensions/commands/research-llm.js");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("freshness");
+    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("stale");
+  });
+
   it("should pass signal to complete when provided", async () => {
     const { complete } = await import("@earendil-works/pi-ai");
     vi.mocked(complete).mockResolvedValue({

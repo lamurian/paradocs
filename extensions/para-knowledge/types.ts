@@ -60,6 +60,8 @@ export interface SearchResult {
   author: string;
   editor: string;
   file_mtime: string;
+  created: string | null;
+  modified: string | null;
   /** Brief summary ≤ 200 characters, enriches BM25 search. */
   description: string | null;
   /** Original source URL the document summarises (optional). */

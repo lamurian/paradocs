@@ -184,7 +184,10 @@ export function createHandler(pi: ExtensionAPI) {
       const docsCtx: string =
         existingDocs.length > 0
           ? existingDocs
-              .map((d) => `## ${d.title} (${d.path})\n${d.body.slice(0, 1500)}`)
+              .map(
+                (d) =>
+                  `## ${d.title} (${d.path})${d.created ? ` — date: ${d.created.slice(0, 10)}` : ""}\n${d.body.slice(0, 1500)}`,
+              )
               .join("\n\n")
           : "No existing documents found for this topic.";
 

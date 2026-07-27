@@ -18,6 +18,49 @@ import { searchDocs } from "../../para-knowledge/db-sqlite.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+// ── Age formatting ──────────────────────────────────────────────────
+
+/**
+ * Format a document's creation date into a human-readable age string.
+ *
+ * @param created - ISO 8601 date string or null.
+ * @returns Human-readable age like "2+ years old", "3 months old", "today".
+ */
+export function formatAge(created: string | null): string {
+  if (created === null) return "no date";
+
+  const createdDate = new Date(created);
+  const now = new Date();
+  const diffMs = now.getTime() - createdDate.getTime();
+
+  if (diffMs < 0) return "just now";
+
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "yesterday";
+
+  if (diffDays < 7) {
+    return `${diffDays} ${diffDays === 1 ? "day" : "days"} old`;
+  }
+
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffDays < 30) {
+    return `${diffWeeks} ${diffWeeks === 1 ? "week" : "weeks"} old`;
+  }
+
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffDays < 365) {
+    return `${diffMonths} ${diffMonths === 1 ? "month" : "months"} old`;
+  }
+
+  const diffYears = Math.floor(diffDays / 365);
+  return `${diffYears}+ years old`;
+}
+
 /**
  * Register the ask tool.
  */
@@ -37,6 +80,7 @@ export function registerAskTool(pi: ExtensionAPI): void {
       "If the returned documents fully answer the question, cite them by path with @citekey and answer directly.",
       "If gaps remain, search the web, fetch sources, resolve citations, and create new atomic notes.",
       "Every new source must be resolved via resolve_citation before being referenced.",
+      "Consider whether the information may be outdated. A note from 2021 about a fast-moving topic (tech, AI, medicine) is likely stale, while a note from 2021 about an evergreen topic (history, mathematics, established science) is probably still current. Cross-check the 'Date:' shown for each result.",
     ],
     parameters: Type.Object({
       question: Type.String({ description: "The question to search the knowledge base for" }),
@@ -79,6 +123,7 @@ export function registerAskTool(pi: ExtensionAPI): void {
             (r) =>
               `## ${r.title} (\`${r.path}\`)\n` +
               `Tags: ${r.tags.join(", ") || "(none)"}\n` +
+              `Date: ${r.created || "unknown"}\n` +
               `Relevance: ${r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak"}\n` +
               `---\n${r.body}`,
           )
@@ -87,7 +132,7 @@ export function registerAskTool(pi: ExtensionAPI): void {
         const summary = results
           .map(
             (r) =>
-              `- [${r.title}](${r.path})  (relevance: ${r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak"})`,
+              `- [${r.title}](${r.path})  (${formatAge(r.created)} | relevance: ${r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak"})`,
           )
           .join("\n");
 

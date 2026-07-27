@@ -41,6 +41,7 @@ Evaluate carefully:
 - sufficient=false if major gaps exist, sources are weak, or the topic is only partially covered
 - createNote=true when your answer is a novel synthesis across multiple documents that should be saved as a new atomic note
 - In the answer, cite sources using @citekey notation from the document content
+- Consider the freshness/recency of the information. A document from 2021 about a fast-moving topic (technology, AI, current events, medicine) is likely outdated. A document from 2021 about an evergreen topic (established science, history, mathematics, philosophy) is likely still relevant. When in doubt about currency, prefer sufficient=false so the agent can verify with fresh sources.
 - Optional "commitMessage": a descriptive git commit message for the note(s) being created, e.g. "docs: add synthesis comparing living fences and concrete walls"`;
 
 /**
@@ -80,6 +81,7 @@ EVALUATE STRICTLY:
 - createNote=true when your answer is a novel synthesis across multiple documents
 - Decompose into notes[] when the synthesis covers multiple distinct sub-topics
 - In the answer, cite sources using @citekey notation from the document content
+- Consider freshness/recency. For topics in fast-moving fields (technology, AI, medicine, current events), documents older than 6-12 months should be treated as likely stale unless their source URLs are verified current. For evergreen topics (history, mathematics, established science), age is less of a concern.
 - Optional "commitMessage": a descriptive git commit message for the note(s) being created, e.g. "docs: research dopamine's role in incentive salience"`;
 
 // ── Types ──────────────────────────────────────────────────────────

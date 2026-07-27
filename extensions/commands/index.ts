@@ -14,6 +14,7 @@ import {
   createHandler as createResearchHandler,
   description as researchDescription,
 } from "./research.js";
+import { createSplitHandler, splitDescription } from "./split.js";
 import {
   createHandler as createSummarizeHandler,
   description as summarizeDescription,
@@ -44,4 +45,9 @@ export default function (pi: ExtensionAPI): void {
   });
 
   registerAskTool(pi);
+
+  pi.registerCommand("split", {
+    description: splitDescription,
+    handler: createSplitHandler(pi),
+  });
 }

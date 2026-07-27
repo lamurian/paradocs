@@ -41,6 +41,8 @@ export interface SearchResult {
   author: string;
   editor: string;
   file_mtime: string;
+  created: string | null;
+  modified: string | null;
   source_url: string | null;
   description: string | null;
   tags: string[];

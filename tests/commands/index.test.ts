@@ -70,11 +70,11 @@ describe("commands index", () => {
     expect(typeof config.handler).toBe("function");
   });
 
-  it("should register exactly 3 commands", async () => {
+  it("should register exactly 4 commands", async () => {
     const mod = await import("../../extensions/commands/index.js");
     mod.default(mockPi as never);
 
-    expect(registerCommand).toHaveBeenCalledTimes(3);
+    expect(registerCommand).toHaveBeenCalledTimes(4);
   });
 
   it("should register the ask tool", async () => {

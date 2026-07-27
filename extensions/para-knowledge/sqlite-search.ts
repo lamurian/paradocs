@@ -60,7 +60,7 @@ function searchByText(
   {
     let sql = `
       SELECT d.path, d.title, d.body,
-             f.author, f.editor, f.file_mtime, f.source_url,
+             f.author, f.editor, f.created, f.modified, f.file_mtime, f.source_url,
              d.rank AS bm25_score
       FROM docs_fts d
       JOIN files f ON f.path = d.path
@@ -113,6 +113,8 @@ function rowToResult(
     author: (row.author as string) ?? "",
     editor: (row.editor as string) ?? "",
     file_mtime: (row.file_mtime as string) ?? "",
+    created: (row.created as string) ?? null,
+    modified: (row.modified as string) ?? null,
     source_url: (row.source_url as string | null) ?? null,
     description: null,
     tags: getFileTags(db, path),
@@ -138,7 +140,7 @@ function searchByTagsOnly(db: SqliteDb, tags: string[], maxResults: number): Sea
   const ph = tags.map(() => "?").join(", ");
   const rows = db
     .prepare(
-      `SELECT DISTINCT f.path, f.title, f.author, f.editor, f.file_mtime, f.source_url
+      `SELECT DISTINCT f.path, f.title, f.author, f.editor, f.created, f.modified, f.file_mtime, f.source_url
      FROM files f
      JOIN tags t ON f.path = t.file_path
      WHERE t.tag IN (${ph})
@@ -159,6 +161,8 @@ function searchByTagsOnly(db: SqliteDb, tags: string[], maxResults: number): Sea
       author: (row.author as string) ?? "",
       editor: (row.editor as string) ?? "",
       file_mtime: (row.file_mtime as string) ?? "",
+      created: (row.created as string) ?? null,
+      modified: (row.modified as string) ?? null,
       source_url: (row.source_url as string | null) ?? null,
       description: null,
       tags: getFileTags(db, path),

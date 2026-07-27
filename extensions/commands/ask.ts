@@ -41,7 +41,8 @@ export const PROMPT = `You evaluate sufficiency of knowledge base results. Retur
 If sufficient: {"sufficient":true,"answer":"answer with @citekey citations"}
 If insufficient: {"sufficient":false,"plan":"## Research Plan\\n**Question**: {q}\\n**Phase 1**: Sufficiency check\\n**Phase 2**: Web search\\n**Phase 3**: Fetch and cite\\n**Phase 4**: Synthesize — create atomic notes using create_para_doc"}
 Cite sources with @citekey when sufficient.
-Optional "commitMessage": descriptive git commit message for the new note, e.g. "docs: add synthesis of dopamine's role in wanting vs liking"`;
+Optional "commitMessage": descriptive git commit message for the new note, e.g. "docs: add synthesis of dopamine's role in wanting vs liking"
+Consider document freshness: notes about fast-moving topics (tech, AI, medicine) may be outdated even if they appear relevant. Each document's creation date is shown in parentheses.`;
 
 /**
  * Run the sufficiency check without TUI components.
@@ -71,7 +72,12 @@ async function runAskSufficiency(
     const ctxStr =
       docs.length === 0
         ? "No existing PARA documents found."
-        : docs.map((r) => `- **${r.title}** (\`${r.path}\`): ${r.body.slice(0, 300)}`).join("\n");
+        : docs
+            .map(
+              (r) =>
+                `- **${r.title}** (\`${r.path}\`)${r.created ? ` (date: ${r.created.slice(0, 10)})` : ""}: ${r.body.slice(0, 300)}`,
+            )
+            .join("\n");
 
     const response = await complete(
       ctx.model!,
