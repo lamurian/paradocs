@@ -81,6 +81,21 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     expect(result.message).toBe("Single coherent topic.");
   });
 
+  it("should not pass removed authStorage/modelRegistry options", async () => {
+    const { createAgentSession } = await import("@earendil-works/pi-coding-agent");
+    const mock = makeSessionMock(
+      JSON.stringify({ valid: true, message: "Single coherent topic." }),
+    );
+    vi.mocked(createAgentSession).mockResolvedValue(mock);
+
+    const { validateAtomicity } = await import("../../common/atomicity.js");
+    await validateAtomicity("Content", "Title", { id: "test" } as never);
+
+    const options = vi.mocked(createAgentSession).mock.calls[0][0];
+    expect(options).not.toHaveProperty("authStorage");
+    expect(options).not.toHaveProperty("modelRegistry");
+  });
+
   it("should return invalid with suggested splits when LLM finds multiple Q&A pairs", async () => {
     const { createAgentSession } = await import("@earendil-works/pi-coding-agent");
 

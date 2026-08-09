@@ -17,10 +17,8 @@
  */
 
 import {
-  AuthStorage,
   createAgentSession,
   type CreateAgentSessionOptions,
-  ModelRegistry,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 
@@ -84,17 +82,12 @@ export interface BatchDoc {
  * @returns The accumulated response text, or null on failure.
  */
 async function spawnAtomicitySubAgent(model: Model, userMessage: string): Promise<string | null> {
-  const authStorage = AuthStorage.create();
-  const modelRegistry = ModelRegistry.create(authStorage);
-
   let session;
   try {
     const result = await createAgentSession({
       sessionManager: SessionManager.inMemory(),
       model,
       noTools: "all",
-      authStorage,
-      modelRegistry,
     });
     session = result.session;
   } catch {
