@@ -166,6 +166,24 @@ describe("searchSearxng", () => {
     expect(results).toEqual([]);
   });
 
+  it("should read SEARXNG_PORT from the environment at runtime", async () => {
+    // Regression guard: the port must NOT be captured at module load time,
+    // otherwise a custom SEARXNG_PORT from ~/.pi/agent/.env is ignored.
+    process.env.SEARXNG_PORT = "9999";
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SEARXNG_JSON_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    await searchSearxng("test", 3);
+
+    const url = new URL(mockFetch.mock.calls[0][0] as string);
+    expect(url.port).toBe("9999");
+    delete process.env.SEARXNG_PORT;
+  });
+
   it("should set safesearch, language and pageno parameters", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

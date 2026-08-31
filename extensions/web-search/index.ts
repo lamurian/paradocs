@@ -9,6 +9,7 @@
 
 import { Type } from "typebox";
 
+import { configureEnv } from "../../common/env.js";
 import { searchWeb, formatResults } from "../../common/webSearch.js";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -42,7 +43,9 @@ export default function (pi: ExtensionAPI): void {
       ),
     }),
 
-    async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      configureEnv(ctx.cwd);
+
       const { query, tier, category } = params;
       const {
         results,

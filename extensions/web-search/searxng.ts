@@ -7,7 +7,6 @@
  */
 
 import { getSearxngConfig } from "../../common/env.js";
-const SEARXNG_PORT = getSearxngConfig().port;
 
 export interface SearchResult {
   title: string;
@@ -39,7 +38,10 @@ export async function searchSearxng(
   signal?: AbortSignal,
   category?: string,
 ): Promise<SearchResult[]> {
-  const baseUrl = `http://127.0.0.1:${SEARXNG_PORT}/search`;
+  // Read port at runtime (not module load) so a custom SEARXNG_PORT from
+  // ~/.pi/agent/.env or <cwd>/.pi/.env is honored after configureEnv().
+  const { port } = getSearxngConfig();
+  const baseUrl = `http://127.0.0.1:${port}/search`;
   const params = new URLSearchParams();
   params.set("format", "json");
   params.set("safesearch", "1");
@@ -70,7 +72,10 @@ export async function searchSearxng(
     // Use a 30-second timeout for local SearXNG. Respect the pi signal
     // (user cancellation) by aborting our controller when it fires.
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new DOMException("Timed out", "TimeoutError")), 30_000);
+    const timer = setTimeout(
+      () => controller.abort(new DOMException("Timed out", "TimeoutError")),
+      30_000,
+    );
     if (signal) {
       signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
     }
