@@ -62,7 +62,7 @@ describe("searchTavily", () => {
     expect(results[0].tier).toBe(3);
   });
 
-  it("should send POST request with correct body", async () => {
+  it("should send POST request with Bearer auth and correct body", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(TAVILY_JSON_RESPONSE),
@@ -74,12 +74,16 @@ describe("searchTavily", () => {
 
     expect(mockFetch).toHaveBeenCalledWith("https://api.tavily.com/search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer tvly-mock-key-12345",
+      },
       body: expect.any(String),
     });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.api_key).toBe("tvly-mock-key-12345");
+    // Key must not leak into the body — auth travels via the Bearer header.
+    expect(body.api_key).toBeUndefined();
     expect(body.query).toBe("test query");
     expect(body.max_results).toBe(10);
     expect(body.include_answer).toBe(false);

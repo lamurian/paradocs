@@ -39,7 +39,6 @@ export async function searchTavily(
   if (!apiKey) return [];
 
   const body: Record<string, unknown> = {
-    api_key: apiKey,
     query,
     max_results: 10,
     include_answer: false,
@@ -58,7 +57,10 @@ export async function searchTavily(
   try {
     const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(body),
       signal,
     });
