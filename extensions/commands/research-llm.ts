@@ -10,6 +10,7 @@
 import { complete, type UserMessage } from "@earendil-works/pi-ai";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 
+import { extractJson } from "../../common/extractJson.js";
 import { callLlmDirect, type LlmCallResult } from "../../common/llm.js";
 
 // Re-export for backward compatibility with existing callers
@@ -84,7 +85,28 @@ EVALUATE STRICTLY:
 - Consider freshness/recency. For topics in fast-moving fields (technology, AI, medicine, current events), documents older than 6-12 months should be treated as likely stale unless their source URLs are verified current. For evergreen topics (history, mathematics, established science), age is less of a concern.
 - Optional "commitMessage": a descriptive git commit message for the note(s) being created, e.g. "docs: research dopamine's role in incentive salience"`;
 
-// ── Types ──────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────
+
+/**
+ * Parse a sufficiency evaluation LLM response with robust JSON extraction.
+ *
+ * Uses extractJson to handle markdown fences, prose prefixes, and trailing
+ * commas, then validates the required shape (`sufficient` must be boolean).
+ *
+ * @param text - Raw LLM response text.
+ * @returns Parsed SufficiencyResult, or null if extraction or validation fails.
+ */
+export function parseSufficiencyResponse(text: string): SufficiencyResult | null {
+  const parsed = extractJson(text);
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    typeof (parsed as Record<string, unknown>).sufficient !== "boolean"
+  ) {
+    return null;
+  }
+  return parsed as SufficiencyResult;
+}
 
 // ── Types ──────────────────────────────────────────────────────────
 

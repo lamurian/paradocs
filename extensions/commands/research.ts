@@ -14,6 +14,7 @@ import { DECOMPOSITION_PROMPT, formatResearchPlan } from "./research-format.js";
 import {
   callLlmDirect,
   callLlmWithLoader,
+  parseSufficiencyResponse,
   RESEARCH_SUFFICIENCY_PROMPT,
   type LlmCallResult,
   type SufficiencyResult,
@@ -206,13 +207,7 @@ export function createHandler(pi: ExtensionAPI) {
               { apiKey, headers },
               RESEARCH_SUFFICIENCY_PROMPT,
               [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
-              (text) => {
-                try {
-                  return JSON.parse(text) as SufficiencyResult;
-                } catch {
-                  return null;
-                }
-              },
+              (text) => parseSufficiencyResponse(text),
             ),
         );
       } else {
@@ -222,27 +217,24 @@ export function createHandler(pi: ExtensionAPI) {
           { apiKey, headers },
           RESEARCH_SUFFICIENCY_PROMPT,
           [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
-          (text) => {
-            try {
-              return JSON.parse(text) as SufficiencyResult;
-            } catch {
-              return null;
-            }
-          },
+          (text) => parseSufficiencyResponse(text),
         );
       }
 
       if (!sufficiencyResult.ok) {
         if (sufficiencyResult.type === "cancelled") {
           ctx.ui.notify("Research cancelled.", "info");
-        } else {
-          ctx.ui.notify(`❌ Research failed: ${sufficiencyResult.message}`, "error");
+          return;
         }
-        return;
-      }
-
-      if (await handleSufficiencyResult(sufficiencyResult.value, topic, ctx.cwd, pi)) {
-        return;
+        ctx.ui.notify(
+          "⚠️ Could not evaluate existing knowledge — generating research plan directly.",
+          "info",
+        );
+        // Fall through to decomposition step below
+      } else {
+        if (await handleSufficiencyResult(sufficiencyResult.value, topic, ctx.cwd, pi)) {
+          return;
+        }
       }
 
       // Step 2: Decompose into WHY/HOW/WHAT question tree

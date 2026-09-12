@@ -138,17 +138,34 @@ describe("research handler — sufficiency flow", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should handle error from LLM sufficiency check", async () => {
-    custom.mockResolvedValue({
-      ok: false,
-      type: "error",
-      message: "LLM returned invalid JSON",
-    });
+  it("should fall through to decomposition when sufficiency parsing fails", async () => {
+    // Sufficiency call fails (e.g. LLM returned unparseable JSON)
+    custom
+      .mockResolvedValueOnce({
+        ok: false,
+        type: "error",
+        message: "LLM returned invalid JSON",
+      })
+      // Decomposition call succeeds
+      .mockResolvedValueOnce({
+        ok: true,
+        value: JSON.stringify({
+          why: { question: "Why?", supporting: ["W1", "W2", "W3"] },
+          how: { question: "How?", supporting: ["H1", "H2", "H3"] },
+        }),
+      });
     const { createHandler } = await import("../../extensions/commands/research.js");
     const handler = createHandler(mockPi as never);
     await handler("error topic", mockCtx as never);
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("Research failed"), "error");
-    expect(sendUserMessage).not.toHaveBeenCalled();
+    // Should warn but not hard-fail
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("Could not evaluate existing knowledge"),
+      "info",
+    );
+    // Should still produce a research plan
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      expect.stringContaining("Research Plan: error topic"),
+    );
   });
 
   it("should handle error from question tree decomposition step", async () => {
