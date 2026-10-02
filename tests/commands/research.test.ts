@@ -1,295 +1,249 @@
 /**
- * Tests for the /research command handler.
+ * Tests for the /research command — research engine flow (R7),
+ * cleanup of old sufficiency modules (R9), and KNOWLEDGE_DIR descriptions (R10).
  *
  * @module tests/commands/research.test
  */
 
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-describe("research command handler", () => {
+vi.mock("../../common/llm.js", () => ({
+  callLlmDirect: vi.fn(),
+  callLlmWithLoader: vi.fn(),
+}));
+vi.mock("../../extensions/research-engine/runner.js", () => ({
+  runResearchEngine: vi.fn(),
+  MAX_CONCURRENCY: 4,
+  MIN_SOURCES: 10,
+  RESEARCHER_PROMPT_PATH: "/x/researcher.md",
+  getPiInvocation: vi.fn(),
+  parseSources: vi.fn(),
+}));
+vi.mock("../../extensions/research-engine/writeback.js", () => ({
+  writeBackToKB: vi.fn(),
+  parseGrouping: vi.fn(),
+  GROUPING_PROMPT: "",
+}));
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "../..");
+const EXT_DIR = resolve(ROOT, "extensions");
+
+const QUESTION_TREE = {
+  why: { question: "Why is X important?", supporting: ["W1", "W2"] },
+  how: { question: "How does X work?", supporting: ["H1"] },
+};
+
+const RESEARCH_RESULT = {
+  sources: [{ url: "https://src.example/1", snippet: "Key point" }],
+  questions: ["Why is X important?", "W1", "W2", "How does X work?", "H1"],
+  assessment: { sufficient: false, outdatedNotes: [], gaps: [] },
+};
+
+const WRITEBACK_RESULT = {
+  created: ["Resources/x-note.md"],
+  updated: [],
+  skipped: [],
+};
+
+/** Recursively collect .ts files under a directory. */
+function collectTsFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...collectTsFiles(full));
+    } else if (entry.endsWith(".ts")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function makeCtx(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ui: { notify: vi.fn(), custom: vi.fn() },
+    cwd: "/test",
+    mode: "rpc",
+    model: { id: "m", provider: "p" },
+    modelRegistry: {
+      getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "sk-test" }),
+    },
+    ...overrides,
+  };
+}
+
+describe("/research command — research engine flow (R7)", () => {
   let sendUserMessage: ReturnType<typeof vi.fn>;
-  let notify: ReturnType<typeof vi.fn>;
-  let mockPi: Record<string, unknown>;
-  let mockCtx: Record<string, unknown>;
-  let getApiKeyAndHeaders: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    vi.resetModules();
+    vi.clearAllMocks();
     sendUserMessage = vi.fn();
-    notify = vi.fn();
-    getApiKeyAndHeaders = vi.fn().mockResolvedValue({ ok: true, apiKey: "sk-test", headers: {} });
-    mockCtx = {
-      ui: { notify },
-      model: { id: "gpt-4o", provider: "openai" },
-      modelRegistry: {
-        getApiKeyAndHeaders,
-      },
-      cwd: "/test",
-    };
-    mockPi = {
-      sendUserMessage,
-      registerCommand: vi.fn(),
-      registerTool: vi.fn(),
-    };
   });
 
   it("should show usage when no topic is provided", async () => {
     const { createHandler } = await import("../../extensions/commands/research.js");
-    const handler = createHandler(mockPi as never);
+    const notify = vi.fn();
+    const handler = createHandler({ sendUserMessage } as never);
 
-    await handler("", mockCtx as never);
-
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("Usage: /research"), "warning");
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
-
-  it("should show usage for whitespace-only input", async () => {
-    const { createHandler } = await import("../../extensions/commands/research.js");
-    const handler = createHandler(mockPi as never);
-
-    await handler("   ", mockCtx as never);
+    await handler("", makeCtx({ ui: { notify } }) as never);
 
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("Usage: /research"), "warning");
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should show error when no model is selected", async () => {
+  it("should require a selected model", async () => {
     const { createHandler } = await import("../../extensions/commands/research.js");
-    const handler = createHandler(mockPi as never);
+    const notify = vi.fn();
+    const handler = createHandler({ sendUserMessage } as never);
 
-    await handler("dopamine and motivation", {
-      ...mockCtx,
-      mode: "tui",
-      ui: { notify, custom: vi.fn() },
-      model: undefined,
-    } as never);
+    await handler(
+      "dopamine and motivation",
+      makeCtx({ model: undefined, ui: { notify } }) as never,
+    );
 
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("No model selected"), "error");
+  });
+
+  it("should decompose via DECOMPOSITION_PROMPT then run the engine with all questions in one call", async () => {
+    const { callLlmDirect } = await import("../../common/llm.js");
+    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
+    const { writeBackToKB } = await import("../../extensions/research-engine/writeback.js");
+
+    vi.mocked(callLlmDirect).mockImplementation((_m, _a, systemPrompt) => {
+      if (systemPrompt.includes("WHY/HOW/WHAT")) {
+        return Promise.resolve({ ok: true, value: QUESTION_TREE } as never);
+      }
+      return Promise.resolve({ ok: true, value: "Research report content." } as never);
+    });
+    vi.mocked(runResearchEngine).mockResolvedValue(RESEARCH_RESULT);
+    vi.mocked(writeBackToKB).mockResolvedValue(WRITEBACK_RESULT);
+
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler({ sendUserMessage } as never);
+    const ctx = makeCtx();
+
+    await handler("dopamine and motivation", ctx as never);
+
+    // DECOMPOSITION_PROMPT invoked
+    const decompPrompt = vi.mocked(callLlmDirect).mock.calls[0][2];
+    expect(decompPrompt).toContain("WHY/HOW/WHAT");
+
+    // Full question list fed to the engine in a single invocation
+    expect(runResearchEngine).toHaveBeenCalledTimes(1);
+    expect(runResearchEngine).toHaveBeenCalledWith(
+      ["Why is X important?", "W1", "W2", "How does X work?", "H1"],
+      ctx,
+    );
+    expect(writeBackToKB).toHaveBeenCalledTimes(1);
+
+    // writeBackToKB runs before sendUserMessage; message has report + paths
+    const writebackOrder = vi.mocked(writeBackToKB).mock.invocationCallOrder[0];
+    const sendOrder = sendUserMessage.mock.invocationCallOrder[0];
+    expect(writebackOrder).toBeLessThan(sendOrder);
+
+    const message = sendUserMessage.mock.calls[0][0] as string;
+    expect(message).toContain("Research report content.");
+    expect(message).toContain("Resources/x-note.md");
+  });
+
+  it("should fall back to the topic when decomposition fails", async () => {
+    const { callLlmDirect } = await import("../../common/llm.js");
+    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
+    const { writeBackToKB } = await import("../../extensions/research-engine/writeback.js");
+
+    vi.mocked(callLlmDirect).mockImplementation((_m, _a, systemPrompt) => {
+      if (systemPrompt.includes("WHY/HOW/WHAT")) {
+        return Promise.resolve({ ok: false, type: "error", message: "boom" } as never);
+      }
+      return Promise.resolve({ ok: true, value: "Fallback report." } as never);
+    });
+    vi.mocked(runResearchEngine).mockResolvedValue({
+      ...RESEARCH_RESULT,
+      questions: ["dopamine and motivation"],
+    });
+    vi.mocked(writeBackToKB).mockResolvedValue({ created: [], updated: [], skipped: [] });
+
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const handler = createHandler({ sendUserMessage } as never);
+
+    await handler("dopamine and motivation", makeCtx() as never);
+
+    expect(runResearchEngine).toHaveBeenCalledWith(["dopamine and motivation"], expect.anything());
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Fallback report."));
+  });
+
+  it("should not send a message when the TUI custom result is null", async () => {
+    const { createHandler } = await import("../../extensions/commands/research.js");
+    const notify = vi.fn();
+    const custom = vi.fn().mockResolvedValue(null);
+    const handler = createHandler({ sendUserMessage } as never);
+
+    await handler(
+      "dopamine and motivation",
+      makeCtx({ mode: "tui", ui: { notify, custom } }) as never,
+    );
+
+    expect(custom).toHaveBeenCalledTimes(1);
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should work in RPC mode without ctx.ui.custom", async () => {
-    const { createHandler } = await import("../../extensions/commands/research.js");
-    const handler = createHandler(mockPi as never);
-
-    // RPC mode: mode is not "tui", no custom(), direct LLM path
-    await handler("dopamine and motivation", {
-      ...mockCtx,
-      mode: "rpc",
-      ui: { notify },
-    } as never);
-
-    // Should not error about TUI mode
-    expect(notify).not.toHaveBeenCalledWith(expect.stringContaining("requires interactive"));
-    // Should notify about evaluating existing knowledge
-    expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining("Evaluating existing knowledge"),
-      "info",
-    );
-  });
-
-  it("should register /research command with description", async () => {
+  it("should register /research with description and handler", async () => {
     const mod = await import("../../extensions/commands/index.js");
-    mod.default(mockPi as never);
+    const registerCommand = vi.fn();
+    const registerTool = vi.fn();
+    mod.default({ registerCommand, registerTool, on: vi.fn() } as never);
 
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-    expect(mockPi.registerCommand).toHaveBeenCalledWith(
+    expect(registerCommand).toHaveBeenCalledWith(
       "research",
       expect.objectContaining({
-        description: expect.any(String),
-        handler: expect.any(Function),
+        description: expect.any(String) as string,
+        handler: expect.any(Function) as () => void,
       }),
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment */
     );
   });
 });
 
-describe("formatResearchPlan", () => {
-  it("should format a research plan with question tree", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const questionTree = JSON.stringify({
-      why: {
-        question: "Why is dopamine central to motivation?",
-        supporting: [
-          "What is the neurobiological evidence?",
-          "What distinguishes wanting versus liking?",
-          "How do dysregulation disorders affect motivation?",
-        ],
-      },
-      how: {
-        question: "How does dopamine signalling drive behaviour?",
-        supporting: [
-          "What experimental methods reveal reward prediction?",
-          "What measurements quantify dopamine release?",
-          "How do interventions modulate motivation?",
-        ],
-      },
-    });
-
-    const plan = formatResearchPlan("dopamine and motivation", questionTree);
-
-    expect(plan).toContain("Research Plan: dopamine and motivation");
-    expect(plan).toContain("WHY");
-    expect(plan).toContain("HOW");
-    expect(plan).toContain("web_search");
-    expect(plan).toContain("fetch_url");
-    expect(plan).toContain("atomic note");
-    expect(plan).toContain("Completion Criteria");
-    expect(plan).toContain("dopamine and motivation");
+describe("cleanup of old sufficiency modules (R9)", () => {
+  it("should have deleted research-llm.ts from disk", () => {
+    expect(existsSync(resolve(EXT_DIR, "commands/research-llm.ts"))).toBe(false);
   });
 
-  it("should include topic name in plan header even with special chars", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const plan = formatResearchPlan("Complex! Topic with @special #chars & more!!!", "{}");
-
-    expect(plan).toContain("Research Plan: Complex! Topic with @special #chars & more!!!");
+  it("should not import research-llm or its symbols anywhere under extensions/", () => {
+    for (const file of collectTsFiles(EXT_DIR)) {
+      const source = readFileSync(file, "utf-8");
+      expect(source, file).not.toContain("research-llm");
+      expect(source, file).not.toContain("SUFFICIENCY_PROMPT");
+      expect(source, file).not.toContain("parseSufficiencyResponse");
+    }
   });
 
-  it("should include topic name in plan header", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
+  it("should keep DECOMPOSITION_PROMPT and drop formatResearchPlan from research-format.ts", async () => {
+    const mod = (await import("../../extensions/commands/research-format.js")) as Record<
+      string,
+      unknown
+    >;
 
-    const plan = formatResearchPlan("a very very very long research topic", "{}");
-
-    expect(plan).toContain("Research Plan: a very very very long research topic");
-  });
-
-  it("should include completion criteria checklist without subdirectory reference", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const plan = formatResearchPlan("test topic", "{}");
-
-    expect(plan).toContain("- [ ] WHY question has ≥1 sourced answer");
-    expect(plan).toContain("- [ ] HOW question has ≥1 sourced answer");
-    expect(plan).toContain("- [ ] ≤5 search rounds used");
-    // Should not prescribe a subdirectory convention
-    expect(plan).not.toContain("atomic notes created in");
-    expect(plan).not.toContain("research-test-topic-");
-  });
-
-  it("should include confidence scoring rubric", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const plan = formatResearchPlan("test topic", "{}");
-
-    expect(plan).toContain("High");
-    expect(plan).toContain("Moderate");
-    expect(plan).toContain("Low");
-    expect(plan).toContain("peer-reviewed");
-  });
-
-  it("should include flat atomic note guidance without subdirectory convention", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const plan = formatResearchPlan("sleep and memory", "{}");
-
-    // Should not prescribe a subdirectory per topic
-    expect(plan).not.toContain("research-sleep-and-memory-");
-    expect(plan).not.toContain("-executive-summary");
-    // Should still mention atomic notes generally
-    expect(plan).toContain("atomic note");
-    // Should mention the agent decides the PARA directory per note
-    expect(plan).toContain("PARA");
-    expect(plan).toContain("Resources");
-    expect(plan).toContain("Areas");
-    expect(plan).toContain("Projects");
-  });
-
-  it("should include batch creation guidance in the plan", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const plan = formatResearchPlan("integrated farming", "{}");
-
-    expect(plan).toContain("batch_create_para_docs");
-  });
-
-  it("should not include commit step with commit_changes", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const plan = formatResearchPlan("dopamine and motivation", "{}");
-
-    expect(plan).not.toContain("commit_changes");
-    expect(plan).not.toContain("commit_amend");
-    expect(plan).not.toContain("docs:");
-  });
-
-  it("should include atomicity split guidance and flat PARA guidance in the plan", async () => {
-    const { formatResearchPlan } = await import("../../extensions/commands/research-format.js");
-
-    const plan = formatResearchPlan("integrated farming", "{}");
-
-    expect(plan).toContain("split it into multiple atomic notes");
-    // Should guide the agent to decide per-note which directory fits
-    expect(plan).toContain("decides per-note");
+    expect(mod.DECOMPOSITION_PROMPT).toBeDefined();
+    expect(mod.DECOMPOSITION_PROMPT as string).toContain("WHY/HOW/WHAT");
+    expect(mod.formatResearchPlan).toBeUndefined();
   });
 });
 
-// ── RESEARCH_SUFFICIENCY_PROMPT content ────────────────────────────
-
-describe("RESEARCH_SUFFICIENCY_PROMPT", () => {
-  it("should be stricter than the generic sufficiency prompt", async () => {
-    const { RESEARCH_SUFFICIENCY_PROMPT } =
-      await import("../../extensions/commands/research-llm.js");
-
-    // Must use stricter language about exhaustive coverage
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("exhaustive");
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("partial");
+describe("KNOWLEDGE_DIR tool descriptions (R10)", () => {
+  it("should mention KNOWLEDGE_DIR and .env in create_para_doc description", () => {
+    const source = readFileSync(resolve(EXT_DIR, "para-knowledge/tools/createDoc.ts"), "utf-8");
+    expect(source).toContain("KNOWLEDGE_DIR");
+    expect(source).toContain(".env");
   });
 
-  it("should instruct multi-note decomposition via notes[]", async () => {
-    const { RESEARCH_SUFFICIENCY_PROMPT } =
-      await import("../../extensions/commands/research-llm.js");
-
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("notes[]");
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("6 paragraphs");
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("3 headings");
-  });
-
-  it("should forbid markdown code fences with negative examples", async () => {
-    const { RESEARCH_SUFFICIENCY_PROMPT } =
-      await import("../../extensions/commands/research-llm.js");
-
-    // Must explicitly tell the LLM not to use markdown code fences
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("DO NOT");
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("```");
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("❌ Bad");
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("✅ Good");
-  });
-
-  it("should forbid any explanatory text before or after JSON", async () => {
-    const { RESEARCH_SUFFICIENCY_PROMPT } =
-      await import("../../extensions/commands/research-llm.js");
-
-    expect(RESEARCH_SUFFICIENCY_PROMPT).toContain("explanatory text");
-  });
-});
-
-// ── SufficiencyResult type shape ──────────────────────────────────
-
-describe("SufficiencyResult type", () => {
-  it("should export notes-aware types and strict prompt", async () => {
-    const mod = await import("../../extensions/commands/research-llm.js");
-
-    // Runtime check: verify the module exports the expected items
-    expect(mod.SUFFICIENCY_PROMPT).toBeDefined();
-    expect(mod.RESEARCH_SUFFICIENCY_PROMPT).toBeDefined();
-  });
-
-  it("should preserve legacy single-note fields for backward compat", async () => {
-    const mod = await import("../../extensions/commands/research-llm.js");
-
-    // Check that the SUFFICIENCY_PROMPT still mentions createNote
-    expect(mod.SUFFICIENCY_PROMPT).toContain("createNote");
-    expect(mod.SUFFICIENCY_PROMPT).toContain("noteTitle");
-    expect(mod.SUFFICIENCY_PROMPT).toContain("noteContent");
-  });
-
-  it("should also forbid markdown code fences in generic SUFFICIENCY_PROMPT", async () => {
-    const { SUFFICIENCY_PROMPT } = await import("../../extensions/commands/research-llm.js");
-
-    expect(SUFFICIENCY_PROMPT).toContain("DO NOT");
-    expect(SUFFICIENCY_PROMPT).toContain("✅ Good");
-    expect(SUFFICIENCY_PROMPT).toContain("❌ Bad");
+  it("should mention KNOWLEDGE_DIR and .env in batch_create_para_docs description", () => {
+    const source = readFileSync(resolve(EXT_DIR, "batch-create/index.ts"), "utf-8");
+    expect(source).toContain("KNOWLEDGE_DIR");
+    expect(source).toContain(".env");
   });
 });

@@ -87,6 +87,7 @@ export default function (pi: ExtensionAPI): void {
     description:
       "Create multiple PARA knowledge documents (markdown + YAML frontmatter) in one call, " +
       "index all of them in notes.db, and run batch auto-linking across them. " +
+      "Files are written to KNOWLEDGE_DIR (from .env), not the current working directory. " +
       "Each document follows: PARA classification — Resources (reference/theory), Areas (responsibilities/skills), " +
       "Projects (deliverables/practical work). " +
       "Atomic principle — one key idea per note (one research question + one indicative answer). " +

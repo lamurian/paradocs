@@ -69,6 +69,7 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
     label: "Create PARA Doc",
     description:
       "Create a new PARA knowledge document (markdown + YAML frontmatter) and index it in notes.db. " +
+      "Files are written to KNOWLEDGE_DIR (from .env), not the current working directory. " +
       "Conventions: PARA classification — Resources for reference/theory, Areas for responsibilities/skills, " +
       "Projects for deliverables/practical work. " +
       "Atomic principle — one key idea per note (one research question + one indicative answer). " +

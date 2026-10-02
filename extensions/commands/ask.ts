@@ -1,128 +1,140 @@
 /**
- * /ask command — knowledge base sufficiency check with plan generation.
+ * /ask command — research engine flow.
  *
- * Searches existing PARA docs for a question, evaluates sufficiency via LLM,
- * and either answers from existing knowledge or generates a structured research
- * plan for the agent to execute.
+ * Reformulates the user question into focused research questions, runs the
+ * research engine (KB-first subagents), writes results back to the knowledge
+ * base (KNOWLEDGE_DIR from .env), and synthesizes a cited answer.
  *
  * @module extensions/commands/ask
  */
 
-import { complete } from "@earendil-works/pi-ai";
-import { BorderedLoader } from "@earendil-works/pi-coding-agent";
-
-import { createDocument } from "../../common/createDocument.js";
 import { extractJson } from "../../common/extractJson.js";
-import { commitKnowledgeBase } from "../../common/gitCommit.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
-import { searchDocs } from "../para-knowledge/db-sqlite.js";
+import { callLlmDirect, callLlmWithLoader } from "../../common/llm.js";
+import { runResearchEngine } from "../research-engine/runner.js";
+import { writeBackToKB } from "../research-engine/writeback.js";
 
+import type { LlmCallResult } from "../../common/llm.js";
+import type { ResearchResult } from "../research-engine/types.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
-/** Result shape for sufficiency checks in both TUI and RPC modes. */
-interface SufficiencyResult {
-  sufficient: boolean;
-  answer?: string;
-  plan?: string;
-  createNote?: boolean;
-  noteTitle?: string;
-  noteContent?: string;
-  noteTags?: string[];
-  commitMessage?: string;
+export const description = "Ask a question and get a researched answer with KB write-back";
+
+/** System prompt: reformulate the user question into 1-3 research questions. */
+export const REFORMULATION_PROMPT = `Reformulate the user question into 1-3 focused research questions for a research engine.
+
+Return ONLY a JSON array of strings. No markdown fences, no prose.
+Example: ["What is the mechanism of X?", "What evidence links X to Y?"]
+
+Rules:
+- 1-3 questions, each under 20 words, self-contained.
+- Cover distinct aspects of the original question.`;
+
+/** System prompt: synthesize an answer from collected web sources. */
+export const SYNTHESIS_PROMPT = `Synthesize a comprehensive answer to the research question using the collected web sources below.
+
+Answer directly in markdown. Cite sources inline by their URL in parentheses.
+Do not mention the research process. Return ONLY the answer text.`;
+
+interface AuthInfo {
+  apiKey: string;
+  headers?: Record<string, string>;
 }
 
-export const description = "Ask a question and get an answer or research plan";
-
-export const FALLBACK_PLAN = (q: string) =>
-  `## Research Plan\n\n**Question**: ${q}\n\n**Phase 1**: Sufficiency check — search notes.db\n\n**Phase 2**: Web search — search for: ${q}\n\n**Phase 3**: Fetch and cite — fetch_url then resolve_citation\n\n**Phase 4**: Synthesize — create atomic notes using create_para_doc`;
-
-export const PROMPT = `You evaluate sufficiency of knowledge base results. Return ONLY valid JSON.
-If sufficient: {"sufficient":true,"answer":"answer with @citekey citations"}
-If insufficient: {"sufficient":false,"plan":"## Research Plan\\n**Question**: {q}\\n**Phase 1**: Sufficiency check\\n**Phase 2**: Web search\\n**Phase 3**: Fetch and cite\\n**Phase 4**: Synthesize — create atomic notes using create_para_doc"}
-Cite sources with @citekey when sufficient.
-Optional "commitMessage": descriptive git commit message for the new note, e.g. "docs: add synthesis of dopamine's role in wanting vs liking"
-Consider document freshness: notes about fast-moving topics (tech, AI, medicine) may be outdated even if they appear relevant. Each document's creation date is shown in parentheses.`;
+/**
+ * Parse a reformulation LLM response into a question array.
+ *
+ * @param text - Raw LLM response text.
+ * @param fallback - Question to use when parsing fails.
+ * @returns 1-3 research questions.
+ */
+export function parseQuestions(text: string, fallback: string): string[] {
+  const parsed = extractJson(text);
+  if (Array.isArray(parsed)) {
+    const qs = parsed
+      .filter((q): q is string => typeof q === "string" && q.trim().length > 0)
+      .map((q) => q.trim())
+      .slice(0, 3);
+    if (qs.length > 0) return qs;
+  }
+  return [fallback];
+}
 
 /**
- * Run the sufficiency check without TUI components.
- *
- * Extracted so both TUI (via BorderedLoader callback) and RPC (direct await)
- * code paths can share the same LLM + search logic.
+ * Resolve model authentication for LLM calls.
  *
  * @param ctx - The extension command context.
- * @param question - The user's question.
- * @param signal - Optional AbortSignal for cancellation.
- * @returns The sufficiency result, or null on error/cancellation.
+ * @returns Auth info, or null after notifying the user on failure.
  */
-async function runAskSufficiency(
-  ctx: ExtensionCommandContext,
-  question: string,
-  signal?: AbortSignal,
-): Promise<SufficiencyResult | null> {
+async function resolveAuth(ctx: ExtensionCommandContext): Promise<AuthInfo | null> {
+  const model = ctx.model as Model<Api>;
   try {
-    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model! as Model<Api>);
-    if (!auth.ok || !auth.apiKey) {
-      ctx.ui.notify(`❌ No API key for ${(ctx.model! as Model<Api>).provider}`, "error");
+    const result = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (!result.ok || !result.apiKey) {
+      ctx.ui.notify(`❌ No API key for ${model.provider}`, "error");
       return null;
     }
-
-    const db = await ensureNotesDb(ctx.cwd);
-    const docs = searchDocs(db, question, {}, 10);
-    const ctxStr =
-      docs.length === 0
-        ? "No existing PARA documents found."
-        : docs
-            .map(
-              (r) =>
-                `- **${r.title}** (\`${r.path}\`)${r.created ? ` (date: ${r.created.slice(0, 10)})` : ""}: ${r.body.slice(0, 300)}`,
-            )
-            .join("\n");
-
-    const response = await complete(
-      ctx.model!,
-      {
-        systemPrompt: PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: `Question: ${question}\n\nExisting PARA docs:\n${ctxStr}` },
-            ],
-            timestamp: Date.now(),
-          },
-        ],
-      },
-      { apiKey: auth.apiKey, headers: auth.headers, signal },
-    );
-
-    const text = response.content
-      .filter((c): c is { type: "text"; text: string } => c.type === "text")
-      .map((c) => c.text)
-      .join("\n")
-      .trim();
-    const extracted = extractJson(text);
-    if (extracted !== null) {
-      const parsed = extracted as SufficiencyResult;
-      return {
-        sufficient: parsed.sufficient ?? false,
-        answer: parsed.answer,
-        plan: parsed.plan,
-        createNote: parsed.createNote,
-        noteTitle: parsed.noteTitle,
-        noteContent: parsed.noteContent,
-        noteTags: parsed.noteTags,
-        commitMessage: parsed.commitMessage,
-      };
-    }
-    return { sufficient: false, plan: FALLBACK_PLAN(question) };
-  } catch (err) {
-    console.error("[ask]", err);
-    ctx.ui.notify(`❌ Error: ${err instanceof Error ? err.message : String(err)}`, "error");
+    return { apiKey: result.apiKey, headers: result.headers };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ctx.ui.notify(`❌ Auth error: ${msg}`, "error");
     return null;
   }
 }
 
+/**
+ * Run an LLM call with TUI loader or direct call depending on mode.
+ *
+ * @param ctx - The extension command context.
+ * @param loaderText - Loader text for TUI mode.
+ * @param systemPrompt - The system prompt.
+ * @param userText - The user message text.
+ * @param parseFn - Response parser.
+ * @returns The LLM call result.
+ */
+async function runLlm<T>(
+  ctx: ExtensionCommandContext,
+  loaderText: string,
+  systemPrompt: string,
+  userText: string,
+  parseFn: (text: string) => T | null,
+): Promise<LlmCallResult<T>> {
+  const model = ctx.model as Model<Api>;
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (!auth.ok || !auth.apiKey) {
+    return { ok: false, type: "error", message: "No API key" };
+  }
+  const authInfo = { apiKey: auth.apiKey, headers: auth.headers };
+  const messageContent = [{ type: "text" as const, text: userText }];
+
+  if (ctx.mode === "tui") {
+    return ctx.ui
+      .custom<LlmCallResult<T> | null>((tui, theme, _kb, done) =>
+        callLlmWithLoader(
+          tui,
+          theme,
+          done,
+          loaderText,
+          model,
+          authInfo,
+          systemPrompt,
+          messageContent,
+          parseFn,
+        ),
+      )
+      .then((r) => r ?? { ok: false, type: "cancelled" as const });
+  }
+  return callLlmDirect<T>(model, authInfo, systemPrompt, messageContent, parseFn);
+}
+
+/**
+ * Create the /ask command handler.
+ *
+ * Flow: reformulate question → research engine → KB write-back → synthesis.
+ *
+ * @param pi - The pi extension API instance.
+ * @returns The command handler function.
+ */
 export function createHandler(pi: ExtensionAPI) {
   return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
     const q = args.trim();
@@ -134,76 +146,52 @@ export function createHandler(pi: ExtensionAPI) {
       ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
       return;
     }
-    ctx.ui.notify(`🔍 Checking: "${q.slice(0, 80)}…"`, "info");
+    ctx.ui.notify(`🔍 Researching: "${q.slice(0, 80)}…"`, "info");
 
-    let result: SufficiencyResult | null;
+    const auth = await resolveAuth(ctx);
+    if (!auth) return;
 
-    if (ctx.mode === "tui") {
-      // TUI path: BorderedLoader with cancellation via loader.signal
-      result = await ctx.ui.custom<SufficiencyResult | null>((tui, theme, _kb, done) => {
-        const loader = new BorderedLoader(tui, theme, "Checking knowledge base...");
-        loader.onAbort = () => done(null);
-        void runAskSufficiency(ctx, q, loader.signal)
-          .then(done)
-          .catch(() => done(null));
-        return loader;
-      });
-    } else {
-      // RPC / non-TUI path: direct call, no BorderedLoader
-      ctx.ui.notify("⏳ Checking knowledge base...", "info");
-      result = await runAskSufficiency(ctx, q);
+    // Step 1: Reformulate into 1-3 research questions
+    const reform = await runLlm<string[]>(
+      ctx,
+      "Reformulating questions...",
+      REFORMULATION_PROMPT,
+      `Question: ${q}`,
+      (text) => parseQuestions(text, q),
+    );
+    if (!reform.ok && reform.type === "cancelled") {
+      ctx.ui.notify("Research cancelled.", "info");
+      return;
     }
+    const questions = reform.ok ? reform.value : [q];
 
-    if (result) {
-      await handleSufficiencyResult(result, q, ctx.cwd, pi);
-    }
+    // Step 2: Research engine (KB-first subagents) + Step 3: KB write-back
+    const result: ResearchResult = await runResearchEngine(questions, ctx);
+    const writeback = await writeBackToKB(result, {
+      cwd: ctx.cwd,
+      model: ctx.model,
+      modelRegistry: ctx.modelRegistry,
+    });
+
+    // Step 4: Synthesize the answer from collected sources
+    const sourcesStr = result.sources.map((s) => `- ${s.url}: ${s.snippet}`).join("\n");
+    const synth = await runLlm<string>(
+      ctx,
+      "Synthesizing answer...",
+      SYNTHESIS_PROMPT,
+      `Question: ${q}\n\nSources:\n${sourcesStr || "(none)"}`,
+      (text) => text.trim(),
+    );
+    const answer = synth.ok && synth.value ? synth.value : "_(synthesis unavailable)_";
+
+    const wbLines = [
+      ...writeback.created.map((p) => `created: ${p}`),
+      ...writeback.updated.map((p) => `updated: ${p}`),
+      ...writeback.skipped.map((s) => `skipped: ${s}`),
+    ];
+    pi.sendUserMessage(
+      `## Answer: ${q}\n\n${answer}\n\n---\n` +
+        `📄 Knowledge base (KNOWLEDGE_DIR):\n${wbLines.join("\n") || "(no changes)"}`,
+    );
   };
-}
-
-/**
- * Handle the sufficiency result by creating a document or showing the plan.
- *
- * Extracted to reduce complexity of the main handler.
- */
-async function handleSufficiencyResult(
-  result: SufficiencyResult,
-  question: string,
-  cwd: string,
-  pi: ExtensionAPI,
-): Promise<void> {
-  if (result.sufficient && result.answer) {
-    if (result.createNote && result.noteTitle && result.noteContent) {
-      // Novel synthesis across multiple docs — save as new atomic note
-      const doc = await createDocument(
-        {
-          title: result.noteTitle,
-          content: result.noteContent,
-          tags: result.noteTags ?? ["generated"],
-          area: "Resources",
-          description: result.answer.slice(0, 200).replace(/\n/g, " "),
-        },
-        { cwd },
-      );
-      // Auto-commit to knowledge base repo
-      if (result.commitMessage) {
-        await commitKnowledgeBase(result.commitMessage, cwd);
-      }
-
-      const linkStr =
-        doc.linkCount > 0
-          ? `🔗 linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}`
-          : "no auto-links";
-      const commitStr = result.commitMessage ? `\n💾 Committed: \`${result.commitMessage}\`` : "";
-      pi.sendUserMessage(
-        `## Answer: ${question}\n\n${result.answer}\n\n---\n📄 Note saved to knowledge base: \`${doc.path}\` (${linkStr})${commitStr}`,
-      );
-    } else {
-      // Just answer from existing knowledge, no note needed
-      pi.sendUserMessage(
-        `## Answer: ${question}\n\n${result.answer}\n\n---\n*Based on existing knowledge — no new note created.*`,
-      );
-    }
-  } else if (result.plan) {
-    pi.sendUserMessage(result.plan);
-  }
 }

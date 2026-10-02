@@ -1,11 +1,10 @@
 /**
- * ask tool — knowledge base search returning full document context.
+ * ask tool — full research pipeline for the agent.
  *
- * The agent calls this when it needs supporting information to answer the
- * user's question. It searches notes.db (FTS5 BM25) and returns matching
- * document titles, paths, full bodies, tags, and scores. The agent's own
- * LLM evaluates whether the existing knowledge is sufficient or whether
- * web search is needed.
+ * Reformulates the question into 1-3 research questions, runs the research
+ * engine (KB-first subagents), writes results back to the knowledge base
+ * (KNOWLEDGE_DIR from .env, not cwd), and returns sources, note paths, and
+ * a synthesized answer.
  *
  * @module extensions/commands/tools/ask
  */
@@ -13,84 +12,72 @@
 import { Type } from "typebox";
 
 import { configureEnv } from "../../../common/env.js";
-import { ensureNotesDb } from "../../../common/notesDb.js";
-import { searchDocs } from "../../para-knowledge/db-sqlite.js";
+import { callLlmDirect } from "../../../common/llm.js";
+import { runResearchEngine } from "../../research-engine/runner.js";
+import { writeBackToKB } from "../../research-engine/writeback.js";
+import { parseQuestions, REFORMULATION_PROMPT, SYNTHESIS_PROMPT } from "../ask.js";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-// ── Age formatting ──────────────────────────────────────────────────
+/** Resolved authentication for the research pipeline. */
+interface ToolAuth {
+  model: Model<Api>;
+  apiKey: string;
+  headers?: Record<string, string>;
+}
 
 /**
- * Format a document's creation date into a human-readable age string.
+ * Resolve the model and API key for the research pipeline.
  *
- * @param created - ISO 8601 date string or null.
- * @returns Human-readable age like "2+ years old", "3 months old", "today".
+ * @param ctx - The tool extension context.
+ * @returns Auth info, or an error message when unavailable.
  */
-export function formatAge(created: string | null): string {
-  if (created === null) return "no date";
-
-  const createdDate = new Date(created);
-  const now = new Date();
-  const diffMs = now.getTime() - createdDate.getTime();
-
-  if (diffMs < 0) return "just now";
-
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffDays === 0) return "today";
-  if (diffDays === 1) return "yesterday";
-
-  if (diffDays < 7) {
-    return `${diffDays} ${diffDays === 1 ? "day" : "days"} old`;
+async function resolveToolAuth(
+  ctx: ExtensionContext,
+): Promise<{ auth: ToolAuth } | { error: string }> {
+  if (!ctx.model) {
+    return { error: "❌ No model selected for the research pipeline." };
   }
-
-  const diffWeeks = Math.floor(diffDays / 7);
-  if (diffDays < 30) {
-    return `${diffWeeks} ${diffWeeks === 1 ? "week" : "weeks"} old`;
+  const model = ctx.model as Model<Api>;
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (!auth.ok || !auth.apiKey) {
+    return { error: `❌ No API key for ${model.provider}.` };
   }
-
-  const diffMonths = Math.floor(diffDays / 30);
-  if (diffDays < 365) {
-    return `${diffMonths} ${diffMonths === 1 ? "month" : "months"} old`;
-  }
-
-  const diffYears = Math.floor(diffDays / 365);
-  return `${diffYears}+ years old`;
+  return { auth: { model, apiKey: auth.apiKey, headers: auth.headers } };
 }
 
 /**
  * Register the ask tool.
+ *
+ * @param pi - The pi extension API instance.
  */
 export function registerAskTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "ask",
     label: "Ask the Knowledge Base",
     description:
-      "Search the PARA knowledge base and return full document context for a question. " +
-      "Returns matching document titles, paths, full bodies, tags, and relevance scores. " +
-      "Use this first when you need supporting information to answer the user's question.",
+      "Full research pipeline for a question: reformulates it into 1-3 research questions, " +
+      "runs KB-first research subagents (web sources, 10-50 per run), writes results back to " +
+      "the knowledge base (KNOWLEDGE_DIR from .env, not the current working directory), and " +
+      "returns sources, note paths, and a synthesized answer.",
     promptSnippet:
-      "Use this tool first when you need supporting information to answer the user's question. " +
-      "It searches the PARA knowledge base and returns full document context.",
+      "Full research pipeline — KB-first subagent research, knowledge base write-back, synthesized answer",
     promptGuidelines: [
-      "Call ask before searching the web — existing knowledge may be sufficient.",
-      "If the returned documents fully answer the question, cite them by path with @citekey and answer directly.",
-      "If gaps remain, search the web, fetch sources, resolve citations, and create new atomic notes.",
-      "Every new source must be resolved via resolve_citation before being referenced.",
-      "Consider whether the information may be outdated. A note from 2021 about a fast-moving topic (tech, AI, medicine) is likely stale, while a note from 2021 about an evergreen topic (history, mathematics, established science) is probably still current. Cross-check the 'Date:' shown for each result.",
+      "Call ask first when you need supporting information — it researches the knowledge base and web, then improves the knowledge base.",
+      "Results are written to KNOWLEDGE_DIR (from .env), not the current working directory.",
+      "The tool returns {url, snippet} sources, created/updated note paths, and a synthesized answer.",
+      "Consider freshness: notes on fast-moving topics (tech, AI, medicine) may be outdated even when relevant.",
     ],
     parameters: Type.Object({
-      question: Type.String({ description: "The question to search the knowledge base for" }),
+      question: Type.String({ description: "The question to research" }),
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       configureEnv(ctx.cwd);
 
       onUpdate?.({
-        content: [{ type: "text" as const, text: "🗄️ Searching knowledge base…" }],
+        content: [{ type: "text" as const, text: "🔬 Researching knowledge base and web…" }],
         details: {},
       });
 
@@ -98,65 +85,89 @@ export function registerAskTool(pi: ExtensionAPI): void {
       if (!question) {
         return {
           content: [{ type: "text" as const, text: "📭 No question provided." }],
-          details: { results: [], count: 0 },
+          details: {
+            sources: [],
+            writeback: { created: [], updated: [], skipped: ["no question"] },
+            answer: "",
+          },
         };
       }
 
       try {
-        const db = await ensureNotesDb(ctx.cwd);
-        const results = searchDocs(db, question);
-
-        if (results.length === 0) {
+        const authResult = await resolveToolAuth(ctx);
+        if ("error" in authResult) {
           return {
-            content: [
-              {
-                type: "text" as const,
-                text: `📭 No documents found for: "${question}". You may need to search the web and create new knowledge documents.`,
-              },
-            ],
-            details: { results: [], count: 0 },
+            content: [{ type: "text" as const, text: authResult.error }],
+            details: {
+              sources: [],
+              writeback: { created: [], updated: [], skipped: [authResult.error] },
+              answer: "",
+            },
           };
         }
+        const { auth } = authResult;
 
-        const context = results
-          .map(
-            (r) =>
-              `## ${r.title} (\`${r.path}\`)\n` +
-              `Tags: ${r.tags.join(", ") || "(none)"}\n` +
-              `Date: ${r.created || "unknown"}\n` +
-              `Relevance: ${r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak"}\n` +
-              `---\n${r.body}`,
-          )
-          .join("\n\n---\n\n");
+        // Step 1: Reformulate into 1-3 research questions
+        const reform = await callLlmDirect<string[]>(
+          auth.model,
+          auth,
+          REFORMULATION_PROMPT,
+          [{ type: "text", text: `Question: ${question}` }],
+          (text) => parseQuestions(text, question),
+        );
+        const questions = reform.ok ? reform.value : [question];
 
-        const summary = results
-          .map(
-            (r) =>
-              `- [${r.title}](${r.path})  (${formatAge(r.created)} | relevance: ${r.matchedByTag ? "tag-only" : r.score < -0.001 ? "good" : "weak"})`,
-          )
-          .join("\n");
+        // Step 2: Research engine + Step 3: KB write-back
+        const result = await runResearchEngine(questions, ctx);
+        const writeback = await writeBackToKB(result, {
+          cwd: ctx.cwd,
+          model: auth.model,
+          modelRegistry: ctx.modelRegistry,
+        });
 
+        // Step 4: Synthesize the answer
+        const sourcesStr = result.sources.map((s) => `- ${s.url}: ${s.snippet}`).join("\n");
+        const synth = await callLlmDirect<string>(
+          auth.model,
+          auth,
+          SYNTHESIS_PROMPT,
+          [{ type: "text", text: `Question: ${question}\n\nSources:\n${sourcesStr || "(none)"}` }],
+          (text) => text.trim(),
+        );
+        const answer = synth.ok && synth.value ? synth.value : "_(synthesis unavailable)_";
+
+        const sourceLines = result.sources.map((s) => `- ${s.url}: ${s.snippet}`);
+        const wbLines = [
+          ...writeback.created.map((p) => `created: ${p}`),
+          ...writeback.updated.map((p) => `updated: ${p}`),
+          ...writeback.skipped.map((s) => `skipped: ${s}`),
+        ];
         return {
           content: [
             {
               type: "text" as const,
               text:
-                `🗄️ **${results.length} document${results.length === 1 ? "" : "s"} found for:** "${question}"\n\n` +
-                `${summary}\n\n` +
-                `---\n\n` +
-                `### Full Document Context\n\n${context}`,
+                `🔬 Research complete: ${result.sources.length} source${result.sources.length === 1 ? "" : "s"}.\n\n` +
+                `${sourceLines.join("\n") || "(no sources found)"}\n\n` +
+                `Knowledge base write-back (KNOWLEDGE_DIR):\n` +
+                `${wbLines.join("\n") || "(nothing written)"}\n\n` +
+                `### Answer\n\n${answer}`,
             },
           ],
-          details: { results, count: results.length },
+          details: { sources: result.sources, writeback, answer, questions },
         };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error("[ask tool] Error:", msg);
+        console.error("[ask tool]", msg);
         return {
           content: [
-            { type: "text" as const, text: `❌ Knowledge base search error: ${msg.slice(0, 200)}` },
+            { type: "text" as const, text: `❌ Research pipeline error: ${msg.slice(0, 200)}` },
           ],
-          details: { results: [], count: 0, error: msg },
+          details: {
+            sources: [],
+            writeback: { created: [], updated: [], skipped: [msg] },
+            answer: "",
+          },
         };
       }
     },

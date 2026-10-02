@@ -1,284 +1,216 @@
 /**
- * /research command — iterative academic research workflow.
+ * /research command — research engine flow.
  *
- * Decomposes a topic via WHY/HOW/WHAT decomposition using the LLM, then outputs
- * a structured research plan for the agent to execute step by step.
- * First evaluates whether existing PARA docs already cover the topic.
+ * Decomposes a topic via WHY/HOW/WHAT, feeds all resulting questions to the
+ * research engine in a single parallel invocation, writes results back to the
+ * knowledge base (KNOWLEDGE_DIR from .env), and synthesizes a research report.
  *
  * @module extensions/commands/research
  */
 
-import { complete } from "@earendil-works/pi-ai";
+import { DECOMPOSITION_PROMPT } from "./research-format.js";
+import { extractJson } from "../../common/extractJson.js";
+import { callLlmDirect, callLlmWithLoader } from "../../common/llm.js";
+import { runResearchEngine } from "../research-engine/runner.js";
+import { writeBackToKB } from "../research-engine/writeback.js";
 
-import { DECOMPOSITION_PROMPT, formatResearchPlan } from "./research-format.js";
-import {
-  callLlmDirect,
-  callLlmWithLoader,
-  parseSufficiencyResponse,
-  RESEARCH_SUFFICIENCY_PROMPT,
-  type LlmCallResult,
-  type SufficiencyResult,
-} from "./research-llm.js";
-import { createDocument } from "../../common/createDocument.js";
-import { commitKnowledgeBase } from "../../common/gitCommit.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
-import { searchDocs } from "../para-knowledge/db-sqlite.js";
-
-import type { SearchResult } from "../para-knowledge/sqlite-types.js";
+import type { LlmCallResult } from "../../common/llm.js";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
-/** Human-readable description shown in /commands list */
+/** Human-readable description shown in /commands list. */
 export const description = "Run iterative academic research on a topic";
 
+/** System prompt: synthesize a research report from collected sources. */
+export const SYNTHESIS_PROMPT = `Synthesize a comprehensive research report for the topic using the collected web sources below.
+
+Structure the report with short markdown sections. Cite sources inline by their URL in parentheses.
+Do not mention the research process. Return ONLY the report text.`;
+
+/** One branch of the WHY/HOW/WHAT question tree. */
+interface QuestionBranch {
+  question: string;
+  supporting: string[];
+}
+
+/** WHY/HOW decomposition tree produced by the DECOMPOSITION_PROMPT. */
+export interface QuestionTree {
+  why: QuestionBranch;
+  how: QuestionBranch;
+}
+
 /**
- * Handle a sufficiency result by creating notes or outputting an inline answer.
+ * Parse a decomposition LLM response into a question tree.
  *
- * Extracted to reduce cyclomatic complexity of the main handler.
- *
- * @returns true if the result was handled (sufficient), false if research plan needed.
+ * @param text - Raw LLM response text.
+ * @returns The question tree, or null when invalid.
  */
-async function handleSufficiencyResult(
-  sufficiencyResult: SufficiencyResult,
-  topic: string,
-  cwd: string,
-  pi: ExtensionAPI,
-): Promise<boolean> {
-  // Auto-commit helper after document creation
-  if (sufficiencyResult.commitMessage) {
-    await commitKnowledgeBase(sufficiencyResult.commitMessage, cwd);
-  }
-  if (!sufficiencyResult.sufficient) return false;
+export function parseQuestionTree(text: string): QuestionTree | null {
+  const parsed = extractJson(text);
+  if (parsed === null || typeof parsed !== "object") return null;
+  const tree = parsed as Partial<QuestionTree>;
+  if (!tree.why || !tree.how || typeof tree.why.question !== "string") return null;
+  return tree as QuestionTree;
+}
 
-  // Multi-note creation path
-  if (sufficiencyResult.createNote && sufficiencyResult.notes?.length) {
-    const created: Array<{ path: string; linkCount: number }> = [];
-    for (const note of sufficiencyResult.notes) {
-      const doc = await createDocument(
-        {
-          title: note.title,
-          content: note.content,
-          tags: note.tags,
-          area: "Resources",
-          description: note.content.replace(/\n+/g, " ").slice(0, 200).replace(/@\w+/g, "").trim(),
-        },
-        { cwd },
-      );
-      created.push(doc);
+/**
+ * Flatten a question tree into a research question list.
+ *
+ * @param tree - The WHY/HOW/WHAT decomposition tree.
+ * @param topic - Fallback topic used when the tree is empty.
+ * @returns All questions from both branches, filtered and deduplicated.
+ */
+export function flattenQuestionTree(tree: QuestionTree, topic: string): string[] {
+  const raw = [
+    tree.why.question,
+    ...(Array.isArray(tree.why.supporting) ? tree.why.supporting : []),
+    tree.how.question,
+    ...(Array.isArray(tree.how.supporting) ? tree.how.supporting : []),
+  ];
+  const qs = raw
+    .filter((q): q is string => typeof q === "string" && q.trim().length > 0)
+    .map((q) => q.trim());
+  return qs.length > 0 ? [...new Set(qs)] : [topic];
+}
+
+/**
+ * Resolve model authentication for LLM calls.
+ *
+ * @param ctx - The extension command context.
+ * @returns Auth info, or null after notifying the user on failure.
+ */
+async function resolveAuth(ctx: ExtensionCommandContext): Promise<{
+  apiKey: string;
+  headers?: Record<string, string>;
+} | null> {
+  const model = ctx.model as Model<Api>;
+  try {
+    const result = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (!result.ok || !result.apiKey) {
+      ctx.ui.notify(`❌ No API key for ${model.provider}`, "error");
+      return null;
     }
-    const commitStr = sufficiencyResult.commitMessage
-      ? `\n💾 Committed: \`${sufficiencyResult.commitMessage}\``
-      : "";
-    pi.sendUserMessage(
-      `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
-        `📄 Created ${created.length} atomic notes covering this topic.${commitStr}`,
-    );
-    return true;
+    return { apiKey: result.apiKey, headers: result.headers };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ctx.ui.notify(`❌ Auth error: ${msg}`, "error");
+    return null;
   }
+}
 
-  // Legacy single-note creation path
-  if (sufficiencyResult.createNote && sufficiencyResult.noteContent) {
-    const doc = await createDocument(
-      {
-        title: sufficiencyResult.noteTitle ?? topic,
-        content: sufficiencyResult.noteContent,
-        tags: sufficiencyResult.noteTags ?? ["generated"],
-        area: "Resources",
-        description: sufficiencyResult.answer
-          .replace(/\n+/g, " ")
-          .slice(0, 200)
-          .replace(/@\w+/g, "")
-          .trim(),
-      },
-      { cwd },
-    );
-    const linkMsg =
-      doc.linkCount > 0
-        ? `\n🔗 Auto-linked to ${doc.linkCount} related note${doc.linkCount === 1 ? "" : "s"}.`
-        : "";
-    const commitStr = sufficiencyResult.commitMessage
-      ? `\n💾 Committed: \`${sufficiencyResult.commitMessage}\``
-      : "";
-    pi.sendUserMessage(
-      `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
-        `📄 Note saved to knowledge base: \`${doc.path}\`${linkMsg}${commitStr}`,
-    );
-    return true;
+/**
+ * Run an LLM call with TUI loader or direct call depending on mode.
+ *
+ * @param ctx - The extension command context.
+ * @param loaderText - Loader text for TUI mode.
+ * @param systemPrompt - The system prompt.
+ * @param userText - The user message text.
+ * @param parseFn - Response parser.
+ * @returns The LLM call result.
+ */
+async function runLlm<T>(
+  ctx: ExtensionCommandContext,
+  loaderText: string,
+  systemPrompt: string,
+  userText: string,
+  parseFn: (text: string) => T | null,
+): Promise<LlmCallResult<T>> {
+  const model = ctx.model as Model<Api>;
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (!auth.ok || !auth.apiKey) {
+    return { ok: false, type: "error", message: "No API key" };
   }
+  const authInfo = { apiKey: auth.apiKey, headers: auth.headers };
+  const messageContent = [{ type: "text" as const, text: userText }];
 
-  // No note: inline answer only
-  pi.sendUserMessage(
-    `## Research Answer: ${topic}\n\n${sufficiencyResult.answer}\n\n---\n` +
-      `*Based on existing knowledge — no new note created.*`,
-  );
-  return true;
+  if (ctx.mode === "tui") {
+    return ctx.ui
+      .custom<LlmCallResult<T> | null>((tui, theme, _kb, done) =>
+        callLlmWithLoader(
+          tui,
+          theme,
+          done,
+          loaderText,
+          model,
+          authInfo,
+          systemPrompt,
+          messageContent,
+          parseFn,
+        ),
+      )
+      .then((r) => r ?? { ok: false, type: "cancelled" as const });
+  }
+  return callLlmDirect<T>(model, authInfo, systemPrompt, messageContent, parseFn);
 }
 
 /**
  * Create the /research command handler.
  *
- * Factory pattern: captures the ExtensionAPI reference so the handler
- * can inject structured outputs (inline answer or research plan) via
- * pi.sendUserMessage().
+ * Flow: WHY/HOW/WHAT decomposition → research engine (single parallel call)
+ * → KB write-back → synthesis of a research report.
  *
- * Flow:
- * 1. Search existing PARA docs for the topic
- * 2. LLM evaluates sufficiency of existing knowledge (strict prompt)
- * 3. If sufficient:
- *    a. If createNote + notes[] → create multiple atomic documents
- *    b. If createNote + noteContent → create single atomic document (legacy)
- *    c. Else → output inline answer with @citekey citations, no new note
- * 4. If insufficient: WHY/HOW/WHAT decomposition + structured research plan
- *
- * @param pi  The pi extension API instance.
- * @returns   The command handler function.
+ * @param pi - The pi extension API instance.
+ * @returns The command handler function.
  */
-/**
- * Resolve auth for the selected model.
- *
- * Returns { ok: true, apiKey, headers } if authentication succeeds,
- * or notifies the user and returns { ok: false } on failure.
- */
-async function resolveAuth(ctx: ExtensionCommandContext): Promise<
-  | {
-      ok: true;
-      apiKey: string;
-      headers?: Record<string, string>;
-      model: Parameters<typeof complete>[0];
-    }
-  | { ok: false }
-> {
-  if (!ctx.model) {
-    ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
-    return { ok: false };
-  }
-
-  const model = ctx.model as Parameters<typeof complete>[0];
-  try {
-    const result = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-    if (!result.ok || !result.apiKey) {
-      ctx.ui.notify(`❌ No API key for ${(model as { provider: string }).provider}`, "error");
-      return { ok: false };
-    }
-    return { ok: true, apiKey: result.apiKey, headers: result.headers, model };
-  } catch (e) {
-    ctx.ui.notify(`❌ Auth error: ${e instanceof Error ? e.message : String(e)}`, "error");
-    return { ok: false };
-  }
-}
-
 export function createHandler(pi: ExtensionAPI) {
   return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
     const topic = args.trim();
-
     if (!topic) {
       ctx.ui.notify("Usage: /research <topic> — please provide a research topic.", "warning");
       return;
     }
+    if (!ctx.model) {
+      ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
+      return;
+    }
+    ctx.ui.notify(`🔬 Researching: "${topic.slice(0, 80)}…"`, "info");
 
     const auth = await resolveAuth(ctx);
-    if (!auth.ok) return;
-    const { model, apiKey, headers } = auth;
+    if (!auth) return;
 
-    try {
-      const db = await ensureNotesDb(ctx.cwd);
-      const existingDocs: SearchResult[] = searchDocs(db, topic);
-      const docsCtx: string =
-        existingDocs.length > 0
-          ? existingDocs
-              .map(
-                (d) =>
-                  `## ${d.title} (${d.path})${d.created ? ` — date: ${d.created.slice(0, 10)}` : ""}\n${d.body.slice(0, 1500)}`,
-              )
-              .join("\n\n")
-          : "No existing documents found for this topic.";
-
-      // Step 1: Evaluate sufficiency of existing knowledge
-      let sufficiencyResult: LlmCallResult<SufficiencyResult>;
-
-      if (ctx.mode === "tui") {
-        sufficiencyResult = await ctx.ui.custom<LlmCallResult<SufficiencyResult>>(
-          (tui, theme, _kb, done) =>
-            callLlmWithLoader(
-              tui,
-              theme,
-              done,
-              "🔍 Evaluating existing knowledge...",
-              model,
-              { apiKey, headers },
-              RESEARCH_SUFFICIENCY_PROMPT,
-              [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
-              (text) => parseSufficiencyResponse(text),
-            ),
-        );
-      } else {
-        ctx.ui.notify("⏳ Evaluating existing knowledge...", "info");
-        sufficiencyResult = await callLlmDirect<SufficiencyResult>(
-          model,
-          { apiKey, headers },
-          RESEARCH_SUFFICIENCY_PROMPT,
-          [{ type: "text", text: `Topic: ${topic}\n\nExisting documents:\n${docsCtx}` }],
-          (text) => parseSufficiencyResponse(text),
-        );
-      }
-
-      if (!sufficiencyResult.ok) {
-        if (sufficiencyResult.type === "cancelled") {
-          ctx.ui.notify("Research cancelled.", "info");
-          return;
-        }
-        ctx.ui.notify(
-          "⚠️ Could not evaluate existing knowledge — generating research plan directly.",
-          "info",
-        );
-        // Fall through to decomposition step below
-      } else {
-        if (await handleSufficiencyResult(sufficiencyResult.value, topic, ctx.cwd, pi)) {
-          return;
-        }
-      }
-
-      // Step 2: Decompose into WHY/HOW/WHAT question tree
-      let questionTree: LlmCallResult<string>;
-
-      if (ctx.mode === "tui") {
-        questionTree = await ctx.ui.custom<LlmCallResult<string>>((tui, theme, _kb, done) =>
-          callLlmWithLoader(
-            tui,
-            theme,
-            done,
-            "🔬 Decomposing research topic...",
-            model,
-            { apiKey, headers },
-            DECOMPOSITION_PROMPT,
-            [{ type: "text", text: topic }],
-            (text) => text,
-          ),
-        );
-      } else {
-        ctx.ui.notify("⏳ Decomposing research topic...", "info");
-        questionTree = await callLlmDirect<string>(
-          model,
-          { apiKey, headers },
-          DECOMPOSITION_PROMPT,
-          [{ type: "text", text: topic }],
-          (text) => text,
-        );
-      }
-
-      if (!questionTree.ok) {
-        if (questionTree.type === "cancelled") {
-          ctx.ui.notify("Research plan generation cancelled.", "info");
-        } else {
-          ctx.ui.notify(`❌ Research plan generation failed: ${questionTree.message}`, "error");
-        }
-        return;
-      }
-
-      pi.sendUserMessage(formatResearchPlan(topic, questionTree.value));
-      await Promise.resolve();
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      ctx.ui.notify(`❌ /research error: ${msg}`, "error");
+    // Step 1: WHY/HOW/WHAT decomposition
+    const decomp = await runLlm<QuestionTree>(
+      ctx,
+      "Decomposing research topic...",
+      DECOMPOSITION_PROMPT,
+      topic,
+      parseQuestionTree,
+    );
+    if (!decomp.ok && decomp.type === "cancelled") {
+      ctx.ui.notify("Research cancelled.", "info");
+      return;
     }
+    const questions = decomp.ok ? flattenQuestionTree(decomp.value, topic) : [topic];
+
+    // Step 2: Research engine — all questions in one parallel invocation
+    const result = await runResearchEngine(questions, ctx);
+
+    // Step 3: KB write-back (KNOWLEDGE_DIR from .env)
+    const writeback = await writeBackToKB(result, {
+      cwd: ctx.cwd,
+      model: ctx.model,
+      modelRegistry: ctx.modelRegistry,
+    });
+
+    // Step 4: Synthesize the research report
+    const sourcesStr = result.sources.map((s) => `- ${s.url}: ${s.snippet}`).join("\n");
+    const synth = await runLlm<string>(
+      ctx,
+      "Synthesizing research report...",
+      SYNTHESIS_PROMPT,
+      `Topic: ${topic}\n\nSources:\n${sourcesStr || "(none)"}`,
+      (text) => text.trim(),
+    );
+    const report = synth.ok && synth.value ? synth.value : "_(synthesis unavailable)_";
+
+    const wbLines = [
+      ...writeback.created.map((p) => `created: ${p}`),
+      ...writeback.updated.map((p) => `updated: ${p}`),
+      ...writeback.skipped.map((s) => `skipped: ${s}`),
+    ];
+    pi.sendUserMessage(
+      `## Research Report: ${topic}\n\n${report}\n\n---\n` +
+        `📄 Knowledge base (KNOWLEDGE_DIR):\n${wbLines.join("\n") || "(no changes)"}`,
+    );
   };
 }

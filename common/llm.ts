@@ -3,11 +3,13 @@
  *
  * Provides:
  * - `callLlmDirect<T>()` — direct LLM call without TUI dependencies
+ * - `callLlmWithLoader<T>()` — LLM call inside a BorderedLoader (TUI)
  *
  * @module common/llm
  */
 
 import { complete, type UserMessage } from "@earendil-works/pi-ai";
+import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ export type LlmCallResult<T> =
  * @typeParam T - The parsed return type from the LLM response.
  * @param model - The LLM model to use.
  * @param auth - API key and headers for authentication.
- * @param systemPrompt - System prompt for the LLM.
+ * @param systemPrompt - The system prompt for the LLM.
  * @param messageContent - User message content array (type+text pairs).
  * @param parseFn - Function to parse the LLM response text into type T.
  * @param signal - Optional AbortSignal for cancellation.
@@ -75,4 +77,68 @@ export async function callLlmDirect<T>(
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, type: "error", message };
   }
+}
+
+/**
+ * Run an LLM call inside a BorderedLoader within a TUI custom context.
+ *
+ * @typeParam T - The parsed return type from the LLM response.
+ * @param tui - TUI instance from the custom callback.
+ * @param theme - Theme from the custom callback.
+ * @param done - Done callback from the custom callback.
+ * @param loaderText - Text to display in the loader.
+ * @param model - The LLM model to use.
+ * @param auth - API key and headers for authentication.
+ * @param systemPrompt - The system prompt for the LLM.
+ * @param messageContent - User message content array (type+text pairs).
+ * @param parseFn - Function to parse the LLM response text into type T.
+ * @returns The BorderedLoader instance.
+ */
+export function callLlmWithLoader<T>(
+  tui: unknown,
+  theme: unknown,
+  done: (value: LlmCallResult<T>) => void,
+  loaderText: string,
+  model: Parameters<typeof complete>[0],
+  auth: { apiKey: string; headers?: Record<string, string> },
+  systemPrompt: string,
+  messageContent: { type: "text"; text: string }[],
+  parseFn: (text: string) => T | null,
+): BorderedLoader {
+  const loader = new BorderedLoader(tui as never, theme as never, loaderText);
+  loader.onAbort = () => done({ ok: false, type: "cancelled" });
+
+  void (async () => {
+    try {
+      const userMessage: UserMessage = {
+        role: "user",
+        content: messageContent,
+        timestamp: Date.now(),
+      };
+      const response = await complete(
+        model,
+        { systemPrompt, messages: [userMessage] },
+        { apiKey: auth.apiKey, headers: auth.headers, signal: loader.signal },
+      );
+      if (response.stopReason === "aborted") {
+        done({ ok: false, type: "cancelled" });
+        return;
+      }
+      const text = response.content
+        .filter((c): c is { type: "text"; text: string } => c.type === "text")
+        .map((c) => c.text)
+        .join("\n");
+      const parsed = parseFn(text);
+      if (parsed === null) {
+        done({ ok: false, type: "error", message: "LLM returned invalid JSON" });
+        return;
+      }
+      done({ ok: true, value: parsed });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      done({ ok: false, type: "error", message });
+    }
+  })();
+
+  return loader;
 }

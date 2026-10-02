@@ -1,294 +1,196 @@
 /**
- * Tests for the /ask command handler — plan generator.
+ * Tests for the /ask command — research engine flow.
  *
  * @module tests/commands/ask.test
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock createDocument to avoid file I/O in the createNote path.
-// Safe because existing tests only test guard conditions that exit before
-// document creation.
-vi.mock("../../common/createDocument.js", () => ({
-  createDocument: vi.fn().mockResolvedValue({
-    path: "Resources/test-synthesis.md",
-    title: "Test Synthesis",
-    linkCount: 3,
-    indexOk: true,
-  }),
+vi.mock("../../common/llm.js", () => ({
+  callLlmDirect: vi.fn(),
+  callLlmWithLoader: vi.fn(),
+}));
+vi.mock("../../extensions/research-engine/runner.js", () => ({
+  runResearchEngine: vi.fn(),
+  MAX_CONCURRENCY: 4,
+  MIN_SOURCES: 10,
+  RESEARCHER_PROMPT_PATH: "/x/researcher.md",
+  getPiInvocation: vi.fn(),
+  parseSources: vi.fn(),
+}));
+vi.mock("../../extensions/research-engine/writeback.js", () => ({
+  writeBackToKB: vi.fn(),
+  parseGrouping: vi.fn(),
+  GROUPING_PROMPT: "",
 }));
 
-// Store the last user message sent to the LLM so tests can inspect it.
-const llmMessages: string[] = [];
-vi.mock("@earendil-works/pi-ai", () => ({
-  complete: vi.fn().mockImplementation(
-    (
-      _model: unknown,
-      messages: {
-        systemPrompt: string;
-        messages: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
-      },
-    ) => {
-      // Capture the user message for inspection
-      const userMsg =
-        messages.messages[0]?.content
-          ?.filter((c: { type: string }) => c.type === "text")
-          .map((c: { text: string }) => c.text)
-          .join("") ?? "";
-      llmMessages.push(userMsg);
-      return {
-        role: "assistant",
-        content: [
-          { type: "text", text: '{"sufficient":true,"answer":"Answer from existing docs."}' },
-        ],
-        stopReason: "stop",
-        api: "test",
-        provider: "test",
-        model: "test-model",
-        timestamp: Date.now(),
-      };
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ASK_TS = resolve(HERE, "../../extensions/commands/ask.ts");
+
+const RESEARCH_RESULT = {
+  sources: [{ url: "https://src.example/1", snippet: "Key point" }],
+  questions: ["q1", "q2"],
+  assessment: { sufficient: false, outdatedNotes: [], gaps: ["q1"] },
+};
+
+const WRITEBACK_RESULT = {
+  created: ["Resources/new-note.md"],
+  updated: ["Resources/old-note.md"],
+  skipped: [],
+};
+
+function makeCtx(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ui: { notify: vi.fn(), custom: vi.fn() },
+    cwd: "/test",
+    mode: "rpc",
+    model: { id: "m", provider: "p" },
+    modelRegistry: {
+      getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "sk-test" }),
     },
-  ),
-}));
+    ...overrides,
+  };
+}
 
-describe("ask command handler", () => {
+describe("/ask command — research engine flow", () => {
   let sendUserMessage: ReturnType<typeof vi.fn>;
-  let notify: ReturnType<typeof vi.fn>;
-  let mockPi: Record<string, unknown>;
-  let mockCtx: Record<string, unknown>;
 
   beforeEach(() => {
-    vi.resetModules();
+    vi.clearAllMocks();
     sendUserMessage = vi.fn();
-    notify = vi.fn();
-    mockCtx = {
-      ui: { notify },
-      cwd: "/test",
-    };
-    mockPi = {
-      sendUserMessage,
-      registerCommand: vi.fn(),
-    };
   });
 
   it("should show usage when no question is provided", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
+    const notify = vi.fn();
+    const handler = createHandler({ sendUserMessage } as never);
 
-    await handler("", mockCtx as never);
-
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("Usage: /ask"), "warning");
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
-
-  it("should show usage for whitespace-only input", async () => {
-    const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
-
-    await handler("   ", mockCtx as never);
+    await handler("", makeCtx({ ui: { notify } }) as never);
 
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("Usage: /ask"), "warning");
     expect(sendUserMessage).not.toHaveBeenCalled();
-  });
-
-  it("should work in RPC mode without ctx.ui.custom", async () => {
-    const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
-
-    // Simulate RPC mode: mode is not "tui", no custom(), but model is set
-    await handler("What is dopamine?", {
-      ...mockCtx,
-      mode: "rpc",
-      model: { id: "test-model", provider: "test" },
-      modelRegistry: {
-        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
-      },
-    } as never);
-
-    // Should not error about TUI mode — proceeds to LLM call path
-    expect(notify).not.toHaveBeenCalledWith(expect.stringContaining("requires interactive"));
-    // Should notify about checking
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍"), "info");
   });
 
   it("should require a selected model", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
+    const notify = vi.fn();
+    const handler = createHandler({ sendUserMessage } as never);
 
-    await handler("What is dopamine?", {
-      ...mockCtx,
-      mode: "tui",
-      ui: { notify, custom: vi.fn() },
-    } as never);
+    await handler("What is dopamine?", makeCtx({ model: undefined, ui: { notify } }) as never);
 
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("No model selected"), "error");
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should notify the user when check starts", async () => {
+  it("should notify and stop when auth fails", async () => {
     const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
+    const notify = vi.fn();
+    const handler = createHandler({ sendUserMessage } as never);
 
-    await handler("What is dopamine?", {
-      ...mockCtx,
-      mode: "tui",
-      ui: { notify, custom: vi.fn() },
-      model: { id: "test-model", provider: "test" },
-      modelRegistry: {
-        getApiKeyAndHeaders: vi.fn().mockRejectedValue(new Error("No registry")),
-      },
-    } as never);
-
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍 Checking:"), "info");
-  });
-
-  it("should handle errors gracefully", async () => {
-    const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
-
-    await expect(handler("What is dopamine?", mockCtx as never)).resolves.not.toThrow();
-  });
-
-  it("should create a new atomic note when createNote is true", async () => {
-    const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
-
-    await handler("living fence vs concrete wall durability", {
-      ...mockCtx,
-      mode: "tui",
-      ui: {
-        notify,
-        custom: vi.fn().mockResolvedValue({
-          sufficient: true,
-          answer: "Synthesis answer about living fences vs concrete walls...",
-          createNote: true,
-          noteTitle: "Comparing Living Fences vs Concrete Walls",
-          noteContent:
-            "## Summary\n\nNovel synthesis content.\n\n## Key Points\n\n- Point 1\n- Point 2",
-          noteTags: ["living-fence", "comparison"],
-        }),
-      },
-      model: { id: "test-model", provider: "test" },
-      modelRegistry: {
-        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
-      },
-    } as never);
-
-    // Should show note creation confirmation instead of "no new note created"
-    expect(sendUserMessage).toHaveBeenCalledWith(
-      expect.stringContaining("📄 Note saved to knowledge base"),
+    await handler(
+      "What is dopamine?",
+      makeCtx({
+        ui: { notify },
+        modelRegistry: {
+          getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: false }),
+        },
+      }) as never,
     );
-    expect(sendUserMessage).not.toHaveBeenCalledWith(
-      expect.stringContaining("no new note created"),
-    );
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("API key"), "error");
+    expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("should not include commit step in the fallback plan", async () => {
-    const { FALLBACK_PLAN } = await import("../../extensions/commands/ask.js");
+  it("should run reformulation, research engine, writeback, then synthesis in order", async () => {
+    const { callLlmDirect } = await import("../../common/llm.js");
+    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
+    const { writeBackToKB } = await import("../../extensions/research-engine/writeback.js");
 
-    const plan = FALLBACK_PLAN("test question");
-
-    expect(plan).not.toContain("commit_changes");
-    expect(plan).not.toContain("commit_amend");
-    expect(plan).not.toContain("docs:");
-  });
-
-  it("should not include commit step in the PROMPT template", async () => {
-    const { PROMPT } = await import("../../extensions/commands/ask.js");
-
-    expect(PROMPT).not.toContain("commit_changes");
-    expect(PROMPT).not.toContain("commit_amend");
-  });
-
-  it("should not include Phase 5 in FALLBACK_PLAN", async () => {
-    const { FALLBACK_PLAN } = await import("../../extensions/commands/ask.js");
-
-    const plan = FALLBACK_PLAN("test question");
-    expect(plan).toContain("Phase 4");
-    expect(plan).not.toContain("Phase 5");
-  });
-
-  it("should not include Phase 5 in PROMPT", async () => {
-    const { PROMPT } = await import("../../extensions/commands/ask.js");
-
-    expect(PROMPT).toContain("Phase 4");
-    expect(PROMPT).not.toContain("Phase 5");
-  });
-
-  it("should not show commit instruction in note creation output", async () => {
-    const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
-
-    await handler("living fence vs concrete wall durability", {
-      ...mockCtx,
-      mode: "tui",
-      ui: {
-        notify,
-        custom: vi.fn().mockResolvedValue({
-          sufficient: true,
-          answer: "Synthesis answer about living fences vs concrete walls...",
-          createNote: true,
-          noteTitle: "Comparing Living Fences vs Concrete Walls",
-          noteContent:
-            "## Summary\n\nNovel synthesis content.\n\n## Key Points\n\n- Point 1\n- Point 2",
-          noteTags: ["living-fence", "comparison"],
-        }),
-      },
-      model: { id: "test-model", provider: "test" },
-      modelRegistry: {
-        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
-      },
-    } as never);
-
-    // Should not include commit instruction; should show note saved message
-    expect(sendUserMessage).not.toHaveBeenCalledWith(expect.stringContaining("commit_changes"));
-    expect(sendUserMessage).toHaveBeenCalledWith(
-      expect.stringContaining("Note saved to knowledge base"),
-    );
-  });
-
-  it("should include freshness guidance in PROMPT", async () => {
-    const { PROMPT } = await import("../../extensions/commands/ask.js");
-    expect(PROMPT).toContain("freshness");
-    expect(PROMPT).toContain("outdated");
-  });
-
-  it("should include date in LLM context for docs with created date", async () => {
-    // Clear captured messages
-    llmMessages.length = 0;
+    vi.mocked(callLlmDirect).mockImplementation((_m, _a, systemPrompt) => {
+      if (systemPrompt.includes("Reformulate")) {
+        return Promise.resolve({ ok: true, value: ["q1", "q2"] } as never);
+      }
+      return Promise.resolve({ ok: true, value: "Synthesized answer about dopamine." } as never);
+    });
+    vi.mocked(runResearchEngine).mockResolvedValue(RESEARCH_RESULT);
+    vi.mocked(writeBackToKB).mockResolvedValue(WRITEBACK_RESULT);
 
     const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
+    const handler = createHandler({ sendUserMessage } as never);
+    const ctx = makeCtx();
 
-    // RPC mode with DB that has a doc with known date
-    await handler("test topic", {
-      ...mockCtx,
-      mode: "rpc",
-      model: { id: "test-model", provider: "test" },
-      modelRegistry: {
-        getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "test-key" }),
-      },
-    } as never);
+    await handler("What is dopamine?", ctx as never);
 
-    // At minimum, the LLM call happened and the message is non-empty
-    expect(llmMessages.length).toBeGreaterThanOrEqual(1);
+    expect(callLlmDirect).toHaveBeenCalledTimes(2);
+    expect(runResearchEngine).toHaveBeenCalledWith(["q1", "q2"], ctx);
+    expect(writeBackToKB).toHaveBeenCalledTimes(1);
+
+    // Order: engine before writeback before synthesis before sendUserMessage
+    const engineOrder = vi.mocked(runResearchEngine).mock.invocationCallOrder[0];
+    const writebackOrder = vi.mocked(writeBackToKB).mock.invocationCallOrder[0];
+    const synthesisOrder = vi.mocked(callLlmDirect).mock.invocationCallOrder[1];
+    const sendOrder = sendUserMessage.mock.invocationCallOrder[0];
+    expect(engineOrder).toBeLessThan(writebackOrder);
+    expect(writebackOrder).toBeLessThan(synthesisOrder);
+    expect(synthesisOrder).toBeLessThan(sendOrder);
+
+    // Synthesis receives the collected sources
+    const synthMessage = vi.mocked(callLlmDirect).mock.calls[1][3];
+    const synthText = synthMessage.map((c: { text: string }) => c.text).join("\n");
+    expect(synthText).toContain("https://src.example/1");
+
+    // User message contains answer and note paths
+    const message = sendUserMessage.mock.calls[0][0] as string;
+    expect(message).toContain("Synthesized answer about dopamine.");
+    expect(message).toContain("Resources/new-note.md");
+    expect(message).toContain("Resources/old-note.md");
   });
 
-  it("should truncate long question in notification", async () => {
+  it("should fall back to the raw question when reformulation fails", async () => {
+    const { callLlmDirect } = await import("../../common/llm.js");
+    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
+    const { writeBackToKB } = await import("../../extensions/research-engine/writeback.js");
+
+    vi.mocked(callLlmDirect).mockImplementation((_m, _a, systemPrompt) => {
+      if (systemPrompt.includes("Reformulate")) {
+        return Promise.resolve({ ok: false, type: "error", message: "boom" } as never);
+      }
+      return Promise.resolve({ ok: true, value: "Fallback answer." } as never);
+    });
+    vi.mocked(runResearchEngine).mockResolvedValue({
+      ...RESEARCH_RESULT,
+      questions: ["What is dopamine?"],
+    });
+    vi.mocked(writeBackToKB).mockResolvedValue({ created: [], updated: [], skipped: [] });
+
     const { createHandler } = await import("../../extensions/commands/ask.js");
-    const handler = createHandler(mockPi as never);
+    const handler = createHandler({ sendUserMessage } as never);
 
-    const longQuestion = "What is ".repeat(20) + "?";
-    await handler(longQuestion, {
-      ...mockCtx,
-      mode: "tui",
-      ui: { notify, custom: vi.fn() },
-      model: { id: "test-model", provider: "test" },
-      modelRegistry: {
-        getApiKeyAndHeaders: vi.fn().mockRejectedValue(new Error("No registry")),
-      },
-    } as never);
+    await handler("What is dopamine?", makeCtx() as never);
 
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("…"), "info");
+    expect(runResearchEngine).toHaveBeenCalledWith(["What is dopamine?"], expect.anything());
+    expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("Fallback answer."));
+  });
+
+  it("should not send a message when the TUI custom result is null", async () => {
+    const { createHandler } = await import("../../extensions/commands/ask.js");
+    const notify = vi.fn();
+    const custom = vi.fn().mockResolvedValue(null);
+    const handler = createHandler({ sendUserMessage } as never);
+
+    await handler("What is dopamine?", makeCtx({ mode: "tui", ui: { notify, custom } }) as never);
+
+    expect(custom).toHaveBeenCalledTimes(1);
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("should not reference the removed runAskSufficiency path", () => {
+    const source = readFileSync(ASK_TS, "utf-8");
+    expect(source).not.toContain("runAskSufficiency");
+    expect(source).not.toContain("SufficiencyResult");
   });
 });
