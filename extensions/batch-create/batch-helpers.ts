@@ -60,7 +60,7 @@ export interface CitationViolation {
  * validationErrors.
  *
  * @param docs - Array of documents to validate.
- * @returns Valid docs (possibly expanded), errors, and expansion stats.
+ * @returns Valid docs (possibly expanded), errors, warnings, and expansion stats.
  */
 export async function validateDocuments(
   docs: BatchDoc[],
@@ -68,12 +68,14 @@ export async function validateDocuments(
 ): Promise<{
   validDocs: BatchDoc[];
   validationErrors: ValidationError[];
+  warnings: ValidationError[];
   expandedCount: number;
 }> {
   const results = await validateDocumentsAtomicity(docs, model);
 
   const validDocs: BatchDoc[] = [];
   const validationErrors: ValidationError[] = [];
+  const warnings: ValidationError[] = [];
   let expandedCount = 0;
 
   for (let i = 0; i < docs.length; i++) {
@@ -81,6 +83,9 @@ export async function validateDocuments(
 
     if (result.valid) {
       validDocs.push(docs[i]);
+      if (result.warning) {
+        warnings.push({ title: docs[i].title, message: result.warning });
+      }
     } else if (result.suggestedSplits && result.suggestedSplits.length > 0) {
       // Expand: replace the failed doc with its suggested splits
       for (const split of result.suggestedSplits) {
@@ -103,7 +108,7 @@ export async function validateDocuments(
     }
   }
 
-  return { validDocs, validationErrors, expandedCount };
+  return { validDocs, validationErrors, warnings, expandedCount };
 }
 
 /**

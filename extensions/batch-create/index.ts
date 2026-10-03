@@ -22,7 +22,7 @@ import { validateCitations } from "../../common/citation-validation.js";
 import { getKnowledgeConfig } from "../../common/env.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 
-import type { BatchDoc, CitationViolation } from "./batch-helpers.js";
+import type { BatchDoc, CitationViolation, CreatedFile, ValidationError } from "./batch-helpers.js";
 import type { SqliteDb } from "../para-knowledge/sqlite-types.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -56,6 +56,57 @@ async function createAndIndexAll(
   const created = await createFilesOnDisk(docs, knowledgeDir);
   await indexDocumentsInDb(docs, created, cwd);
   return created;
+}
+
+/** Early response when atomicity validation rejected every document. */
+function noValidDocsResponse(validationErrors: ValidationError[]): {
+  content: Array<{ type: "text"; text: string }>;
+  details: Record<string, unknown>;
+} {
+  const lines = validationErrors.map((e) => `  • "${e.title}": ${e.message}`).join("\n");
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `❌ All ${validationErrors.length} document(s) failed atomicity validation:\n\n${lines}`,
+      },
+    ],
+    details: { error: "ALL_ATOMICITY_VIOLATIONS", validationErrors },
+  };
+}
+
+/** Run batch auto-linking with error tolerance; returns linked count (-1 on failure). */
+async function runAutoLinkBatch(
+  doAutoLink: boolean,
+  validDocs: BatchDoc[],
+  created: CreatedFile[],
+  cwd: string,
+  warn: (text: string) => void,
+): Promise<number> {
+  if (!doAutoLink) return 0;
+  try {
+    return await autoLinkBatch(validDocs, created, cwd);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[batch-create] Auto-link error:", msg);
+    warn(`⚠️  Auto-linking error: ${msg.slice(0, 200)}.`);
+    return -1;
+  }
+}
+
+/** Warning note for docs created without atomicity verification. */
+function buildWarningNote(warnings: ValidationError[]): string {
+  if (warnings.length === 0) return "";
+  return (
+    `\n⚠️  ${warnings.length} document(s) created WITHOUT atomicity verification:\n` +
+    warnings.map((w) => `  • "${w.title}": ${w.message}`).join("\n")
+  );
+}
+
+/** Note describing how many docs were decomposed into atomic splits. */
+function buildExpansionNote(expandedCount: number, errorCount: number): string {
+  if (expandedCount === 0) return "";
+  return `\n📐 Decomposed ${errorCount} document(s) into ${expandedCount} atomic notes`;
 }
 
 function buildCitationErrorResponse(violations: CitationViolation[]): {
@@ -142,30 +193,16 @@ export default function (pi: ExtensionAPI): void {
       const { dir: knowledgeDir } = getKnowledgeConfig(ctx.cwd);
 
       // Atomicity validation with auto-expansion
-      const { validDocs, validationErrors, expandedCount } = await validateDocuments(
-        docs,
-        ctx.model!,
-      );
+      const {
+        validDocs,
+        validationErrors,
+        warnings = [],
+        expandedCount,
+      } = await validateDocuments(docs, ctx.model!);
 
-      // If no valid docs remain, return errors immediately
-      if (validDocs.length === 0) {
-        const lines = validationErrors.map((e) => `  • "${e.title}": ${e.message}`).join("\n");
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ All ${validationErrors.length} document(s) failed atomicity validation:\n\n${lines}`,
-            },
-          ],
-          details: {
-            error: "ALL_ATOMICITY_VIOLATIONS",
-            validationErrors,
-          },
-        };
-      }
+      if (validDocs.length === 0) return noValidDocsResponse(validationErrors);
 
-      // Citation validation — validate ALL documents (including atomicity-passing)
-      // If ANY doc has unresolved citations, reject the entire batch
+      // Citation validation — reject the batch when any citekey is unresolved
       const db = await ensureNotesDb(ctx.cwd);
       const citationViolations = findCitationViolations(docs, db);
       if (citationViolations.length > 0) {
@@ -205,33 +242,22 @@ export default function (pi: ExtensionAPI): void {
         };
       }
 
-      // Step 3: Auto-link across the batch
-      let linkedCount = 0;
+      // Step 3: Auto-link across the batch (error-tolerant)
       if (doAutoLink) {
         onUpdate?.({
           content: [{ type: "text", text: "🔗 Running batch semantic auto-linking…" }],
           details: {},
         });
-
-        try {
-          linkedCount = await autoLinkBatch(validDocs, created, ctx.cwd);
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.error("[batch-create] Auto-link error:", msg);
-          onUpdate?.({
-            content: [
-              { type: "text" as const, text: `⚠️  Auto-linking error: ${msg.slice(0, 200)}.` },
-            ],
-            details: {},
-          });
-        }
       }
+      const warn = (text: string): void => {
+        onUpdate?.({ content: [{ type: "text" as const, text }], details: {} });
+      };
+      const linkedCount = await runAutoLinkBatch(doAutoLink, validDocs, created, ctx.cwd, warn);
 
-      const skippedNote = buildSkippedNote(validationErrors);
-      const expansionNote =
-        expandedCount > 0
-          ? `\n📐 Decomposed ${validationErrors.length} document(s) into ${expandedCount} atomic notes`
-          : "";
+      const notes =
+        buildSkippedNote(validationErrors) +
+        buildExpansionNote(expandedCount, validationErrors.length) +
+        buildWarningNote(warnings);
       const linkNote = doAutoLink
         ? `\n🔗 Auto-linked: ${linkedCount}/${created.length} documents received markdown links`
         : "";
@@ -240,7 +266,7 @@ export default function (pi: ExtensionAPI): void {
         content: [
           {
             type: "text",
-            text: buildCreatedSummary(created, linkNote, skippedNote + expansionNote),
+            text: buildCreatedSummary(created, linkNote, notes),
           },
         ],
         details: {
@@ -250,6 +276,7 @@ export default function (pi: ExtensionAPI): void {
           linkedCount,
           expandedCount,
           validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
         },
       };
     },

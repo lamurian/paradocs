@@ -25,6 +25,30 @@ export type LlmCallResult<T> =
   | { ok: false; type: "cancelled" }
   | { ok: false; type: "error"; message: string };
 
+/**
+ * Race a promise against a wall-clock timeout.
+ *
+ * @param work - The promise to await.
+ * @param timeoutMs - Timeout in milliseconds.
+ * @returns The promise result, or rejects with a timeout error.
+ */
+async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`LLM call timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // ── Exports ──────────────────────────────────────────────────────────
 
 /**
@@ -40,6 +64,7 @@ export type LlmCallResult<T> =
  * @param messageContent - User message content array (type+text pairs).
  * @param parseFn - Function to parse the LLM response text into type T.
  * @param signal - Optional AbortSignal for cancellation.
+ * @param timeoutMs - Optional wall-clock timeout; errors when exceeded.
  * @returns A promise resolving to an LlmCallResult.
  */
 export async function callLlmDirect<T>(
@@ -49,6 +74,7 @@ export async function callLlmDirect<T>(
   messageContent: { type: "text"; text: string }[],
   parseFn: (text: string) => T | null,
   signal?: AbortSignal,
+  timeoutMs?: number,
 ): Promise<LlmCallResult<T>> {
   try {
     const userMessage: UserMessage = {
@@ -56,11 +82,12 @@ export async function callLlmDirect<T>(
       content: messageContent,
       timestamp: Date.now(),
     };
-    const response = await complete(
+    const work = complete(
       model,
       { systemPrompt, messages: [userMessage] },
       { apiKey: auth.apiKey, headers: auth.headers, signal },
     );
+    const response = timeoutMs && timeoutMs > 0 ? await withTimeout(work, timeoutMs) : await work;
     if (response.stopReason === "aborted") {
       return { ok: false, type: "cancelled" };
     }

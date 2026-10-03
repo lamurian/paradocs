@@ -101,6 +101,7 @@ async function importFresh(): Promise<{
     Promise.resolve({
       validDocs: docs,
       validationErrors: [],
+      warnings: [],
       expandedCount: 0,
     }),
   );

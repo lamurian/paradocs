@@ -1,30 +1,68 @@
 /**
- * ask tool — full research pipeline for the agent.
+ * ask tool — deterministic research pipeline with quick/deep modes.
  *
- * Reformulates the question into 1-3 research questions, runs the research
- * engine (KB-first subagents), writes results back to the knowledge base
- * (KNOWLEDGE_DIR from .env, not cwd), and returns sources, note paths, and
- * a synthesized answer.
+ * Quick mode (default) runs the FSM orchestrator in-tool with the ask-quick
+ * profile; when the deterministic guard reports a scope shortfall on a
+ * healthy pipeline, it auto-escalates into a detached deep job seeded with
+ * the collected state. Deep mode starts that background job immediately and
+ * delivers results via a followUp user message. Every result carries the
+ * digest (questions per cycle, source count, gaps) and the state path.
  *
  * @module extensions/commands/tools/ask
  */
 
 import { Type } from "typebox";
 
-import { configureEnv } from "../../../common/env.js";
-import { callLlmDirect } from "../../../common/llm.js";
-import { runResearchEngine } from "../../research-engine/runner.js";
-import { writeBackToKB } from "../../research-engine/writeback.js";
-import { parseQuestions, REFORMULATION_PROMPT, SYNTHESIS_PROMPT } from "../ask.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
+import { checkpointPathFor } from "../../research-engine/checkpoint.js";
+import { buildResearchDeps } from "../../research-engine/deps.js";
+import { canonicalizeUrl } from "../../research-engine/fetcher.js";
+import { runResearch } from "../../research-engine/orchestrator.js";
+import { ASK_DEEP_PROFILE, ASK_QUICK_PROFILE } from "../../research-engine/profiles.js";
+import { buildDigest } from "../../research-engine/state.js";
 
+import type { ResearchAuth } from "../../research-engine/deps.js";
+import type { GateProfile, ResearchState } from "../../research-engine/state.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-/** Resolved authentication for the research pipeline. */
-interface ToolAuth {
-  model: Model<Api>;
-  apiKey: string;
-  headers?: Record<string, string>;
+/** Answer text for a terminal state (errors surfaced, never swallowed). */
+function answerOf(state: ResearchState): string {
+  return state.synthesis && state.synthesis.trim().length > 0
+    ? state.synthesis
+    : `_(synthesis unavailable: ${state.synthesisError ?? "no sources collected"})_`;
+}
+
+/**
+ * Render the tool result: answer, digest, escalation line, state path.
+ *
+ * @param state - Terminal research state.
+ * @param statePath - Checkpoint file path for the job.
+ * @param deepJobId - Detached deep job id when escalation fired.
+ * @returns Tool result text.
+ */
+export function renderToolResult(
+  state: ResearchState,
+  statePath: string,
+  deepJobId?: string,
+): string {
+  const digest = buildDigest(state);
+  const cycles = digest.questionsByCycle
+    .map((qs, i) => `cycle${i + 1}: [${qs.join("; ")}]`)
+    .join(" | ");
+  const lines = [
+    `🔬 Research complete: ${state.summaries.length} source(s).`,
+    "",
+    "### Answer",
+    answerOf(state),
+    "",
+    `Digest: questions by cycle: ${cycles || "(none)"}; sources: ${digest.sourceCount}; gaps: ${digest.gaps.join("; ") || "(none)"}`,
+  ];
+  if (state.escalation?.escalate && deepJobId) {
+    lines.push(`⚡ escalated to deep research: ${state.escalation.reason} (job ${deepJobId})`);
+  }
+  lines.push(`State: ${statePath}`);
+  return lines.join("\n");
 }
 
 /**
@@ -35,7 +73,7 @@ interface ToolAuth {
  */
 async function resolveToolAuth(
   ctx: ExtensionContext,
-): Promise<{ auth: ToolAuth } | { error: string }> {
+): Promise<{ auth: ResearchAuth } | { error: string }> {
   if (!ctx.model) {
     return { error: "❌ No model selected for the research pipeline." };
   }
@@ -47,35 +85,46 @@ async function resolveToolAuth(
   return { auth: { model, apiKey: auth.apiKey, headers: auth.headers } };
 }
 
-/**
- * Register the ask tool.
- *
- * @param pi - The pi extension API instance.
- */
+/** Register the ask tool. */
 export function registerAskTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "ask",
     label: "Ask the Knowledge Base",
     description:
-      "Full research pipeline for a question: reformulates it into 1-3 research questions, " +
-      "runs KB-first research subagents (web sources, 10-50 per run), writes results back to " +
-      "the knowledge base (KNOWLEDGE_DIR from .env, not the current working directory), and " +
-      "returns sources, note paths, and a synthesized answer.",
+      "Deterministic research pipeline for a question: KB-first, then tiered web search, " +
+      "per-source summarization, and sufficiency-gated cycles. Writes results back to the " +
+      "knowledge base (KNOWLEDGE_DIR from .env, not the cwd). Quick mode runs in-tool " +
+      "(1 cycle, 5 sources); deep mode runs a background job and delivers via followUp.",
     promptSnippet:
-      "Full research pipeline — KB-first subagent research, knowledge base write-back, synthesized answer",
+      "Deterministic research pipeline — KB-first, sufficiency-gated cycles, knowledge base write-back",
     promptGuidelines: [
       "Call ask first when you need supporting information — it researches the knowledge base and web, then improves the knowledge base.",
       "Results are written to KNOWLEDGE_DIR (from .env), not the current working directory.",
-      "The tool returns {url, snippet} sources, created/updated note paths, and a synthesized answer.",
-      "Consider freshness: notes on fast-moving topics (tech, AI, medicine) may be outdated even when relevant.",
+      'Pass mode:"deep" for broad questions; results arrive as a follow-up message while you keep working.',
+      "Pass avoidQuestions/knownSources from a previous result's digest to avoid duplicate work.",
+      "Every result includes the digest, gaps, and the state file path for inspection.",
     ],
     parameters: Type.Object({
       question: Type.String({ description: "The question to research" }),
+      mode: Type.Optional(
+        Type.Union([Type.Literal("quick"), Type.Literal("deep")], {
+          description: "quick (default, in-tool) or deep (background job, followUp delivery)",
+        }),
+      ),
+      avoidQuestions: Type.Optional(
+        Type.Array(Type.String(), {
+          description: "Questions already asked in earlier runs — never repeated",
+        }),
+      ),
+      knownSources: Type.Optional(
+        Type.Array(Type.String(), {
+          description: "URLs already collected — skipped",
+        }),
+      ),
     }),
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       configureEnv(ctx.cwd);
-
       onUpdate?.({
         content: [{ type: "text" as const, text: "🔬 Researching knowledge base and web…" }],
         details: {},
@@ -85,91 +134,96 @@ export function registerAskTool(pi: ExtensionAPI): void {
       if (!question) {
         return {
           content: [{ type: "text" as const, text: "📭 No question provided." }],
-          details: {
-            sources: [],
-            writeback: { created: [], updated: [], skipped: ["no question"] },
-            answer: "",
-          },
+          details: { jobId: "", statePath: "", digest: null },
         };
       }
+      const authResult = await resolveToolAuth(ctx);
+      if ("error" in authResult) {
+        return {
+          content: [{ type: "text" as const, text: authResult.error }],
+          details: { jobId: "", statePath: "", digest: null },
+        };
+      }
+      const { auth } = authResult;
 
-      try {
-        const authResult = await resolveToolAuth(ctx);
-        if ("error" in authResult) {
-          return {
-            content: [{ type: "text" as const, text: authResult.error }],
-            details: {
-              sources: [],
-              writeback: { created: [], updated: [], skipped: [authResult.error] },
-              answer: "",
-            },
-          };
-        }
-        const { auth } = authResult;
+      const deep = params.mode === "deep";
+      const profile: GateProfile = deep ? ASK_DEEP_PROFILE : ASK_QUICK_PROFILE;
+      const jobId = `ask-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const knowledgeDir = getKnowledgeConfig(ctx.cwd).dir;
+      const statePath = checkpointPathFor(knowledgeDir, jobId);
+      const seed = {
+        askedQuestions: (params.avoidQuestions ?? []).map((s) => s.trim()).filter(Boolean),
+        visited: (params.knownSources ?? []).filter(Boolean).map(canonicalizeUrl),
+      };
+      const deps = buildResearchDeps(ctx, auth, { allowEscalation: !deep });
 
-        // Step 1: Reformulate into 1-3 research questions
-        const reform = await callLlmDirect<string[]>(
-          auth.model,
-          auth,
-          REFORMULATION_PROMPT,
-          [{ type: "text", text: `Question: ${question}` }],
-          (text) => parseQuestions(text, question),
+      const deliver = (state: ResearchState, path: string): void => {
+        pi.sendUserMessage(
+          `🔬 Deep research finished for "${question}":\n\n${renderToolResult(state, path)}`,
+          { deliverAs: "followUp" },
         );
-        const questions = reform.ok ? reform.value : [question];
-
-        // Step 2: Research engine + Step 3: KB write-back
-        const result = await runResearchEngine(questions, ctx);
-        const writeback = await writeBackToKB(result, {
-          cwd: ctx.cwd,
-          model: auth.model,
-          modelRegistry: ctx.modelRegistry,
+      };
+      const deliverFailure = (jobLabel: string, e: unknown): void => {
+        const msg = e instanceof Error ? e.message : String(e);
+        pi.sendUserMessage(`🔬 Deep research ${jobLabel} for "${question}": ${msg.slice(0, 200)}`, {
+          deliverAs: "followUp",
         });
+      };
 
-        // Step 4: Synthesize the answer
-        const sourcesStr = result.sources.map((s) => `- ${s.url}: ${s.snippet}`).join("\n");
-        const synth = await callLlmDirect<string>(
-          auth.model,
-          auth,
-          SYNTHESIS_PROMPT,
-          [{ type: "text", text: `Question: ${question}\n\nSources:\n${sourcesStr || "(none)"}` }],
-          (text) => text.trim(),
-        );
-        const answer = synth.ok && synth.value ? synth.value : "_(synthesis unavailable)_";
-
-        const sourceLines = result.sources.map((s) => `- ${s.url}: ${s.snippet}`);
-        const wbLines = [
-          ...writeback.created.map((p) => `created: ${p}`),
-          ...writeback.updated.map((p) => `updated: ${p}`),
-          ...writeback.skipped.map((s) => `skipped: ${s}`),
-        ];
+      if (deep) {
+        void runResearch(deps, { question, mode: "breadth", profile, jobId, seed })
+          .then((state) => deliver(state, statePath))
+          .catch((e: unknown) => deliverFailure("failed", e));
         return {
           content: [
             {
               type: "text" as const,
-              text:
-                `🔬 Research complete: ${result.sources.length} source${result.sources.length === 1 ? "" : "s"}.\n\n` +
-                `${sourceLines.join("\n") || "(no sources found)"}\n\n` +
-                `Knowledge base write-back (KNOWLEDGE_DIR):\n` +
-                `${wbLines.join("\n") || "(nothing written)"}\n\n` +
-                `### Answer\n\n${answer}`,
+              text: `🔬 Deep research started (job ${jobId}). Results will arrive as a follow-up message.`,
             },
           ],
-          details: { sources: result.sources, writeback, answer, questions },
-        };
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error("[ask tool]", msg);
-        return {
-          content: [
-            { type: "text" as const, text: `❌ Research pipeline error: ${msg.slice(0, 200)}` },
-          ],
-          details: {
-            sources: [],
-            writeback: { created: [], updated: [], skipped: [msg] },
-            answer: "",
-          },
+          details: { jobId, statePath, mode: "deep" },
         };
       }
+
+      const state = await runResearch(deps, {
+        question,
+        mode: "breadth",
+        profile,
+        jobId,
+        seed,
+      });
+
+      let deepJobId: string | undefined;
+      if (state.stage === "ESCALATED" && state.escalation?.escalate) {
+        deepJobId = `${jobId}-deep`;
+        const deepDeps = buildResearchDeps(ctx, auth, {});
+        const deepPath = checkpointPathFor(knowledgeDir, deepJobId);
+        void runResearch(deepDeps, {
+          question,
+          mode: "depth",
+          profile: ASK_DEEP_PROFILE,
+          jobId: deepJobId,
+          seed: {
+            visited: state.visited,
+            summaries: state.summaries,
+            askedQuestions: state.askedQuestions,
+          },
+        })
+          .then((s) => deliver(s, deepPath))
+          .catch((e: unknown) => deliverFailure("failed", e));
+      }
+
+      return {
+        content: [{ type: "text" as const, text: renderToolResult(state, statePath, deepJobId) }],
+        details: {
+          jobId,
+          deepJobId,
+          statePath,
+          digest: buildDigest(state),
+          answer: state.synthesis ?? "",
+          sources: state.summaries,
+        },
+      };
     },
   });
 }

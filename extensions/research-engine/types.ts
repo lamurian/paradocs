@@ -12,6 +12,10 @@ export interface ResearchSource {
   snippet: string;
   /** Optional source title. */
   title?: string;
+  /** Optional authors ("Last, First" format) for citation fallback metadata. */
+  authors?: string[];
+  /** Optional publication year for citation fallback metadata. */
+  year?: number;
   /** Optional search tier the source was found in (1-3). */
   tier?: number;
 }

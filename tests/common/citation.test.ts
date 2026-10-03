@@ -110,4 +110,32 @@ describe("resolveCitation shared module", () => {
     expect(result.isNew).toBe(false);
     expect(result.error).toContain("Could not parse");
   });
+
+  it("should fall back with title+year alone, author defaults to unknown (T10)", async () => {
+    const { resolveCitation } = await import("../../common/citation.js");
+
+    const result = await resolveCitation(
+      { source: "https://promptessor.com/blog/llm-guardrails-guide", title: "T", year: 2026 },
+      { cwd: tmpDir },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(result.isNew).toBe(true);
+    expect(result.citekey).toBe("unknown2026");
+    expect(result.bibtex).toContain("@misc{unknown2026");
+    expect(result.bibtex).toContain("author = {unknown}");
+    expect(result.bibtex).toContain("T");
+  });
+
+  it("should still fail without a title even when year is present (T10)", async () => {
+    const { resolveCitation } = await import("../../common/citation.js");
+
+    const result = await resolveCitation(
+      { source: "https://genai.owasp.org/", year: 2026 },
+      { cwd: tmpDir },
+    );
+
+    expect(result.citekey).toBeNull();
+    expect(result.error).toContain("Could not parse");
+  });
 });

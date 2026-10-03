@@ -9,9 +9,10 @@
  * prompt is set directly on session.agent.state to avoid file I/O from
  * custom ResourceLoader configuration.
  *
- * On sub-agent creation failure (infrastructure issue), fails closed
- * (rejects). On JSON parse error (LLM produced non-JSON), fails open
- * (accepts) to avoid blocking document creation.
+ * On sub-agent failure (infrastructure issue), retries once and then
+ * fails open: content is accepted with an "atomicity unverified" warning
+ * that carries the underlying error. On JSON parse error (LLM produced
+ * non-JSON), fails open (accepts) to avoid blocking document creation.
  *
  * @module common/atomicity
  */
@@ -42,6 +43,11 @@ export interface AtomicityResult {
   /** Human-readable message explaining the result. */
   message: string;
   /**
+   * Set when the atomicity check could not run (sub-agent unavailable
+   * after retry). Content is accepted (fail-open) but unverified.
+   */
+  warning?: string;
+  /**
    * When valid=false, the decomposed atomic notes the agent should
    * create instead. Each entry has its own title, content, tags,
    * and an inferred PARA area.
@@ -66,22 +72,25 @@ export interface BatchDoc {
 
 // ── Sub-agent helper ────────────────────────────────────────────────
 
+/** Outcome of one sub-agent attempt. */
+interface SubAgentOutcome {
+  ok: boolean;
+  text?: string;
+  error?: string;
+}
+
 /**
- * Spawn an ephemeral sub-agent to evaluate atomicity.
+ * Spawn an ephemeral sub-agent to evaluate atomicity (single attempt).
  *
- * Creates a minimal session using the default ResourceLoader (no custom
- * extensions or skills needed), then immediately sets the system prompt
- * on the agent state. This avoids file I/O dependencies from
- * DefaultResourceLoader configuration.
- *
- * The sub-agent receives the document title and content as a user
- * message and returns JSON via text deltas in the event stream.
+ * Creates a minimal session using the default ResourceLoader, sets the
+ * system prompt directly on the agent state, and returns the accumulated
+ * response text. Failures return a typed error instead of throwing.
  *
  * @param model   - The LLM model to use (inherited from parent).
  * @param userMessage - The message to send (title + content).
- * @returns The accumulated response text, or null on failure.
+ * @returns Outcome with response text, or a typed error.
  */
-async function spawnAtomicitySubAgent(model: Model, userMessage: string): Promise<string | null> {
+async function spawnAtomicitySubAgent(model: Model, userMessage: string): Promise<SubAgentOutcome> {
   let session;
   try {
     const result = await createAgentSession({
@@ -90,14 +99,11 @@ async function spawnAtomicitySubAgent(model: Model, userMessage: string): Promis
       noTools: "all",
     });
     session = result.session;
-  } catch {
-    return null;
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
   try {
-    // Set the system prompt directly on the agent state.
-    // This is the simplest way to override the prompt without a
-    // custom ResourceLoader.
     session.agent.state.systemPrompt = ATOMICITY_SYSTEM_PROMPT;
 
     let fullText = "";
@@ -109,12 +115,40 @@ async function spawnAtomicitySubAgent(model: Model, userMessage: string): Promis
 
     await session.prompt(userMessage);
     unsubscribe();
-    return fullText || null;
-  } catch {
-    return null;
+    return fullText
+      ? { ok: true, text: fullText }
+      : { ok: false, error: "empty sub-agent response" };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   } finally {
     session.dispose();
   }
+}
+
+/**
+ * Run the sub-agent with one retry; on total failure produce the
+ * fail-open "atomicity unverified" result carrying the real error.
+ *
+ * @param model - The LLM model to use.
+ * @param userMessage - The message to send.
+ * @returns Response text, or the fail-open warning result.
+ */
+async function runWithRetry(
+  model: Model,
+  userMessage: string,
+): Promise<{ text: string } | { unverified: AtomicityResult }> {
+  const first = await spawnAtomicitySubAgent(model, userMessage);
+  if (first.ok && first.text !== undefined) return { text: first.text };
+  const retry = await spawnAtomicitySubAgent(model, userMessage);
+  if (retry.ok && retry.text !== undefined) return { text: retry.text };
+  const err = retry.error ?? first.error ?? "unknown error";
+  return {
+    unverified: {
+      valid: true,
+      message: `atomicity unverified: ${err}`,
+      warning: `atomicity unverified: ${err}`,
+    },
+  };
 }
 
 // ── Main exports ─────────────────────────────────────────────────────
@@ -126,8 +160,9 @@ async function spawnAtomicitySubAgent(model: Model, userMessage: string): Promis
  * exactly one question (implicit/explicit) and one answer. If not,
  * the sub-agent decomposes the content into suggested atomic splits.
  *
- * Fails closed on sub-agent creation failure (infrastructure issue).
- * Fails open on JSON parse error (LLM produced unparseable output).
+ * Fails open with an "atomicity unverified" warning (after one retry)
+ * when the sub-agent is unavailable. Fails open on JSON parse error
+ * (LLM produced unparseable output).
  *
  * @param content - Markdown body content (without YAML frontmatter).
  * @param title   - Document title for context.
@@ -146,16 +181,10 @@ export async function validateAtomicity(
   }
 
   const userMessage = `Title: ${title}\n\nContent:\n${content}`;
-  const response = await spawnAtomicitySubAgent(model, userMessage);
+  const outcome = await runWithRetry(model, userMessage);
+  if ("unverified" in outcome) return outcome.unverified;
 
-  if (response === null) {
-    return {
-      valid: false,
-      message: "Sub-agent unavailable — atomicity check could not run.",
-    };
-  }
-
-  const result = parseAtomicityResult(response);
+  const result = parseAtomicityResult(outcome.text);
   if (result === null) {
     return {
       valid: true,
@@ -172,8 +201,9 @@ export async function validateAtomicity(
  * The sub-agent evaluates all documents at once and returns an array
  * of per-document results.
  *
- * Fails closed on sub-agent creation failure (infrastructure issue).
- * Fails open on JSON parse error (unparseable output).
+ * Fails open with per-doc "atomicity unverified" warnings (after one
+ * retry) when the sub-agent is unavailable. Fails open on JSON parse
+ * error (unparseable output).
  *
  * @param docs  - Array of documents to validate.
  * @param model - The LLM model to use (from parent session).
@@ -191,16 +221,12 @@ export async function validateDocumentsAtomicity(
     .join("\n\n---\n\n");
 
   const userMessage = `Evaluate the following ${docs.length} document(s) for atomicity:\n\n${docTexts}`;
-  const response = await spawnAtomicitySubAgent(model, userMessage);
-
-  if (response === null) {
-    return docs.map(() => ({
-      valid: false,
-      message: "Sub-agent unavailable — atomicity check could not run.",
-    }));
+  const outcome = await runWithRetry(model, userMessage);
+  if ("unverified" in outcome) {
+    return docs.map(() => ({ ...outcome.unverified }));
   }
 
-  const results = parseAtomicityResultsArray(response, docs.length);
+  const results = parseAtomicityResultsArray(outcome.text, docs.length);
   if (results === null) {
     return docs.map(() => ({
       valid: true,

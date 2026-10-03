@@ -150,18 +150,19 @@ async function parseCitationSource(
     };
   }
 
-  if (params.title && params.authors && params.authors.length > 0 && params.year) {
-    const authorFamily = params.authors[0].split(",")?.[0]?.trim() || "unknown";
+  if (params.title && params.year) {
+    const authors = params.authors && params.authors.length > 0 ? params.authors : ["unknown"];
+    const authorFamily = authors[0].split(",")?.[0]?.trim() || "unknown";
     const year = params.year;
     const accessed = params.accessed || new Date().toISOString().slice(0, 10);
-    const bibtex = buildMiscEntry(source, params.title, params.authors, year, accessed);
+    const bibtex = buildMiscEntry(source, params.title, authors, year, accessed);
     return { bibtex, authorFamily, year, doi, url: source };
   }
 
   return {
     error:
       `Could not parse "${source}" via citation.js and no fallback metadata provided.` +
-      '\nProvide: title, authors (array of "Last, First"), year.',
+      "\nProvide: title and year (authors optional).",
   };
 }
 
