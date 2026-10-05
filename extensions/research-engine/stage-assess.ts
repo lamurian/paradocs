@@ -1,6 +1,11 @@
 /**
  * ASSESS, SYNTHESIZE, and WRITE_BACK stage executors.
  *
+ * LLM boundaries run through the subagent transport (deps.llm with a
+ * role → per-role timeout). SYNTHESIZE applies a deterministic fallback
+ * chain when the subagent fails: joined summaries → KB docs + fetched
+ * source titles/URLs — research material is never discarded.
+ *
  * @module extensions/research-engine/stage-assess
  */
 
@@ -55,7 +60,7 @@ export async function stageAssess(
         state.kbDocs.map((d) => d.title).join("; ") || "none"
       }`,
       parse: (t) => parseJudge(t),
-      timeoutMs: deps.llmTimeoutMs,
+      role: "judge",
       label: "Assessing…",
     });
     if (res.ok && res.value && typeof res.value === "object") {
@@ -102,11 +107,34 @@ export async function stageAssess(
 }
 
 /**
- * SYNTHESIZE: final answer from summaries or KB gists.
+ * Deterministic synthesis fallback chain.
+ *
+ * synthesis text → joined summaries → KB doc titles/paths + fetched
+ * source titles/URLs. Never discards collected research material.
+ *
+ * @param state - Current research state.
+ * @returns Fallback answer text, or empty string when nothing collected.
+ */
+export function synthesisFallback(state: ResearchState): string {
+  if (state.summaries.length > 0) {
+    return state.summaries
+      .map((s) => `- ${s.url}${s.title ? ` (${s.title})` : ""}: ${s.summary}`)
+      .join("\n");
+  }
+  const lines: string[] = [];
+  for (const d of state.kbDocs) lines.push(`- KB: ${d.title} (${d.path})`);
+  for (const f of state.fetches.filter((r) => r.ok)) {
+    lines.push(`- ${f.url}${f.title ? ` (${f.title})` : ""}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * SYNTHESIZE: subagent answer with deterministic fallback.
  *
  * @param state - Current research state.
  * @param deps - Injected I/O surface.
- * @returns synthesized event (error surfaced, never swallowed).
+ * @returns synthesized event (fallback body on subagent failure).
  */
 export async function stageSynthesize(
   state: ResearchState,
@@ -121,18 +149,19 @@ export async function stageSynthesize(
     system: prompt("synthesis"),
     user: `Question: ${state.question}\n\nSources:\n${context || "(none collected)"}`,
     parse: (t) => parseSynthesis(t),
-    timeoutMs: deps.llmTimeoutMs,
+    role: "synthesis",
     label: "Synthesizing…",
   });
-  if (!res.ok || typeof res.value !== "string" || res.value.trim().length === 0) {
-    return {
-      type: "synthesized",
-      synthesis: "",
-      error: res.ok ? "empty synthesis response" : (res.error ?? "synthesis call failed"),
-      llmErrors: res.ok ? 0 : 1,
-    };
+  if (res.ok && typeof res.value === "string" && res.value.trim().length > 0) {
+    return { type: "synthesized", synthesis: res.value };
   }
-  return { type: "synthesized", synthesis: res.value };
+  const error = res.ok ? "empty synthesis response" : (res.error ?? "synthesis call failed");
+  return {
+    type: "synthesized",
+    synthesis: synthesisFallback(state),
+    error,
+    llmErrors: res.ok ? 0 : 1,
+  };
 }
 
 /**
@@ -158,7 +187,12 @@ export async function stageWriteBack(
     };
   });
   try {
-    const writeback = await deps.writeBack({ sources, questions: state.askedQuestions });
+    const writeback = await deps.writeBack({
+      sources,
+      questions: state.askedQuestions,
+      jobId: state.jobId,
+      synthesis: state.synthesis,
+    });
     return { type: "writeback_done", writeback };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

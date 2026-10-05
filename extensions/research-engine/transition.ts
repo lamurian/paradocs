@@ -11,7 +11,7 @@
  */
 
 import { TERMINAL_STAGES } from "./events.js";
-import { HANDLERS, abortedTransition, budgetTransition } from "./transition-handlers.js";
+import { HANDLERS, commit } from "./transition-handlers.js";
 
 import type { ResearchEvent } from "./events.js";
 import type { ResearchState } from "./state.js";
@@ -21,6 +21,18 @@ export { TERMINAL_STAGES } from "./events.js";
 export { stageEffects } from "./stage-effects.js";
 export type { ResearchEvent } from "./events.js";
 export type { Transition } from "./transition-handlers.js";
+
+/** abort event → CANCELLED with a checkpoint effect. */
+function abortedTransition(prev: ResearchState, event: ResearchEvent, now: number): Transition {
+  const state = commit(prev, "CANCELLED", event, now);
+  return { state, effects: [{ kind: "checkpoint" }] };
+}
+
+/** Budget guard on transition entry → forced degraded SYNTHESIZE. */
+function budgetTransition(prev: ResearchState, event: ResearchEvent, now: number): Transition {
+  const state = commit(prev, "SYNTHESIZE", event, now, { deadlineHit: true, degraded: true });
+  return { state, effects: [{ kind: "checkpoint" }, { kind: "synthesize", degraded: true }] };
+}
 
 /**
  * Apply one event to the research state.

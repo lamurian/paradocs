@@ -1,5 +1,10 @@
 /**
- * Tests for the researcher.md agent definition — deterministic workflow.
+ * Tests for the researcher.md search-subagent prompt contract.
+ *
+ * The prompt is passed as literal system-prompt text to the search
+ * subagent (never as a file path) and must encode: tiered web_search
+ * usage, suitability assessment, and the {sources, coveredFacets} JSON
+ * output contract. It must NOT instruct fetching or KB writes.
  *
  * @module tests/research-engine/researcher-prompt.test
  */
@@ -13,88 +18,55 @@ import { describe, it, expect } from "vitest";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROMPT_PATH = resolve(HERE, "../../extensions/research-engine/prompts/researcher.md");
 
-/** Parse simple YAML frontmatter (key: value lines) from the agent file. */
-function parseFrontmatter(content: string): Record<string, string> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  const fm: Record<string, string> = {};
-  for (const line of match[1].split("\n")) {
-    const kv = line.match(/^(\w+):\s*(.*)$/);
-    if (kv) fm[kv[1]] = kv[2].trim();
-  }
-  return fm;
-}
-
-/** Extract the body after the closing frontmatter fence. */
-function getBody(content: string): string {
-  const match = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
-  return match ? match[1] : content;
-}
-
-describe("researcher.md agent definition", () => {
+describe("researcher.md search-subagent prompt", () => {
   it("should exist at the expected path", () => {
     expect(existsSync(PROMPT_PATH)).toBe(true);
   });
 
-  it("should declare name=researcher and required tools in frontmatter", () => {
+  it("should be pure prompt text with no YAML frontmatter fence", () => {
     const content = readFileSync(PROMPT_PATH, "utf-8");
-    const fm = parseFrontmatter(content);
-
-    expect(fm.name).toBe("researcher");
-    expect(fm.tools).toContain("search_para_docs");
-    expect(fm.tools).toContain("web_search");
-    expect(fm.tools).toContain("fetch_url");
-    expect(fm.tools).toContain("batch_extract_failed");
-    expect(fm.tools).toContain("resolve_citation");
+    // The prompt is injected verbatim via --append-system-prompt; a
+    // frontmatter block would pollute the system prompt.
+    expect(content.startsWith("---")).toBe(false);
   });
 
-  it("should encode KB-first search as the mandatory first workflow step", () => {
-    const body = getBody(readFileSync(PROMPT_PATH, "utf-8"));
+  it("should instruct tiered web_search usage", () => {
+    const content = readFileSync(PROMPT_PATH, "utf-8");
 
-    expect(body).toContain("search_para_docs");
-    expect(body.toLowerCase()).toMatch(/first|MUST/);
-    // The KB search instruction must appear before any web search instruction
-    const kbIdx = body.indexOf("search_para_docs");
-    const webIdx = body.indexOf("web_search");
-    expect(kbIdx).toBeGreaterThan(-1);
-    if (webIdx > -1) expect(kbIdx).toBeLessThan(webIdx);
+    expect(content).toContain("web_search");
+    expect(content).toContain("tier=1");
+    expect(content).toContain("tier=2");
+    expect(content).toContain("tier=3");
   });
 
-  it("should instruct sufficiency and freshness assessment of KB results", () => {
-    const body = getBody(readFileSync(PROMPT_PATH, "utf-8")).toLowerCase();
+  it("should instruct suitability assessment of titles and snippets", () => {
+    const content = readFileSync(PROMPT_PATH, "utf-8").toLowerCase();
 
-    expect(body).toContain("sufficien");
-    expect(body).toContain("freshness");
+    expect(content).toContain("suitability");
+    expect(content).toContain("title");
+    expect(content).toContain("snippet");
   });
 
-  it("should instruct follow-up question construction when KB is insufficient", () => {
-    const body = getBody(readFileSync(PROMPT_PATH, "utf-8")).toLowerCase();
+  it("should specify JSON output with sources and coveredFacets keys", () => {
+    const content = readFileSync(PROMPT_PATH, "utf-8");
 
-    expect(body).toContain("follow-up");
-    expect(body).toContain("question");
+    expect(content.toLowerCase()).toContain("only valid json");
+    expect(content).toContain('"sources"');
+    expect(content).toContain('"coveredFacets"');
+    expect(content).toContain('"url"');
   });
 
-  it("should bound source collection between 10 and 50", () => {
-    const body = getBody(readFileSync(PROMPT_PATH, "utf-8"));
+  it("should forbid fetching and knowledge base writes", () => {
+    const content = readFileSync(PROMPT_PATH, "utf-8");
 
-    expect(body).toMatch(/10/);
-    expect(body).toMatch(/50/);
+    expect(content).toContain("Never call fetch_url");
+    expect(content).toContain("never write to them");
   });
 
-  it("should specify JSON array output of {url, snippet} objects", () => {
-    const body = getBody(readFileSync(PROMPT_PATH, "utf-8"));
+  it("should tell the subagent to deduplicate by URL and cap sources", () => {
+    const content = readFileSync(PROMPT_PATH, "utf-8").toLowerCase();
 
-    expect(body).toContain("url");
-    expect(body).toContain("snippet");
-    expect(body.toLowerCase()).toContain("json");
-  });
-
-  it("should include KNOWLEDGE_DIR guidance that files are not in cwd", () => {
-    const body = getBody(readFileSync(PROMPT_PATH, "utf-8"));
-
-    expect(body).toContain("KNOWLEDGE_DIR");
-    expect(body).toContain(".env");
-    expect(body).toContain("create_para_doc");
-    expect(body).toContain("batch_create_para_docs");
+    expect(content).toContain("deduplicate by url");
+    expect(content).toContain("at most 20");
   });
 });

@@ -36,7 +36,16 @@ export type ResearchEvent =
       kbFreshRatio: number | null;
       llmErrors?: number;
     }
-  | { type: "search_done"; candidates: Candidate[] }
+  | {
+      type: "search_done";
+      candidates: Candidate[];
+      kbDocs?: KbDocGist[];
+      kbFreshRatio?: number | null;
+      queries?: string[];
+      coveredFacets?: string[];
+      llmErrors?: number;
+      failures?: FailureRecord[];
+    }
   | { type: "ranked"; candidates: Candidate[]; llmErrors?: number }
   | { type: "fetched"; records: FetchRecord[] }
   | { type: "summarized"; items: SummaryItem[]; llmErrors?: number; failures?: FailureRecord[] }

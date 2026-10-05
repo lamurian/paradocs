@@ -13,6 +13,7 @@ import { configureEnv } from "../../common/env.js";
 import { buildResearchDeps } from "../research-engine/deps.js";
 import { DEFAULT_STAGE_MESSAGES, runResearch } from "../research-engine/orchestrator.js";
 import { RESEARCH_PROFILE } from "../research-engine/profiles.js";
+import { renderAnswerBody, renderWritebackLines } from "../research-engine/render.js";
 
 import type { ResearchAuth } from "../research-engine/deps.js";
 import type { ResearchStage, ResearchState } from "../research-engine/state.js";
@@ -29,45 +30,27 @@ export const description = "Run iterative academic research on a topic";
  * @returns Message body for pi.sendUserMessage.
  */
 export function renderResearchReport(topic: string, state: ResearchState): string {
-  const report =
-    state.synthesis && state.synthesis.trim().length > 0
-      ? state.synthesis
-      : `_(synthesis unavailable: ${state.synthesisError ?? "no sources collected"})_`;
-  const wb = state.writeback;
-  const wbLines = wb
-    ? [
-        ...wb.created.map((p) => `created: ${p}`),
-        ...wb.updated.map((p) => `updated: ${p}`),
-        ...wb.skipped.map((s) => `skipped: ${s}`),
-      ]
-    : ["(write-back not run)"];
   return (
-    `## Research Report: ${topic}\n\n${report}\n\n---\n` +
-    `📄 Knowledge base (KNOWLEDGE_DIR):\n${wbLines.join("\n") || "(no changes)"}`
+    `## Research Report: ${topic}\n\n${renderAnswerBody(state)}\n\n---\n` +
+    `Knowledge base (KNOWLEDGE_DIR):\n${renderWritebackLines(state.writeback).join("\n")}`
   );
 }
 
 /**
- * Resolve model auth for the pipeline.
+ * Resolve the runtime model for the research pipeline.
+ *
+ * Subprocesses resolve credentials themselves from ~/.pi/agent/auth.json
+ * via pi's own machinery; the extension only needs the model identity.
  *
  * @param ctx - Command context.
  * @returns Auth info, or null after notifying the user on failure.
  */
-async function resolveAuth(ctx: ExtensionCommandContext): Promise<ResearchAuth | null> {
-  if (!ctx.model) return null;
-  const model = ctx.model as ResearchAuth["model"];
-  try {
-    const result = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-    if (!result.ok || !result.apiKey) {
-      ctx.ui.notify(`❌ No API key for ${model.provider}`, "error");
-      return null;
-    }
-    return { model, apiKey: result.apiKey, headers: result.headers };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    ctx.ui.notify(`❌ Auth error: ${msg}`, "error");
+function resolveAuth(ctx: ExtensionCommandContext): ResearchAuth | null {
+  if (!ctx.model) {
+    ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
     return null;
   }
+  return { model: ctx.model };
 }
 
 /** Generate a unique research job id. */
@@ -92,9 +75,9 @@ export function createHandler(pi: ExtensionAPI) {
       ctx.ui.notify("No model selected. Please select a model first (Ctrl+P).", "error");
       return;
     }
-    ctx.ui.notify(`🔬 Researching: "${topic.slice(0, 80)}…"`, "info");
+    ctx.ui.notify(`Researching: "${topic.slice(0, 80)}…"`, "info");
 
-    const auth = await resolveAuth(ctx);
+    const auth = resolveAuth(ctx);
     if (!auth) return;
     configureEnv(ctx.cwd);
 
@@ -132,7 +115,7 @@ export function createHandler(pi: ExtensionAPI) {
       })
       .catch((e: unknown) => {
         const msg = e instanceof Error ? e.message : String(e);
-        ctx.ui.notify(`❌ Research failed: ${msg.slice(0, 200)}`, "error");
+        ctx.ui.notify(`Research failed: ${msg.slice(0, 200)}`, "error");
       });
   };
 }

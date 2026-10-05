@@ -4,6 +4,27 @@
  * @module extensions/research-engine/types
  */
 
+import type { CreateAgentSessionOptions } from "@earendil-works/pi-coding-agent";
+
+/** Runtime model object handed down by pi (used for atomicity subagents). */
+export type RuntimeModel = NonNullable<CreateAgentSessionOptions["model"]>;
+
+/** Minimal model identity for subagent CLI flags (--provider/--model). */
+export interface SubagentModel {
+  provider: string;
+  modelId: string;
+}
+
+/**
+ * Derive subagent CLI identity from a runtime model object.
+ *
+ * @param model - Runtime model from the extension context.
+ * @returns Provider name and model id for --provider/--model flags.
+ */
+export function toSubagentModel(model: RuntimeModel): SubagentModel {
+  return { provider: model.provider, modelId: model.id };
+}
+
 /** A single web source collected by the research engine. */
 export interface ResearchSource {
   /** Source URL. */
@@ -46,6 +67,14 @@ export interface ResearchResult {
   questions: string[];
   /** Assessment of existing knowledge base coverage. */
   assessment: SufficiencyResult;
+}
+
+/** Validated JSON contract returned by the search subagent. */
+export interface SearchSubagentValue {
+  /** Suitable sources with url + snippet (title/tier optional). */
+  sources: Array<{ url: string; title?: string; snippet: string; tier?: number }>;
+  /** Facets of the question the collected sources address. */
+  coveredFacets: string[];
 }
 
 /** Outcome of writing research results back to the knowledge base. */

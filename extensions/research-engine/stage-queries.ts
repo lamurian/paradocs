@@ -1,11 +1,13 @@
 /**
  * QUERY_GEN and REFINE stage executors.
  *
+ * After the subagent collapse, QUERY_GEN performs only the deterministic
+ * KB search (no LLM); the search subagent runs in the SEARCH stage.
+ * REFINE is a deterministic passthrough — next-cycle context (gaps,
+ * covered facets, visited URLs) flows through state into the search task.
+ *
  * @module extensions/research-engine/stage-queries
  */
-
-import { parseQueries, parseRefine, prompt } from "./effects.js";
-import { refineResult } from "./reformulate.js";
 
 import type { ResearchEvent } from "./events.js";
 import type { ResearchDeps } from "./research-deps.js";
@@ -35,13 +37,12 @@ export function kbFreshRatio(
   return years.filter((y) => Number(y) >= minYear).length / years.length;
 }
 
-function describePhase(state: ResearchState): string {
-  const breadth = state.mode === "breadth" && state.cycle === 1;
-  return breadth ? "breadth" : `depth (cycle ${state.cycle})`;
-}
-
 /**
- * QUERY_GEN: KB search + LLM query formulation (+ research facet fill).
+ * QUERY_GEN: deterministic KB search only (no LLM call).
+ *
+ * KB doc titles are injected into the search subagent prompt in the
+ * SEARCH stage; kbSufficient stays null (no LLM verdict), which keeps
+ * the kbCovered short-circuit conservative.
  *
  * @param state - Current research state.
  * @param deps - Injected I/O surface.
@@ -64,119 +65,30 @@ export async function stageQueryGen(
     path: d.path,
     date: d.created,
   }));
-  const freshRatio = kbFreshRatio(kbDocs, state.profile.freshnessWindowDays, now());
-  const phase = describePhase(state);
-
-  const user = [
-    `Question: ${state.question}\nPhase: ${phase}`,
-    kbDocs.length > 0
-      ? `KB documents:\n${kbDocs
-          .map((d) => `- ${d.title}${d.date ? ` (${d.date.slice(0, 10)})` : ""}`)
-          .join("\n")}`
-      : "KB documents: none found",
-    state.askedQuestions.length > 0
-      ? `Already asked (never repeat):\n${state.askedQuestions.map((q) => `- ${q}`).join("\n")}`
-      : "",
-    state.gaps.length > 0 ? `Known gaps:\n${state.gaps.map((g) => `- ${g}`).join("\n")}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const res = await deps.llm({
-    system: prompt("query-gen"),
-    user,
-    parse: (t) => parseQueries(t),
-    timeoutMs: deps.llmTimeoutMs,
-    label: "Querying…",
-  });
-
-  let queries: string[];
-  let kbSufficient: boolean | null = null;
-  let llmErrors = 0;
-  if (res.ok && res.value && typeof res.value === "object") {
-    const v = res.value as { queries?: string[]; kbSufficient?: boolean | null };
-    if (Array.isArray(v.queries) && v.queries.length > 0) {
-      queries = v.queries;
-      kbSufficient = v.kbSufficient ?? null;
-    } else {
-      llmErrors = 1;
-      queries = [state.question];
-    }
-  } else {
-    llmErrors = 1;
-    queries = [state.question];
-  }
-
-  // Deterministic breadth facet fill for /research (contract: reformulator breadth phase).
-  if (state.profile.name === "research" && state.cycle === 1) {
-    const rr = refineResult({
-      phase: "breadth",
-      topic: state.question,
-      asked: state.askedQuestions,
-      coveredFacets: [],
-      gaps: [],
-      parsed: { questions: queries, coveredFacets: [] },
-    });
-    queries = rr.questions;
-  }
-
   return {
     type: "queries_generated",
-    queries,
+    queries: [state.question],
     kbDocs,
-    kbSufficient,
-    kbFreshRatio: freshRatio,
-    llmErrors,
+    kbSufficient: null,
+    kbFreshRatio: kbFreshRatio(kbDocs, state.profile.freshnessWindowDays, now()),
   };
 }
 
 /**
- * REFINE: gap-targeted next-cycle questions (depth phase).
+ * REFINE: deterministic cycle advance.
+ *
+ * The next cycle's search task is built from state (gaps, covered
+ * facets, visited URLs) inside the search runner, so no LLM call is
+ * needed here — the event just advances the cycle bookkeeping.
  *
  * @param state - Current research state.
- * @param deps - Injected I/O surface.
- * @returns refined event (falls back deterministically on LLM failure).
+ * @returns refined event (deterministic fallback).
  */
-export async function stageRefine(
-  state: ResearchState,
-  deps: ResearchDeps,
-): Promise<ResearchEvent> {
-  const user = [
-    `Question: ${state.question}\nPhase: depth (cycle ${state.cycle} → ${state.cycle + 1})`,
-    state.gaps.length > 0
-      ? `Reported gaps:\n${state.gaps.map((g) => `- ${g}`).join("\n")}`
-      : "Reported gaps: none recorded",
-    state.coveredFacets.length > 0
-      ? `Covered facets (exclude):\n${state.coveredFacets.join(", ")}`
-      : "",
-    `Already asked (never repeat):\n${state.askedQuestions.map((q) => `- ${q}`).join("\n")}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const res = await deps.llm({
-    system: prompt("reformulate"),
-    user,
-    parse: (t) => parseRefine(t),
-    timeoutMs: deps.llmTimeoutMs,
-    label: "Refining…",
-  });
-  const parsed =
-    res.ok && res.value && typeof res.value === "object"
-      ? (res.value as { questions: string[]; coveredFacets: string[] })
-      : null;
-  const rr = refineResult({
-    phase: "depth",
-    topic: state.question,
-    asked: state.askedQuestions,
-    coveredFacets: state.coveredFacets,
-    gaps: state.gaps,
-    parsed,
-  });
-  return {
+export function stageRefine(state: ResearchState, _deps: ResearchDeps): Promise<ResearchEvent> {
+  return Promise.resolve({
     type: "refined",
-    questions: rr.questions,
-    coveredFacets: rr.coveredFacets,
-    llmErrors: parsed ? 0 : 1,
-  };
+    questions: [state.question],
+    coveredFacets: [],
+    llmErrors: 0,
+  });
 }

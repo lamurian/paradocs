@@ -1,232 +1,192 @@
 /**
- * Research engine runner — spawns isolated pi subagents per research question.
+ * Search-stage runner — spawns one lean pi subagent with the web_search
+ * tool, parses its {sources, coveredFacets} JSON contract, and emits the
+ * FSM search_done event with canonicalized, visited-filtered candidates.
  *
- * Each question runs in its own `pi --mode json -p --no-session` subprocess
- * with the researcher.md agent definition appended as system prompt. The
- * subprocess env carries PI_RESEARCH_ENGINE=1 so the KB-first tool_call hook
- * is active inside subagents only. Results are merged and deduplicated by URL.
+ * Fixes the old runner's path-vs-literal bug: --append-system-prompt
+ * receives the literal researcher.md contents, never the file path.
  *
  * @module extensions/research-engine/runner
  */
 
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { canonicalizeUrl } from "./fetcher.js";
 import { extractJson } from "../../common/extractJson.js";
+import { buildSubagentArgs } from "../../common/subagent.js";
 
-import type { ResearchResult, ResearchSource, SufficiencyResult } from "./types.js";
+import type { ResearchEvent } from "./events.js";
+import type { ResearchDeps } from "./research-deps.js";
+import type { Candidate, KbDocGist, ResearchState } from "./state.js";
+import type { SearchSubagentValue } from "./types.js";
 
-/** Maximum number of research subagents running concurrently. */
-export const MAX_CONCURRENCY = 4;
+const HERE = dirname(fileURLToPath(import.meta.url));
 
-/** Minimum suitable sources the research engine aims to collect. */
-export const MIN_SOURCES = 10;
+/** Literal path to the researcher system prompt (read as text, never passed as a path). */
+export const RESEARCHER_PROMPT_PATH = resolve(HERE, "prompts", "researcher.md");
 
-/** Path to the researcher agent definition used as subprocess system prompt. */
-export const RESEARCHER_PROMPT_PATH = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "prompts",
-  "researcher.md",
-);
+/** Absolute path to the web-search extension loaded by the search subagent. */
+export const WEB_SEARCH_EXT_PATH = resolve(HERE, "..", "web-search");
 
-/** Minimal context surface the runner needs from commands or tools. */
-export interface RunnerContext {
-  /** Working directory for subprocess execution. */
-  cwd: string;
+/**
+ * Build argv for the search subagent.
+ *
+ * --append-system-prompt receives the literal researcher.md contents
+ * (read in the parent process), never the file path.
+ *
+ * @param input - Provider/model ids and the task text.
+ * @returns Full argv array for the pi subprocess.
+ */
+export function buildSearchAgentArgs(input: {
+  provider: string;
+  modelId: string;
+  task: string;
+}): string[] {
+  const systemPrompt = readFileSync(RESEARCHER_PROMPT_PATH, "utf-8");
+  return buildSubagentArgs({
+    provider: input.provider,
+    modelId: input.modelId,
+    systemPrompt,
+    task: input.task,
+    extraArgs: ["-e", WEB_SEARCH_EXT_PATH, "--tools", "web_search"],
+  });
 }
 
 /**
- * Resolve how to invoke the pi CLI in the current runtime.
+ * Parse and validate the search subagent's JSON contract.
  *
- * Mirrors the SDK subagent example: reuse the running script when it is a
- * real file, otherwise fall back to the `pi` binary for generic node/bun.
+ * Malformed entries (missing url or non-string snippet) are dropped;
+ * duplicate URLs keep the first occurrence; missing coveredFacets
+ * defaults to []. Non-JSON or non-object output yields null.
  *
- * @param extraArgs - CLI arguments to append.
- * @returns Command and full argument list for spawn.
+ * @param text - Raw final assistant text from the subagent.
+ * @returns Validated value, or null when the contract is not met.
  */
-export function getPiInvocation(extraArgs: string[]): { command: string; args: string[] } {
-  const currentScript = process.argv[1];
-  const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
-  if (currentScript && !isBunVirtualScript && existsSync(currentScript)) {
-    return { command: process.execPath, args: [currentScript, ...extraArgs] };
-  }
-  const execName = process.execPath.split("/").pop()?.toLowerCase() ?? "";
-  const isGenericRuntime = /^(node|bun)(\.exe)?$/.test(execName);
-  if (!isGenericRuntime) {
-    return { command: process.execPath, args: extraArgs };
-  }
-  return { command: "pi", args: extraArgs };
-}
-
-/**
- * Parse and validate {url, snippet} sources from subagent output text.
- *
- * @param text - Raw text from the final assistant message.
- * @returns Valid research sources; invalid entries are dropped.
- */
-export function parseSources(text: string): ResearchSource[] {
+export function parseSearchResult(text: string): SearchSubagentValue | null {
   const parsed = extractJson(text);
-  if (!Array.isArray(parsed)) return [];
-  const sources: ResearchSource[] = [];
-  for (const entry of parsed) {
-    if (
-      entry !== null &&
-      typeof entry === "object" &&
-      typeof (entry as ResearchSource).url === "string" &&
-      typeof (entry as ResearchSource).snippet === "string" &&
-      (entry as ResearchSource).url.length > 0
-    ) {
-      const src = entry as ResearchSource;
-      sources.push({ url: src.url, snippet: src.snippet, title: src.title, tier: src.tier });
-    }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const obj = parsed as { sources?: unknown; coveredFacets?: unknown };
+  if (!Array.isArray(obj.sources)) return null;
+  const seen = new Set<string>();
+  const sources: SearchSubagentValue["sources"] = [];
+  for (const entry of obj.sources) {
+    if (entry === null || typeof entry !== "object") continue;
+    const s = entry as { url?: unknown; title?: unknown; snippet?: unknown; tier?: unknown };
+    if (typeof s.url !== "string" || s.url.length === 0) continue;
+    if (typeof s.snippet !== "string") continue;
+    if (seen.has(s.url)) continue;
+    seen.add(s.url);
+    sources.push({
+      url: s.url,
+      snippet: s.snippet,
+      ...(typeof s.title === "string" ? { title: s.title } : {}),
+      ...(typeof s.tier === "number" ? { tier: s.tier } : {}),
+    });
   }
-  return sources;
+  const coveredFacets = Array.isArray(obj.coveredFacets)
+    ? obj.coveredFacets.filter((f): f is string => typeof f === "string" && f.trim().length > 0)
+    : [];
+  return { sources, coveredFacets };
+}
+
+function describePhase(state: ResearchState): string {
+  const breadth = state.mode === "breadth" && state.cycle === 1;
+  return breadth ? "breadth" : `depth (cycle ${state.cycle})`;
 }
 
 /**
- * Extract the final assistant text from collected JSON mode messages.
+ * Build the search subagent task text from pipeline state.
  *
- * @param messages - Parsed JSONL events from the subprocess stdout.
- * @returns Joined text of the last assistant message, or empty string.
- */
-function getFinalAssistantText(messages: Array<Record<string, unknown>>): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (msg.type !== "message_end") continue;
-    const message = msg.message as
-      | { role?: string; content?: Array<{ type: string; text?: string }> }
-      | undefined;
-    if (message?.role !== "assistant" || !Array.isArray(message.content)) continue;
-    const text = message.content
-      .filter((c) => c.type === "text" && typeof c.text === "string")
-      .map((c) => c.text)
-      .join("\n");
-    if (text.trim()) return text;
-  }
-  return "";
-}
-
-/**
- * Run one research question in an isolated pi subprocess.
+ * Includes the question, phase, KB doc titles (context only), known
+ * gaps, covered facets, visited URLs, and already-asked questions so
+ * next cycles target what earlier cycles missed.
  *
- * @param question - The research question for this subagent.
- * @param cwd - Working directory for the subprocess.
- * @returns Sources collected by the subagent; empty on failure.
+ * @param state - Current research state.
+ * @returns Task text for the subagent positional prompt.
  */
-async function runSingleQuestion(question: string, cwd: string): Promise<ResearchSource[]> {
-  const extraArgs = [
-    "--mode",
-    "json",
-    "-p",
-    "--no-session",
-    "--append-system-prompt",
-    RESEARCHER_PROMPT_PATH,
-    `Task: ${question}`,
+export function buildSearchTask(state: ResearchState): string {
+  const lines = [
+    `Question: ${state.question}`,
+    `Phase: ${describePhase(state)}`,
+    state.kbDocs.length > 0
+      ? `KB documents (context only — do not write to them):\n${state.kbDocs
+          .map((d: KbDocGist) => `- ${d.title}${d.date ? ` (${d.date.slice(0, 10)})` : ""}`)
+          .join("\n")}`
+      : "KB documents: none found",
+    state.gaps.length > 0
+      ? `Known gaps from earlier cycles (target these):\n${state.gaps.map((g) => `- ${g}`).join("\n")}`
+      : "",
+    state.coveredFacets.length > 0
+      ? `Facets already covered (do not re-cover):\n${state.coveredFacets.join(", ")}`
+      : "",
+    state.visited.length > 0
+      ? `URLs already collected (never repeat):\n${state.visited.map((u) => `- ${u}`).join("\n")}`
+      : "",
+    state.askedQuestions.length > 0
+      ? `Questions already asked:\n${state.askedQuestions.map((q) => `- ${q}`).join("\n")}`
+      : "",
   ];
-  const invocation = getPiInvocation(extraArgs);
+  return lines.filter(Boolean).join("\n\n");
+}
 
-  return new Promise<ResearchSource[]>((resolvePromise) => {
-    let proc: ReturnType<typeof spawn>;
-    try {
-      proc = spawn(invocation.command, invocation.args, {
-        cwd,
-        shell: false,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, PI_RESEARCH_ENGINE: "1" },
-      });
-    } catch {
-      resolvePromise([]);
-      return;
-    }
+/**
+ * SEARCH stage executor: KB search stays deterministic (already in
+ * state.kbDocs from the previous cycle start); this stage runs the
+ * search subagent and maps its output to FSM candidates.
+ *
+ * @param state - Current research state.
+ * @param deps - Injected I/O surface (searchSubagent).
+ * @returns search_done event with candidates, KB docs, and covered facets.
+ */
+export async function runSearchStage(
+  state: ResearchState,
+  deps: ResearchDeps,
+): Promise<ResearchEvent> {
+  const task = buildSearchTask(state);
+  const res = await deps.searchSubagent({ task });
 
-    const messages: Array<Record<string, unknown>> = [];
-    let buffer = "";
-
-    const processLine = (line: string): void => {
-      if (!line.trim()) return;
-      try {
-        messages.push(JSON.parse(line) as Record<string, unknown>);
-      } catch {
-        /* ignore non-JSON lines */
-      }
+  if (!res.ok || !res.value) {
+    return {
+      type: "search_done",
+      candidates: [],
+      kbDocs: state.kbDocs,
+      queries: [state.question],
+      coveredFacets: [],
+      llmErrors: 1,
+      failures: [
+        {
+          stage: "SEARCH",
+          error: res.error ?? "search subagent failed",
+        },
+      ],
     };
-
-    proc.stdout?.on("data", (data: Buffer) => {
-      buffer += data.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) processLine(line);
-    });
-
-    proc.on("error", () => resolvePromise([]));
-    proc.on("close", () => {
-      if (buffer.trim()) processLine(buffer);
-      resolvePromise(parseSources(getFinalAssistantText(messages)));
-    });
-  });
-}
-
-/**
- * Run tasks with a concurrency limit, preserving input order.
- *
- * @param items - Items to process.
- * @param limit - Maximum concurrent tasks.
- * @param fn - Task function.
- * @returns Results in input order.
- */
-async function mapWithConcurrencyLimit<TIn, TOut>(
-  items: TIn[],
-  limit: number,
-  fn: (item: TIn) => Promise<TOut>,
-): Promise<TOut[]> {
-  if (items.length === 0) return [];
-  const bound = Math.max(1, Math.min(limit, items.length));
-  const results: TOut[] = new Array<TOut>(items.length);
-  let nextIndex = 0;
-  const workers = Array.from({ length: bound }, async () => {
-    while (true) {
-      const current = nextIndex++;
-      if (current >= items.length) return;
-      results[current] = await fn(items[current]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-/**
- * Run the research engine across one or more questions.
- *
- * Spawns up to MAX_CONCURRENCY parallel pi subagents, collects {url, snippet}
- * sources from each, deduplicates by URL across questions, and merges into a
- * single ResearchResult with a default sufficiency assessment.
- *
- * @param questions - Research questions to execute in parallel.
- * @param ctx - Context providing the working directory.
- * @returns Merged, deduplicated research result.
- */
-export async function runResearchEngine(
-  questions: string[],
-  ctx: RunnerContext,
-): Promise<ResearchResult> {
-  const cleanQuestions = questions.map((q) => q.trim()).filter((q) => q.length > 0);
-  const perQuestion = await mapWithConcurrencyLimit(cleanQuestions, MAX_CONCURRENCY, (q) =>
-    runSingleQuestion(q, ctx.cwd),
-  );
-
-  const unique = new Map<string, ResearchSource>();
-  for (const sources of perQuestion) {
-    for (const src of sources) {
-      if (!unique.has(src.url)) unique.set(src.url, src);
-    }
   }
-  const sources = [...unique.values()];
-  const assessment: SufficiencyResult = {
-    sufficient: sources.length >= MIN_SOURCES,
-    outdatedNotes: [],
-    gaps: sources.length < MIN_SOURCES ? cleanQuestions : [],
+
+  const visited = new Set(state.visited);
+  const seen = new Set<string>();
+  const candidates: Candidate[] = [];
+  for (const s of res.value.sources) {
+    const canonicalUrl = canonicalizeUrl(s.url);
+    if (visited.has(canonicalUrl) || seen.has(canonicalUrl)) continue;
+    seen.add(canonicalUrl);
+    candidates.push({
+      url: s.url,
+      canonicalUrl,
+      title: s.title,
+      snippet: s.snippet,
+      tier: s.tier ?? 3,
+      query: state.question,
+    });
+  }
+
+  return {
+    type: "search_done",
+    candidates,
+    kbDocs: state.kbDocs,
+    queries: [state.question],
+    coveredFacets: res.value.coveredFacets,
+    llmErrors: 0,
   };
-  return { sources, questions: cleanQuestions, assessment };
 }

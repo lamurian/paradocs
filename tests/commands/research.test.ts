@@ -11,10 +11,10 @@ import { RESEARCH_PROFILE } from "../../extensions/research-engine/profiles.js";
 import type { ResearchDeps } from "../../extensions/research-engine/research-deps.js";
 import type { ResearchState } from "../../extensions/research-engine/state.js";
 
-vi.mock("../../extensions/research-engine/orchestrator.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../extensions/research-engine/orchestrator.js")>();
-  return { ...actual, runResearch: vi.fn() };
+vi.mock("../../extensions/research-engine/orchestrator.js", async () => {
+  const { DEFAULT_STAGE_MESSAGES } =
+    await import("../../extensions/research-engine/research-deps.js");
+  return { runResearch: vi.fn(), DEFAULT_STAGE_MESSAGES };
 });
 vi.mock("../../extensions/research-engine/deps.js", () => ({
   buildResearchDeps: vi.fn(() => ({})),

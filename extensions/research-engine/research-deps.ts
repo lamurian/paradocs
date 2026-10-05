@@ -7,9 +7,8 @@
  * @module extensions/research-engine/research-deps
  */
 
-import type { SearchDeps } from "./search.js";
 import type { ResearchStage, WritebackLite } from "./state.js";
-import type { ResearchSource } from "./types.js";
+import type { ResearchSource, SearchSubagentValue } from "./types.js";
 /** Input for one orchestrator-issued LLM call. */
 export interface LlmCallInput {
   system: string;
@@ -18,12 +17,29 @@ export interface LlmCallInput {
   timeoutMs?: number;
   /** Short TUI loader label for this call. */
   label?: string;
+  /** Pipeline role — selects the per-role subagent timeout default. */
+  role?: "summarize" | "judge" | "synthesis";
 }
 
 /** Normalized LLM call outcome (never throws). */
 export interface LlmCallOutcome {
   ok: boolean;
   value?: unknown;
+  error?: string;
+}
+
+/** Input for one search-subagent call. */
+export interface SearchSubagentCall {
+  /** Task text for the subagent positional prompt. */
+  task: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
+/** Outcome of one search-subagent call. */
+export interface SearchSubagentOutcome {
+  ok: boolean;
+  value?: SearchSubagentValue;
   error?: string;
 }
 
@@ -36,8 +52,10 @@ export interface KbDocWithTitle {
 
 /** Injected I/O surface for the research orchestrator. */
 export interface ResearchDeps {
-  /** Direct LLM call with a strict parser (never throws). */
+  /** LLM call via the subagent transport with a strict parser (never throws). */
   llm: (input: LlmCallInput) => Promise<LlmCallOutcome>;
+  /** Search subagent call (web_search tool; never throws). */
+  searchSubagent: (input: SearchSubagentCall) => Promise<SearchSubagentOutcome>;
   /** In-process KB search (returns title/path/date gists). */
   searchDocs: (query: string) => Promise<KbDocWithTitle[]>;
   /** URL fetch with timeout (content + error, mirroring fetchUrlWithTimeout). */
@@ -47,7 +65,12 @@ export interface ResearchDeps {
     signal?: AbortSignal,
   ) => Promise<{ title?: string; content?: string; error?: string }>;
   /** KB write-back adapter (sources carry citation metadata). */
-  writeBack: (input: { sources: ResearchSource[]; questions: string[] }) => Promise<WritebackLite>;
+  writeBack: (input: {
+    sources: ResearchSource[];
+    questions: string[];
+    jobId?: string;
+    synthesis?: string;
+  }) => Promise<WritebackLite>;
   /** Resolved KNOWLEDGE_DIR for checkpoints. */
   knowledgeDir: string;
   now?: () => number;
@@ -57,11 +80,8 @@ export interface ResearchDeps {
   signal?: AbortSignal;
   /** Enables the deterministic escalation decision (ask tool quick mode). */
   allowEscalation?: boolean;
-  /** Search backend override (tests). */
-  searchDeps?: SearchDeps;
   fetchConcurrency?: number;
   fetchTimeoutMs?: number;
-  llmTimeoutMs?: number;
 }
 
 /** Per-stage progress messages surfaced in TUI/RPC. */

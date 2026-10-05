@@ -1,17 +1,16 @@
 /**
  * Tests for QUERY_GEN/REFINE stage executors: kbFreshRatio math,
- * KB-search failure tolerance, LLM fallbacks.
+ * deterministic KB search, and the deterministic refine passthrough.
+ *
+ * After the subagent collapse QUERY_GEN performs only the KB search
+ * (no LLM); REFINE is a deterministic cycle advance.
  *
  * @module tests/research-engine/stage-queries.test
  */
 
 import { describe, it, expect, vi } from "vitest";
 
-import {
-  ASK_DEEP_PROFILE,
-  ASK_QUICK_PROFILE,
-  RESEARCH_PROFILE,
-} from "../../extensions/research-engine/profiles.js";
+import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.js";
 import {
   kbFreshRatio,
   stageQueryGen,
@@ -19,9 +18,8 @@ import {
 } from "../../extensions/research-engine/stage-queries.js";
 
 import type {
-  LlmCallInput,
-  LlmCallOutcome,
   ResearchDeps,
+  KbDocWithTitle,
 } from "../../extensions/research-engine/research-deps.js";
 import type { ResearchState } from "../../extensions/research-engine/state.js";
 
@@ -60,9 +58,10 @@ function state(overrides: Partial<ResearchState> = {}): ResearchState {
   };
 }
 
-function depsWith(llm: ResearchDeps["llm"], overrides: Partial<ResearchDeps> = {}): ResearchDeps {
+function depsWith(overrides: Partial<ResearchDeps> = {}): ResearchDeps {
   return {
-    llm,
+    llm: vi.fn(() => Promise.resolve({ ok: false, error: "unused" })),
+    searchSubagent: vi.fn(() => Promise.resolve({ ok: false, error: "unused" })),
     searchDocs: () => Promise.resolve([]),
     fetchUrl: () => Promise.resolve({ error: "unused" }),
     writeBack: () => Promise.resolve({ created: [], updated: [], skipped: [] }),
@@ -87,54 +86,41 @@ describe("kbFreshRatio", () => {
 });
 
 describe("stageQueryGen", () => {
-  it("should tolerate KB search failures and fall back on invalid LLM output", async () => {
-    const llm = vi.fn(
-      (): Promise<LlmCallOutcome> => Promise.resolve({ ok: true, value: { noqueries: true } }),
-    );
-    const deps = depsWith(llm, {
-      searchDocs: () => Promise.reject(new Error("db locked")),
-    });
+  it("should tolerate KB search failures and emit deterministic queries", async () => {
+    const deps = depsWith({ searchDocs: () => Promise.reject(new Error("db locked")) });
     const ev = await stageQueryGen(state(), deps, () => NOW);
     expect(ev.type).toBe("queries_generated");
     if (ev.type === "queries_generated") {
       expect(ev.queries).toEqual(["what is x"]);
       expect(ev.kbDocs).toEqual([]);
       expect(ev.kbSufficient).toBeNull();
-      expect(ev.llmErrors).toBe(1);
+      expect(ev.kbFreshRatio).toBeNull();
     }
   });
 
-  it("should expand breadth queries to the facet template for /research only", async () => {
-    const llm = vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
-      expect(input.label).toBe("Querying…");
-      return Promise.resolve({
-        ok: true,
-        value: { queries: ["mechanisms of x"], kbSufficient: false },
-      });
-    });
-    const research = await stageQueryGen(
-      state({ profile: RESEARCH_PROFILE }),
-      depsWith(llm),
-      () => NOW,
-    );
-    if (research.type === "queries_generated") {
-      expect(research.queries.length).toBeGreaterThanOrEqual(5);
-      expect(research.queries).toContain("What tooling and frameworks exist for what is x?");
+  it("should map KB doc gists and compute the freshness ratio (no LLM call)", async () => {
+    const llm = vi.fn();
+    const docs: KbDocWithTitle[] = [
+      { title: "Fresh", path: "fresh.md", created: "2026-09-01T00:00:00.000Z" },
+      { title: "Stale", path: "stale.md", created: "2019-01-01T00:00:00.000Z" },
+    ];
+    const deps = depsWith({ llm, searchDocs: () => Promise.resolve(docs) });
+    const ev = await stageQueryGen(state(), deps, () => NOW);
+    if (ev.type === "queries_generated") {
+      expect(ev.kbDocs).toEqual([
+        { title: "Fresh", path: "fresh.md", date: "2026-09-01T00:00:00.000Z" },
+        { title: "Stale", path: "stale.md", date: "2019-01-01T00:00:00.000Z" },
+      ]);
+      expect(ev.kbFreshRatio).toBeCloseTo(0.5);
     }
-    const quick = await stageQueryGen(
-      state({ profile: ASK_QUICK_PROFILE }),
-      depsWith(llm),
-      () => NOW,
-    );
-    if (quick.type === "queries_generated") {
-      expect(quick.queries).toEqual(["mechanisms of x"]);
-    }
+    expect(llm).not.toHaveBeenCalled();
+    expect(ev.type).toBe("queries_generated");
   });
 });
 
 describe("stageRefine", () => {
-  it("should fall back deterministically to asked + gap-derived questions on LLM failure", async () => {
-    const llm = vi.fn((): Promise<LlmCallOutcome> => Promise.resolve({ ok: false, error: "429" }));
+  it("should emit a deterministic refined event without LLM calls", async () => {
+    const llm = vi.fn();
     const s = state({
       stage: "REFINE",
       cycle: 1,
@@ -142,37 +128,13 @@ describe("stageRefine", () => {
       coveredFacets: ["tooling"],
       gaps: ["missing evaluation metrics"],
     });
-    const ev = await stageRefine(s, depsWith(llm));
+    const ev = await stageRefine(s, depsWith({ llm }));
     expect(ev.type).toBe("refined");
     if (ev.type === "refined") {
-      expect(ev.llmErrors).toBe(1);
-      expect(ev.questions).toEqual(["q-old", "what is x: missing evaluation metrics"]);
-    }
-  });
-
-  it("should keep validated depth questions and drop asked/covered matches", async () => {
-    const llm = vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
-      expect(input.label).toBe("Refining…");
-      return Promise.resolve({
-        ok: true,
-        value: {
-          questions: ["q-old", "What tooling exists?", "Fresh evaluation question?"],
-          coveredFacets: ["evidence"],
-        },
-      });
-    });
-    const s = state({
-      stage: "REFINE",
-      cycle: 2,
-      askedQuestions: ["q-old"],
-      coveredFacets: ["tooling"],
-      gaps: [],
-    });
-    const ev = await stageRefine(s, depsWith(llm));
-    if (ev.type === "refined") {
+      expect(ev.questions).toEqual(["what is x"]);
+      expect(ev.coveredFacets).toEqual([]);
       expect(ev.llmErrors).toBe(0);
-      expect(ev.questions).toEqual(["Fresh evaluation question?"]);
-      expect(ev.coveredFacets).toEqual(["tooling", "evidence"]);
     }
+    expect(llm).not.toHaveBeenCalled();
   });
 });

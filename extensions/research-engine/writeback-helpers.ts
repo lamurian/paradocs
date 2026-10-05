@@ -8,7 +8,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { validateCitations } from "../../common/citation-validation.js";
+import { loadRefBibCitekeys, validateCitations } from "../../common/citation-validation.js";
 import { resolveCitation } from "../../common/citation.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import {
@@ -20,9 +20,8 @@ import {
 import { indexFile } from "../para-knowledge/db-sqlite.js";
 import { parseFrontmatter, formatFrontmatter } from "../para-knowledge/frontmatter.js";
 
-import type { ResearchSource } from "./types.js";
+import type { ResearchSource, RuntimeModel } from "./types.js";
 import type { SqliteDb } from "../para-knowledge/sqlite-types.js";
-import type { Api, Model } from "@earendil-works/pi-ai";
 
 /** One grouped atomic note produced by the LLM. */
 export interface GroupedNote {
@@ -121,7 +120,7 @@ export async function updateExistingNote(
  */
 export async function createNewNotes(
   notes: GroupedNote[],
-  model: Model<Api>,
+  model: RuntimeModel,
   db: SqliteDb,
   knowledgeDir: string,
   cwd: string,
@@ -134,8 +133,9 @@ export async function createNewNotes(
   for (const ve of validationErrors) skipped.push(`atomicity: ${ve.title}`);
 
   const payable: typeof validDocs = [];
+  const bibCitekeys = loadRefBibCitekeys(knowledgeDir);
   for (const doc of validDocs) {
-    const vr = validateCitations(doc.content, db);
+    const vr = validateCitations(doc.content, db, bibCitekeys);
     if (vr.valid) payable.push(doc);
     else skipped.push(`unresolved citations: ${doc.title} (${vr.missing.join(", ")})`);
   }

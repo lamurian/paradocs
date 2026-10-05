@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 import { Type } from "typebox";
 
 import { validateAtomicity } from "../../../common/atomicity.js";
-import { validateCitations } from "../../../common/citation-validation.js";
+import { loadRefBibCitekeys, validateCitations } from "../../../common/citation-validation.js";
 import { createDocument } from "../../../common/createDocument.js";
 import { getKnowledgeConfig } from "../../../common/env.js";
 import { ensureNotesDb } from "../../../common/notesDb.js";
@@ -102,7 +102,8 @@ export function registerCreateDocTool(pi: ExtensionAPI): void {
 
       // Citation validation — after atomicity, before any IO
       const db = await ensureNotesDb(ctx.cwd);
-      const citationResult = validateCitations(params.content, db);
+      const { dir: kbDir } = getKnowledgeConfig(ctx.cwd);
+      const citationResult = validateCitations(params.content, db, loadRefBibCitekeys(kbDir));
       if (!citationResult.valid) {
         return {
           content: [

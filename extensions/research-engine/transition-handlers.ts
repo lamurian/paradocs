@@ -1,7 +1,6 @@
 /**
- * FSM transition handlers: one function per event plus the abort and
- * budget-guard transitions. `transition()` in transition.ts dispatches
- * here to stay within complexity limits.
+ * FSM transition handlers: one function per event plus abort/budget
+ * transitions. `transition()` in transition.ts dispatches here.
  *
  * @module extensions/research-engine/transition-handlers
  */
@@ -26,7 +25,8 @@ function dedupe(values: string[]): string[] {
   return [...new Set(values.filter((v) => v.length > 0))];
 }
 
-function commit(
+/** Commit an event to a stage with trace + llmErrorCount bookkeeping. */
+export function commit(
   prev: ResearchState,
   to: ResearchStage,
   event: ResearchEvent,
@@ -62,26 +62,6 @@ function kbShortCircuit(
 ): Transition {
   const state = commit(prev, "SYNTHESIZE", event, now, patch);
   return { state, effects: [{ kind: "checkpoint" }, { kind: "synthesize", source: "kb" }] };
-}
-
-/** abort event → CANCELLED with a checkpoint effect. */
-export function abortedTransition(
-  prev: ResearchState,
-  event: ResearchEvent,
-  now: number,
-): Transition {
-  const state = commit(prev, "CANCELLED", event, now);
-  return { state, effects: [{ kind: "checkpoint" }] };
-}
-
-/** Budget guard on transition entry → forced degraded SYNTHESIZE. */
-export function budgetTransition(
-  prev: ResearchState,
-  event: ResearchEvent,
-  now: number,
-): Transition {
-  const state = commit(prev, "SYNTHESIZE", event, now, { deadlineHit: true, degraded: true });
-  return { state, effects: [{ kind: "checkpoint" }, { kind: "synthesize", degraded: true }] };
 }
 
 function handleStart(
@@ -148,9 +128,17 @@ function handleSearchDone(
   event: ResearchEvent & { type: "search_done" },
   now: number,
 ): Transition {
-  return enterStage(prev, "RANK", event, now, { candidates: event.candidates });
+  const queries = dedupe(event.queries ?? [prev.question]);
+  return enterStage(prev, "RANK", event, now, {
+    candidates: event.candidates,
+    kbDocs: event.kbDocs ?? prev.kbDocs,
+    kbFreshRatio: event.kbFreshRatio ?? prev.kbFreshRatio,
+    queries,
+    coveredFacets: dedupe([...prev.coveredFacets, ...(event.coveredFacets ?? [])]),
+    askedQuestions: dedupe([...prev.askedQuestions, ...queries]),
+    failures: [...prev.failures, ...(event.failures ?? [])],
+  });
 }
-
 function handleRanked(
   prev: ResearchState,
   event: ResearchEvent & { type: "ranked" },
@@ -170,9 +158,10 @@ function handleFetched(
   event: ResearchEvent & { type: "fetched" },
   now: number,
 ): Transition {
-  const fetches = [...prev.fetches, ...event.records];
   const ok = event.records.some((r) => r.ok);
-  return enterStage(prev, ok ? "SUMMARIZE" : "ASSESS", event, now, { fetches });
+  return enterStage(prev, ok ? "SUMMARIZE" : "ASSESS", event, now, {
+    fetches: [...prev.fetches, ...event.records],
+  });
 }
 
 function handleSummarized(
@@ -180,11 +169,9 @@ function handleSummarized(
   event: ResearchEvent & { type: "summarized" },
   now: number,
 ): Transition {
-  const summaries = [...prev.summaries, ...event.items];
-  const visited = dedupe([...prev.visited, ...prev.fetches.map((f) => f.canonicalUrl)]);
   return enterStage(prev, "ASSESS", event, now, {
-    summaries,
-    visited,
+    summaries: [...prev.summaries, ...event.items],
+    visited: dedupe([...prev.visited, ...prev.fetches.map((f) => f.canonicalUrl)]),
     failures: [...prev.failures, ...(event.failures ?? [])],
   });
 }
@@ -281,18 +268,19 @@ function handleEscalated(
 
 /** Dispatch table from event type to its pure handler. */
 export const HANDLERS: Record<ResearchEvent["type"], Handler> = {
-  start: (p, e, n) => handleStart(p, e as ResearchEvent & { type: "start" }, n),
-  queries_generated: (p, e, n) =>
-    handleQueriesGenerated(p, e as ResearchEvent & { type: "queries_generated" }, n),
-  search_done: (p, e, n) => handleSearchDone(p, e as ResearchEvent & { type: "search_done" }, n),
-  ranked: (p, e, n) => handleRanked(p, e as ResearchEvent & { type: "ranked" }, n),
-  fetched: (p, e, n) => handleFetched(p, e as ResearchEvent & { type: "fetched" }, n),
-  summarized: (p, e, n) => handleSummarized(p, e as ResearchEvent & { type: "summarized" }, n),
-  assessed: (p, e, n) => handleAssessed(p, e as ResearchEvent & { type: "assessed" }, n),
-  refined: (p, e, n) => handleRefined(p, e as ResearchEvent & { type: "refined" }, n),
-  synthesized: (p, e, n) => handleSynthesized(p, e as ResearchEvent & { type: "synthesized" }, n),
-  writeback_done: (p, e, n) =>
-    handleWritebackDone(p, e as ResearchEvent & { type: "writeback_done" }, n),
-  escalated: (p, e, n) => handleEscalated(p, e as ResearchEvent & { type: "escalated" }, n),
-  aborted: (p, e, n) => abortedTransition(p, e, n),
+  start: handleStart as Handler,
+  queries_generated: handleQueriesGenerated as Handler,
+  search_done: handleSearchDone as Handler,
+  ranked: handleRanked as Handler,
+  fetched: handleFetched as Handler,
+  summarized: handleSummarized as Handler,
+  assessed: handleAssessed as Handler,
+  refined: handleRefined as Handler,
+  synthesized: handleSynthesized as Handler,
+  writeback_done: handleWritebackDone as Handler,
+  escalated: handleEscalated as Handler,
+  aborted: (p, e, n) => {
+    const state = commit(p, "CANCELLED", e, n);
+    return { state, effects: [{ kind: "checkpoint" }] };
+  },
 };

@@ -1,6 +1,6 @@
 /**
  * Orchestrator extended stage paths: chunked map-reduce summarize,
- * head+tail flag, write-back failure surfacing, KB-gist synthesis,
+ * head+tail flag, write-back failure surfacing, synthesis fallback,
  * per-transition checkpoint trace.
  *
  * @module tests/research-engine/orchestrator-paths.test
@@ -21,8 +21,15 @@ import type {
   LlmCallInput,
   LlmCallOutcome,
   KbDocWithTitle,
+  SearchSubagentOutcome,
 } from "../../extensions/research-engine/research-deps.js";
-import type { SearchWebResult } from "../../extensions/research-engine/search.js";
+
+vi.mock("../../common/subagent.js", () => ({
+  buildSubagentArgs: vi.fn(),
+  getPiInvocation: vi.fn(),
+  resolveSubagentTimeoutMs: vi.fn(() => 60_000),
+  runSubagent: vi.fn(),
+}));
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -37,6 +44,19 @@ function tmp(): string {
 
 const URLS = ["https://a.com/1", "https://b.com/2"];
 
+function makeSearchSubagent(): ResearchDeps["searchSubagent"] {
+  return vi.fn(
+    (): Promise<SearchSubagentOutcome> =>
+      Promise.resolve({
+        ok: true,
+        value: {
+          sources: URLS.map((u) => ({ url: u, title: `T ${u}`, snippet: "s", tier: 3 })),
+          coveredFacets: [],
+        },
+      }),
+  );
+}
+
 function makeDeps(overrides: Partial<ResearchDeps> = {}): {
   deps: ResearchDeps;
   knowledgeDir: string;
@@ -45,10 +65,6 @@ function makeDeps(overrides: Partial<ResearchDeps> = {}): {
   const deps: ResearchDeps = {
     llm: vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
       const s = input.system;
-      if (s.includes("name: query-gen")) {
-        return Promise.resolve({ ok: true, value: { queries: ["q1"], kbSufficient: false } });
-      }
-      if (s.includes("name: rank")) return Promise.resolve({ ok: true, value: URLS });
       if (s.includes("name: summarizer")) {
         return Promise.resolve({ ok: true, value: "Chunk summary." });
       }
@@ -58,18 +74,12 @@ function makeDeps(overrides: Partial<ResearchDeps> = {}): {
       if (s.includes("name: synthesis")) return Promise.resolve({ ok: true, value: "Answer." });
       return Promise.resolve({ ok: true, value: "" });
     }),
+    searchSubagent: makeSearchSubagent(),
     searchDocs: (): Promise<KbDocWithTitle[]> => Promise.resolve([]),
     fetchUrl: (url: string) => Promise.resolve({ content: `<title>Doc ${url}</title><p>body</p>` }),
     writeBack: () => Promise.resolve({ created: [], updated: [], skipped: [] }),
     knowledgeDir,
     now: () => Date.parse("2026-10-02T10:00:00Z"),
-    searchDeps: {
-      searchWeb: (): Promise<SearchWebResult> =>
-        Promise.resolve({
-          results: URLS.map((u) => ({ url: u, title: `T ${u}`, snippet: "s" })),
-          tier: 3,
-        }),
-    },
     ...overrides,
   };
   return { deps, knowledgeDir };
@@ -80,11 +90,6 @@ describe("runResearch — extended stage paths", () => {
     const summarizerUsers: string[] = [];
     const llm = vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
       const s = input.system;
-      if (s.includes("name: query-gen")) {
-        return Promise.resolve({ ok: true, value: { queries: ["q1"], kbSufficient: false } });
-      }
-      if (s.includes("name: rank"))
-        return Promise.resolve({ ok: true, value: ["https://a.com/1"] });
       if (s.includes("name: summarizer")) {
         summarizerUsers.push(input.user);
         return Promise.resolve({ ok: true, value: "Chunk summary." });
@@ -140,14 +145,17 @@ describe("runResearch — extended stage paths", () => {
     expect(state.writeback?.skipped[0]).toContain("write-back failed: kb offline");
   });
 
-  it("should synthesize from KB gists when the KB covers the question", async () => {
-    const synthesisUsers: string[] = [];
+  it("should fall back to KB doc listings when synthesis and summaries are empty", async () => {
     const llm = vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
-      if (input.system.includes("name: query-gen")) {
-        return Promise.resolve({ ok: true, value: { queries: ["q1"], kbSufficient: true } });
+      const s = input.system;
+      if (s.includes("name: summarizer")) return Promise.resolve({ ok: true, value: "" });
+      if (s.includes("name: judge")) {
+        return Promise.resolve({ ok: true, value: { sufficient: false, gaps: ["g"] } });
       }
-      synthesisUsers.push(input.user);
-      return Promise.resolve({ ok: true, value: "KB answer." });
+      if (s.includes("name: synthesis")) {
+        return Promise.resolve({ ok: false, error: "synthesis endpoint down" });
+      }
+      return Promise.resolve({ ok: true, value: "" });
     });
     const { deps } = makeDeps({
       llm,
@@ -164,8 +172,9 @@ describe("runResearch — extended stage paths", () => {
       profile: ASK_QUICK_PROFILE,
       jobId: "job-kb2",
     });
-    expect(state.stage).toBe("DONE_SUFFICIENT");
-    expect(synthesisUsers[0]).toContain("Doc A (Resources/a.md)");
+    // Deterministic fallback: KB doc titles/paths preserved in the body.
+    expect(state.synthesis).toContain("Doc A (Resources/a.md)");
+    expect(state.synthesisError).toContain("synthesis endpoint down");
   });
 
   it("should record a checkpoint trace for every transition", async () => {

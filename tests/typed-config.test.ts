@@ -1,6 +1,15 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { join } from "node:path";
 import { homedir } from "node:os";
+import { join } from "node:path";
+
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+
+// Passthrough self-mock + resetModules: with test.isolate=false an earlier
+// file's node:os mock (fake-home) can leak into the cached env.js, while
+// this file's static homedir import gets the real one — the mismatch breaks
+// the default-path and tilde-expansion assertions below.
+vi.mock("node:os", async (importOriginal) => importOriginal<typeof import("node:os")>());
+
+vi.resetModules();
 
 // ---------------------------------------------------------------------------
 // parsePort
@@ -48,9 +57,7 @@ describe("getKnowledgeConfig", () => {
   it("should return default values when no env vars are set", async () => {
     const { getKnowledgeConfig } = await import("../common/env.js");
     const cfg = getKnowledgeConfig();
-    expect(cfg.dir).toBe(
-      join(homedir(), "data", "personal", "Documents", "Cognoscere"),
-    );
+    expect(cfg.dir).toBe(join(homedir(), "data", "personal", "Documents", "Cognoscere"));
     expect(cfg.db).toBe("notes.db");
   });
 
@@ -73,9 +80,7 @@ describe("getKnowledgeConfig", () => {
     process.env.KNOWLEDGE_DB = "my-notes.db";
     const { getKnowledgeConfig } = await import("../common/env.js");
     const cfg = getKnowledgeConfig();
-    expect(cfg.dir).toBe(
-      join(homedir(), "data", "personal", "Documents", "Cognoscere"),
-    );
+    expect(cfg.dir).toBe(join(homedir(), "data", "personal", "Documents", "Cognoscere"));
     expect(cfg.db).toBe("my-notes.db");
   });
 });
@@ -163,6 +168,13 @@ describe("getObscuraConfig", () => {
 });
 
 describe("getApiKeys", () => {
+  beforeEach(() => {
+    // Hermetic: another test's configureEnv cascade may load a real .env
+    // with API keys into process.env — clear them before each assertion.
+    delete process.env.TAVILY_KEY;
+    delete process.env.GITHUB_TOKEN;
+  });
+
   afterEach(() => {
     delete process.env.TAVILY_KEY;
     delete process.env.GITHUB_TOKEN;

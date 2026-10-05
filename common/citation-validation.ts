@@ -2,11 +2,15 @@
  * Citation validation for PARA knowledge documents.
  *
  * Scans markdown content for @citekey references and validates
- * they exist in the SQLite citations table. Used by create_para_doc
- * and batch_create_para_docs as a pre-creation guard.
+ * they exist in the SQLite citations table or in the ref.bib citekey
+ * set. Used by create_para_doc and batch_create_para_docs as a
+ * pre-creation guard.
  *
  * @module common/citation-validation
  */
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.js";
 
@@ -46,21 +50,53 @@ function stripCodeContent(content: string): string {
 // ── Main export ───────────────────────────────────────────────────────
 
 /**
+ * Parse citekeys from ref.bib entries.
+ *
+ * Matches BibTeX entry headers (`@type{citekey,`) and collects the
+ * citekeys. Missing ref.bib yields an empty set.
+ *
+ * @param knowledgeDir - KNOWLEDGE_DIR resolved from env config.
+ * @returns Set of citekeys declared in ref.bib.
+ */
+export function loadRefBibCitekeys(knowledgeDir: string): Set<string> {
+  const keys = new Set<string>();
+  let raw: string;
+  try {
+    raw = readFileSync(join(knowledgeDir, "ref.bib"), "utf-8");
+  } catch {
+    return keys;
+  }
+  const entryRe = /@([a-zA-Z]+)\{([^,\s]+)\s*,/g;
+  let match: RegExpExecArray | null;
+  while ((match = entryRe.exec(raw)) !== null) {
+    const key = match[2].trim();
+    if (key.length > 0) keys.add(key);
+  }
+  return keys;
+}
+
+/**
  * Validate that all @citekey references in content exist in the
- * SQLite citations table.
+ * SQLite citations table or the provided ref.bib citekey set.
  *
  * Scans for Pandoc-style citations: narrative @citekey and
  * parenthetical [@citekey]. Rejects @? (unresolved placeholder)
- * and any citekey not found in the DB.
+ * and any citekey found in neither source.
  *
  * Code blocks, inline code, and markdown link URLs are excluded.
  * Email-like patterns (word\w@) are excluded via word-boundary lookbehind.
  *
  * @param content - Markdown body content to scan.
  * @param db      - Open SQLite database handle with citations table.
+ * @param bibCitekeys - Optional citekeys parsed from ref.bib; a citekey
+ *                      present here passes even when absent from the table.
  * @returns ValidationResult with valid flag and missing list.
  */
-export function validateCitations(content: string, db: SqliteDb): ValidationResult {
+export function validateCitations(
+  content: string,
+  db: SqliteDb,
+  bibCitekeys?: ReadonlySet<string>,
+): ValidationResult {
   const cleaned = stripCodeContent(content);
   const found: string[] = [];
   const seen = new Set<string>();
@@ -83,13 +119,14 @@ export function validateCitations(content: string, db: SqliteDb): ValidationResu
     found.push(citekey);
   }
 
-  // Query each citekey against the citations table
+  // Query each citekey against the citations table and the bib set
   const missing: string[] = [];
   for (const citekey of found) {
     if (citekey === "?") {
       missing.push(citekey);
       continue;
     }
+    if (bibCitekeys?.has(citekey)) continue;
     const row = db.get<{ citekey: string }>(
       "SELECT citekey FROM citations WHERE citekey = ?",
       citekey,

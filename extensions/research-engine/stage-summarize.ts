@@ -8,11 +8,29 @@
 import { parseSummaryText, planSummarization, prompt } from "./effects.js";
 
 import type { ResearchEvent } from "./events.js";
-import type { ResearchDeps } from "./research-deps.js";
+import type { LlmCallInput, LlmCallOutcome, ResearchDeps } from "./research-deps.js";
 import type { FailureRecord, FetchRecord, ResearchState, SummaryItem } from "./state.js";
 
 /** Summarizer concurrency across sources. */
 const SUMMARIZE_CONCURRENCY = 4;
+
+/**
+ * Call deps.llm without letting a rejection kill the fan-out.
+ *
+ * A rejecting subagent dep for one URL must not abort the cycle —
+ * rejections are converted to { ok: false, error: <real message> }.
+ *
+ * @param deps - Injected I/O surface.
+ * @param input - LLM call input.
+ * @returns LLM outcome with the real error message on rejection.
+ */
+async function safeLlm(deps: ResearchDeps, input: LlmCallInput): Promise<LlmCallOutcome> {
+  try {
+    return await deps.llm(input);
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 /** Result of summarizing one fetched record. */
 interface OneSummary {
@@ -73,11 +91,11 @@ async function summarizeChunks(
 ): Promise<OneSummary> {
   const chunkResults = await Promise.all(
     chunks.map((chunk) =>
-      deps.llm({
+      safeLlm(deps, {
         system: prompt("summarizer"),
         user: summarizerUser(state, rec, chunk),
         parse: (t) => parseSummaryText(t),
-        timeoutMs: deps.llmTimeoutMs,
+        role: "summarize",
         label: "Summarizing…",
       }),
     ),
@@ -91,7 +109,7 @@ async function summarizeChunks(
     );
   }
   const digest = chunkResults.map((r, i) => `Part ${i + 1}:\n${r.value as string}`).join("\n\n");
-  const merged = await deps.llm({
+  const merged = await safeLlm(deps, {
     system: prompt("summarizer"),
     user: summarizerUser(
       state,
@@ -99,7 +117,7 @@ async function summarizeChunks(
       `The source was split for length. Merge these part summaries into one summary:\n\n${digest}`,
     ),
     parse: (t) => parseSummaryText(t),
-    timeoutMs: deps.llmTimeoutMs,
+    role: "summarize",
     label: "Summarizing…",
   });
   if (!merged.ok || typeof merged.value !== "string") {
@@ -120,11 +138,11 @@ async function summarizeSingle(
   text: string,
   truncation: { truncation?: "head_tail" },
 ): Promise<OneSummary> {
-  const res = await deps.llm({
+  const res = await safeLlm(deps, {
     system: prompt("summarizer"),
     user: summarizerUser(state, rec, text),
     parse: (t) => parseSummaryText(t),
-    timeoutMs: deps.llmTimeoutMs,
+    role: "summarize",
     label: "Summarizing…",
   });
   if (!res.ok || typeof res.value !== "string") {

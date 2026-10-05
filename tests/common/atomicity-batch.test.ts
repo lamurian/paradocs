@@ -44,6 +44,10 @@ function makeSessionMock(responseText: string) {
 
 describe("validateDocumentsAtomicity — batch variant", () => {
   beforeEach(() => {
+    // Re-evaluate atomicity.js per test so it binds to THIS file's
+    // createAgentSession mock — with test.isolate=false a cached atomicity.js
+    // (evaluated earlier under a real pi registration) would ignore the mock.
+    vi.resetModules();
     vi.clearAllMocks();
   });
 

@@ -10,10 +10,16 @@
  * @module extensions/commands/split
  */
 import { readFile, writeFile } from "node:fs/promises";
+import { formatFrontmatter, parseFrontmatter } from "./split-frontmatter.js";
 import { resolve, basename, extname } from "node:path";
 import { validateAtomicity } from "../../common/atomicity.js";
-import type { Model, Api } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type {
+  CreateAgentSessionOptions,
+  ExtensionAPI,
+  ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
+
+type RuntimeModel = NonNullable<CreateAgentSessionOptions["model"]>;
 interface ProposedSplit {
   title: string;
   content: string;
@@ -26,57 +32,6 @@ interface SplitAnalysis {
   splits: ProposedSplit[];
   executiveSummary: string;
   isAtomic: boolean;
-}
-
-/**
- * Parse frontmatter from markdown content.
- */
-function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return { frontmatter: {}, body: content };
-  try {
-    const yaml = match[1];
-    const frontmatter: Record<string, unknown> = {};
-    for (const line of yaml.split("\n")) {
-      const [key, ...rest] = line.split(":");
-      if (key && rest.length > 0) {
-        let value: string | boolean | number = rest.join(":").trim();
-        if (value.startsWith("[") && value.endsWith("]")) {
-          value = JSON.parse(value);
-        } else if (value.startsWith("'") && value.endsWith("'")) {
-          value = value.slice(1, -1);
-        } else if (value.startsWith('"') && value.endsWith('"')) {
-          value = value.slice(1, -1);
-        } else if (value === "true" || value === "false") {
-          value = value === "true";
-        } else if (!isNaN(Number(value))) {
-          value = Number(value);
-        }
-        frontmatter[key.trim()] = value;
-      }
-    }
-    return { frontmatter, body: content.slice(match[0].length + 1).trim() };
-  } catch {
-    return { frontmatter: {}, body: content };
-  }
-}
-
-/**
- * Format frontmatter as YAML string.
- */
-function formatFrontmatter(fields: Record<string, unknown>): string {
-  const lines = ["---"];
-  for (const [key, value] of Object.entries(fields)) {
-    if (Array.isArray(value)) {
-      lines.push(`${key}: [${value.map((v) => `"${v}"`).join(", ")}]`);
-    } else if (typeof value === "string") {
-      lines.push(`${key}: "${value}"`);
-    } else {
-      lines.push(`${key}: ${value}`);
-    }
-  }
-  lines.push("---");
-  return lines.join("\n");
 }
 
 /**
@@ -174,7 +129,7 @@ function prepareBatchDocs(splits: ProposedSplit[]): Array<{
 async function analyzeForSplits(
   title: string,
   body: string,
-  model: Model<Api>,
+  model: RuntimeModel,
 ): Promise<SplitAnalysis> {
   if (!model) {
     throw new Error("No model available for split analysis");

@@ -5,6 +5,23 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+// Heavy transitive modules are mocked so their real code never loads in
+// this worker (partial top-level loads corrupt v8 coverage attribution
+// in full-suite runs). Registration tests need none of their behavior.
+vi.mock("../../extensions/research-engine/orchestrator.js", () => ({
+  runResearch: vi.fn(),
+  DEFAULT_STAGE_MESSAGES: {},
+}));
+vi.mock("../../extensions/research-engine/deps.js", () => ({
+  buildResearchDeps: vi.fn(() => ({})),
+}));
+vi.mock("../../extensions/research-engine/writeback.js", () => ({
+  writeBackToKB: vi.fn(),
+  parseGrouping: vi.fn(),
+}));
+vi.mock("../../common/atomicity.js", () => ({
+  validateAtomicity: vi.fn(),
+}));
 
 type CommandConfig = {
   description: string;

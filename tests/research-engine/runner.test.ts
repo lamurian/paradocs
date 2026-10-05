@@ -1,145 +1,296 @@
 /**
- * Tests for runResearchEngine — subprocess spawning, concurrency, parsing, dedup.
- * Also covers the research_engine tool registration (R5).
+ * Tests for the search-stage runner (T1 args builder, T3 parseSearchResult).
  *
- * @module tests/research-engine/runner.test
+ * Replaces the old runResearchEngine suite: the search stage now spawns
+ * one lean pi subagent with the web_search tool; the runner builds the
+ * exact CLI args (literal researcher.md prompt text — never the path)
+ * and validates the subagent's {sources, coveredFacets} JSON contract.
  */
 
-import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
-// ── Spawn mock ───────────────────────────────────────────────────────
+// Passthrough self-mock + resetModules: with test.isolate=false the shared
+// module registry can hand us a runner.js instance already evaluated in an
+// earlier file's context, bound to that file's factory mock of
+// common/subagent.js (a bare vi.fn()), which makes buildSubagentArgs return
+// undefined. resetModules forces runner.js to re-evaluate against this
+// file's registration — importOriginal, i.e. the real implementation.
+vi.mock("../../common/subagent.js", async (importOriginal) =>
+  importOriginal<typeof import("../../common/subagent.js")>(),
+);
 
-interface SpawnCall {
-  command: string;
-  args: string[];
-  options: { env?: Record<string, string | undefined> };
+vi.resetModules();
+
+const {
+  WEB_SEARCH_EXT_PATH,
+  buildSearchAgentArgs,
+  buildSearchTask,
+  parseSearchResult,
+  runSearchStage,
+} = await import("../../extensions/research-engine/runner.js");
+
+import type { ResearchState } from "../../extensions/research-engine/state.js";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const RESEARCHER_MD = resolve(HERE, "../../extensions/research-engine/prompts/researcher.md");
+
+// ── T1: buildSearchAgentArgs ──────────────────────────────────────────
+
+describe("buildSearchAgentArgs (T1)", () => {
+  it("produces the exact lean search-subagent CLI in contract order", () => {
+    const args = buildSearchAgentArgs({
+      provider: "opencode-go",
+      modelId: "mimo-v2.5",
+      task: "research agentic harnesses",
+    });
+
+    expect(args).toEqual([
+      "--mode",
+      "json",
+      "-p",
+      "--no-session",
+      "--no-extensions",
+      "-e",
+      WEB_SEARCH_EXT_PATH,
+      "--tools",
+      "web_search",
+      "--offline",
+      "--thinking",
+      "minimal",
+      "--no-context-files",
+      "--no-skills",
+      "--provider",
+      "opencode-go",
+      "--model",
+      "mimo-v2.5",
+      "--append-system-prompt",
+      expect.any(String) as unknown as string,
+      "Task: research agentic harnesses",
+    ]);
+  });
+
+  it("passes the literal researcher.md contents to --append-system-prompt, never the path", () => {
+    const fileText = readFileSync(RESEARCHER_MD, "utf-8");
+    const args = buildSearchAgentArgs({ provider: "p", modelId: "m", task: "t" });
+
+    const promptIdx = args.indexOf("--append-system-prompt");
+    expect(promptIdx).toBeGreaterThan(-1);
+    expect(args[promptIdx + 1]).toBe(fileText);
+    expect(args[promptIdx + 1]).not.toBe(RESEARCHER_MD);
+    expect(args[promptIdx + 1]).not.toContain("researcher.md");
+  });
+
+  it("ends with the Task: positional prompt", () => {
+    const args = buildSearchAgentArgs({ provider: "p", modelId: "m", task: "find X sources" });
+    expect(args[args.length - 1].startsWith("Task: ")).toBe(true);
+    expect(args[args.length - 1]).toBe("Task: find X sources");
+  });
+
+  it("resolves the web-search extension path under extensions/web-search", () => {
+    expect(WEB_SEARCH_EXT_PATH.endsWith("web-search")).toBe(true);
+    const args = buildSearchAgentArgs({ provider: "p", modelId: "m", task: "t" });
+    expect(args[args.indexOf("-e") + 1]).toBe(WEB_SEARCH_EXT_PATH);
+  });
+});
+
+// ── T3: parseSearchResult ─────────────────────────────────────────────
+
+describe("parseSearchResult (T3)", () => {
+  it("parses valid sources and coveredFacets", () => {
+    const text = JSON.stringify({
+      sources: [
+        { url: "https://a.example/1", title: "A", snippet: "Alpha point", tier: 1 },
+        { url: "https://b.example/2", snippet: "Beta point" },
+      ],
+      coveredFacets: ["loop mechanics"],
+    });
+    const result = parseSearchResult(text);
+    expect(result).not.toBeNull();
+    expect(result?.sources).toHaveLength(2);
+    expect(result?.sources[0]).toEqual({
+      url: "https://a.example/1",
+      title: "A",
+      snippet: "Alpha point",
+      tier: 1,
+    });
+    expect(result?.coveredFacets).toEqual(["loop mechanics"]);
+  });
+
+  it("defaults coveredFacets to [] when missing", () => {
+    const text = JSON.stringify({ sources: [{ url: "https://a.example/1", snippet: "s" }] });
+    const result = parseSearchResult(text);
+    expect(result?.coveredFacets).toEqual([]);
+  });
+
+  it("drops malformed entries (missing url or non-string snippet)", () => {
+    const text = JSON.stringify({
+      sources: [
+        { snippet: "no url here" },
+        { url: "https://ok.example/1", snippet: 42 },
+        { url: "https://good.example/1", snippet: "kept" },
+      ],
+    });
+    const result = parseSearchResult(text);
+    expect(result?.sources).toHaveLength(1);
+    expect(result?.sources[0].url).toBe("https://good.example/1");
+  });
+
+  it("deduplicates URLs keeping the first occurrence", () => {
+    const text = JSON.stringify({
+      sources: [
+        { url: "https://dup.example/1", snippet: "first" },
+        { url: "https://dup.example/1", snippet: "second" },
+        { url: "https://other.example/2", snippet: "other" },
+      ],
+    });
+    const result = parseSearchResult(text);
+    expect(result?.sources).toHaveLength(2);
+    expect(result?.sources[0].snippet).toBe("first");
+  });
+
+  it("returns null for non-JSON text", () => {
+    expect(parseSearchResult("not json at all")).toBeNull();
+  });
+
+  it("returns null for non-object JSON", () => {
+    expect(parseSearchResult("[1,2,3]")).toBeNull();
+    expect(parseSearchResult('"just a string"')).toBeNull();
+  });
+
+  it("returns null when sources is missing or not an array", () => {
+    expect(parseSearchResult("{}")).toBeNull();
+    expect(parseSearchResult('{"sources":"nope"}')).toBeNull();
+  });
+
+  it("tolerates markdown fences around the JSON", () => {
+    const text = '```json\n{"sources":[{"url":"https://a.example/1","snippet":"s"}]}\n```';
+    const result = parseSearchResult(text);
+    expect(result?.sources).toHaveLength(1);
+  });
+});
+
+// ── buildSearchTask context branches ───────────────────────────────────
+
+function taskState(overrides: Partial<ResearchState> = {}): ResearchState {
+  return {
+    jobId: "j",
+    question: "how do harnesses work",
+    mode: "depth",
+    profile: {
+      name: "ask-deep",
+      targetSources: 10,
+      maxCycles: 3,
+      deadlineMs: 600_000,
+      minDomains: 3,
+      requireAuthoritative: true,
+      freshnessWindowDays: 365,
+    },
+    stage: "SEARCH",
+    cycle: 2,
+    startedAt: 0,
+    deadlineAt: 1,
+    queries: ["q1"],
+    kbDocs: [],
+    kbSufficient: null,
+    kbFreshRatio: null,
+    kbCovered: false,
+    candidates: [],
+    lastRankCount: 0,
+    fetches: [],
+    summaries: [],
+    visited: [],
+    askedQuestions: [],
+    coveredFacets: [],
+    gaps: [],
+    cycles: [],
+    failures: [],
+    llmErrorCount: 0,
+    deadlineHit: false,
+    degraded: false,
+    trace: [],
+    ...overrides,
+  };
 }
 
-const spawnCalls: SpawnCall[] = [];
-let activeProcesses = 0;
-let maxConcurrent = 0;
-/** URL snippets returned per question index (cycled for >2 questions). */
-let sourcesPerQuestion: Array<Array<{ url: string; snippet: string }>> = [];
-let spawnDelayMs = 10;
+describe("buildSearchTask", () => {
+  it("includes question, phase, and KB context only when docs exist", () => {
+    const bare = buildSearchTask(taskState());
+    expect(bare).toContain("how do harnesses work");
+    expect(bare).toContain("depth (cycle 2)");
+    expect(bare).toContain("KB documents: none found");
+    expect(bare).not.toContain("Known gaps");
+    expect(bare).not.toContain("already collected");
 
-vi.mock("node:child_process", () => ({
-  spawn: vi.fn((command: string, args: string[], options: { env?: Record<string, string> }) => {
-    const callIndex = spawnCalls.length;
-    spawnCalls.push({ command, args, options });
-    activeProcesses++;
-    maxConcurrent = Math.max(maxConcurrent, activeProcesses);
-
-    const stdout = new EventEmitter();
-    const stderr = new EventEmitter();
-    const questionIdx = callIndex % Math.max(sourcesPerQuestion.length, 1);
-    const sources = sourcesPerQuestion[questionIdx] ?? [];
-
-    const child = {
-      stdout,
-      stderr,
-      on: (ev: string, cb: (...a: unknown[]) => void) => {
-        if (ev === "close") {
-          setTimeout(() => {
-            activeProcesses--;
-            cb(0);
-          }, spawnDelayMs);
-        }
-      },
-      kill: vi.fn(),
-    };
-
-    setTimeout(() => {
-      const text = JSON.stringify(sources);
-      const msg = {
-        type: "message_end",
-        message: { role: "assistant", content: [{ type: "text", text }] },
-      };
-      stdout.emit("data", Buffer.from(JSON.stringify(msg) + "\n"));
-    }, spawnDelayMs);
-
-    return child;
-  }),
-}));
-
-// ── runResearchEngine (R2) ──────────────────────────────────────────
-
-describe("runResearchEngine", () => {
-  beforeEach(() => {
-    spawnCalls.length = 0;
-    activeProcesses = 0;
-    maxConcurrent = 0;
-    sourcesPerQuestion = [
-      [
-        { url: "https://a.example/1", snippet: "Alpha source one" },
-        { url: "https://b.example/2", snippet: "Beta source two" },
-      ],
-      [
-        { url: "https://b.example/2", snippet: "Beta source two" },
-        { url: "https://c.example/3", snippet: "Gamma source three" },
-      ],
-    ];
-    spawnDelayMs = 5;
+    const full = buildSearchTask(
+      taskState({
+        kbDocs: [{ title: "Harness Overview", path: "h.md", date: "2026-05-01" }],
+        gaps: ["missing evaluation metrics"],
+        coveredFacets: ["tooling"],
+        visited: ["https://old.example/1"],
+        askedQuestions: ["old question"],
+      }),
+    );
+    expect(full).toContain("Harness Overview");
+    expect(full).toContain("2026-05-01");
+    expect(full).toContain("missing evaluation metrics");
+    expect(full).toContain("tooling");
+    expect(full).toContain("https://old.example/1");
+    expect(full).toContain("old question");
   });
 
-  it("should spawn one subprocess per question with the research engine flags and prompt path", async () => {
-    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
-    const ctx = { cwd: "/test" } as never;
+  it("labels the breadth phase for cycle 1", () => {
+    const task = buildSearchTask(taskState({ mode: "breadth", cycle: 1 }));
+    expect(task).toContain("breadth");
+  });
+});
 
-    await runResearchEngine(["question one", "question two"], ctx);
+// ── runSearchStage failure mapping ───────────────────────────────────
 
-    expect(spawnCalls).toHaveLength(2);
-    for (const call of spawnCalls) {
-      const argStr = call.args.join(" ");
-      expect(argStr).toContain("--mode json");
-      expect(argStr).toContain("-p");
-      expect(argStr).toContain("--no-session");
-      expect(argStr).toContain("--append-system-prompt");
-      // Prompt path must point at the researcher.md definition
-      const promptIdx = call.args.indexOf("--append-system-prompt");
-      expect(promptIdx).toBeGreaterThan(-1);
-      expect(call.args[promptIdx + 1]).toContain("researcher.md");
+describe("runSearchStage", () => {
+  it("maps a failing subagent to search_done with the real error", async () => {
+    const deps = {
+      searchSubagent: () => Promise.resolve({ ok: false, error: "spawn ENOENT" }),
+    } as never;
+    const ev = await runSearchStage(taskState(), deps);
+    expect(ev.type).toBe("search_done");
+    if (ev.type === "search_done") {
+      expect(ev.candidates).toEqual([]);
+      expect(ev.llmErrors).toBe(1);
+      expect(ev.failures?.[0]?.error).toBe("spawn ENOENT");
     }
   });
 
-  it("should set PI_RESEARCH_ENGINE=1 in the subprocess env", async () => {
-    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
-    const ctx = { cwd: "/test" } as never;
-
-    await runResearchEngine(["question one"], ctx);
-
-    expect(spawnCalls).toHaveLength(1);
-    expect(spawnCalls[0].options.env).toBeDefined();
-    expect(spawnCalls[0].options.env?.PI_RESEARCH_ENGINE).toBe("1");
-  });
-
-  it("should cap concurrency at 4 processes with 6 questions", async () => {
-    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
-    const ctx = { cwd: "/test" } as never;
-    const six = ["q1", "q2", "q3", "q4", "q5", "q6"];
-
-    await runResearchEngine(six, ctx);
-
-    expect(spawnCalls).toHaveLength(6);
-    expect(maxConcurrent).toBeLessThanOrEqual(4);
-  });
-
-  it("should parse {url, snippet} sources and deduplicate across questions by URL", async () => {
-    const { runResearchEngine } = await import("../../extensions/research-engine/runner.js");
-    const ctx = { cwd: "/test" } as never;
-
-    const result = await runResearchEngine(["question one", "question two"], ctx);
-
-    expect(result.questions).toEqual(["question one", "question two"]);
-    expect(result.sources).toHaveLength(3);
-    const urls = result.sources.map((s) => s.url);
-    expect(urls).toEqual(["https://a.example/1", "https://b.example/2", "https://c.example/3"]);
-    for (const s of result.sources) {
-      expect(typeof s.snippet).toBe("string");
-      expect(s.snippet.length).toBeGreaterThan(0);
+  it("canonicalizes, dedupes, and filters visited URLs from subagent sources", async () => {
+    const deps = {
+      searchSubagent: () =>
+        Promise.resolve({
+          ok: true,
+          value: {
+            sources: [
+              { url: "https://new.example/a?q=1", title: "A", snippet: "s", tier: 1 },
+              { url: "https://old.example/1", snippet: "visited" },
+              { url: "https://new.example/a?q=1", snippet: "dup" },
+              { url: "https://bare.example/b", snippet: "no tier" },
+            ],
+            coveredFacets: ["mechanisms"],
+          },
+        }),
+    } as never;
+    const ev = await runSearchStage(taskState({ visited: ["https://old.example/1"] }), deps);
+    expect(ev.type).toBe("search_done");
+    if (ev.type === "search_done") {
+      expect(ev.candidates.map((c) => c.canonicalUrl)).toEqual([
+        "https://new.example/a?q=1",
+        "https://bare.example/b",
+      ]);
+      expect(ev.candidates[0].tier).toBe(1);
+      expect(ev.candidates[1].tier).toBe(3);
+      expect(ev.coveredFacets).toEqual(["mechanisms"]);
+      expect(ev.llmErrors).toBe(0);
     }
-    expect(result.assessment).toBeDefined();
-    expect(typeof result.assessment.sufficient).toBe("boolean");
   });
 });

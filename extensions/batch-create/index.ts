@@ -18,7 +18,7 @@ import {
   indexDocumentsInDb,
   autoLinkBatch,
 } from "./batch-helpers.js";
-import { validateCitations } from "../../common/citation-validation.js";
+import { loadRefBibCitekeys, validateCitations } from "../../common/citation-validation.js";
 import { getKnowledgeConfig } from "../../common/env.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 
@@ -28,10 +28,14 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // ── Execute helpers (reduce cyclomatic complexity) ─────────────────────
 
-function findCitationViolations(docs: BatchDoc[], db: SqliteDb): CitationViolation[] {
+function findCitationViolations(
+  docs: BatchDoc[],
+  db: SqliteDb,
+  bibCitekeys: ReadonlySet<string>,
+): CitationViolation[] {
   const violations: CitationViolation[] = [];
   for (const doc of docs) {
-    const vr = validateCitations(doc.content, db);
+    const vr = validateCitations(doc.content, db, bibCitekeys);
     if (!vr.valid) {
       violations.push({ title: doc.title, missing: vr.missing });
     }
@@ -204,7 +208,7 @@ export default function (pi: ExtensionAPI): void {
 
       // Citation validation — reject the batch when any citekey is unresolved
       const db = await ensureNotesDb(ctx.cwd);
-      const citationViolations = findCitationViolations(docs, db);
+      const citationViolations = findCitationViolations(docs, db, loadRefBibCitekeys(knowledgeDir));
       if (citationViolations.length > 0) {
         return buildCitationErrorResponse(citationViolations);
       }

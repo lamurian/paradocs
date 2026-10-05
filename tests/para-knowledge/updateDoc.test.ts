@@ -19,6 +19,19 @@ vi.mock("node:os", async (importOriginal) => {
   };
 });
 
+// Real createAgentSession triggers pi ResourceLoader extension discovery,
+// which natively imports every extensions/*/index.ts (Node type-stripping,
+// startOffset 0). Merging those entries with vite-transformed (startOffset
+// 209) ones garbles v8 coverage for the whole repo — see vitest.config.ts.
+// Stub it so atomicity validation fails open without spawning a sub-agent.
+vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@earendil-works/pi-coding-agent")>();
+  return {
+    ...actual,
+    createAgentSession: vi.fn(() => Promise.reject(new Error("sub-agent disabled in unit tests"))),
+  };
+});
+
 describe("update_para_doc path resolution", () => {
   let tmpDir: string;
   let fakeHome: string;

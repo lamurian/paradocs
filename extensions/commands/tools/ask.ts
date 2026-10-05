@@ -19,22 +19,17 @@ import { buildResearchDeps } from "../../research-engine/deps.js";
 import { canonicalizeUrl } from "../../research-engine/fetcher.js";
 import { runResearch } from "../../research-engine/orchestrator.js";
 import { ASK_DEEP_PROFILE, ASK_QUICK_PROFILE } from "../../research-engine/profiles.js";
+import { renderAnswerBody } from "../../research-engine/render.js";
 import { buildDigest } from "../../research-engine/state.js";
 
 import type { ResearchAuth } from "../../research-engine/deps.js";
 import type { GateProfile, ResearchState } from "../../research-engine/state.js";
-import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-
-/** Answer text for a terminal state (errors surfaced, never swallowed). */
-function answerOf(state: ResearchState): string {
-  return state.synthesis && state.synthesis.trim().length > 0
-    ? state.synthesis
-    : `_(synthesis unavailable: ${state.synthesisError ?? "no sources collected"})_`;
-}
 
 /**
  * Render the tool result: answer, digest, escalation line, state path.
+ *
+ * Uses the deterministic synthesis fallback chain; no emojis.
  *
  * @param state - Terminal research state.
  * @param statePath - Checkpoint file path for the job.
@@ -51,38 +46,34 @@ export function renderToolResult(
     .map((qs, i) => `cycle${i + 1}: [${qs.join("; ")}]`)
     .join(" | ");
   const lines = [
-    `🔬 Research complete: ${state.summaries.length} source(s).`,
+    `Research complete: ${state.summaries.length} source(s).`,
     "",
     "### Answer",
-    answerOf(state),
+    renderAnswerBody(state),
     "",
     `Digest: questions by cycle: ${cycles || "(none)"}; sources: ${digest.sourceCount}; gaps: ${digest.gaps.join("; ") || "(none)"}`,
   ];
   if (state.escalation?.escalate && deepJobId) {
-    lines.push(`⚡ escalated to deep research: ${state.escalation.reason} (job ${deepJobId})`);
+    lines.push(`escalated to deep research: ${state.escalation.reason} (job ${deepJobId})`);
   }
   lines.push(`State: ${statePath}`);
   return lines.join("\n");
 }
 
 /**
- * Resolve the model and API key for the research pipeline.
+ * Resolve the runtime model for the research pipeline.
+ *
+ * Subprocesses resolve credentials themselves from ~/.pi/agent/auth.json
+ * via pi's own machinery; the extension only needs the model identity.
  *
  * @param ctx - The tool extension context.
  * @returns Auth info, or an error message when unavailable.
  */
-async function resolveToolAuth(
-  ctx: ExtensionContext,
-): Promise<{ auth: ResearchAuth } | { error: string }> {
+function resolveToolAuth(ctx: ExtensionContext): { auth: ResearchAuth } | { error: string } {
   if (!ctx.model) {
-    return { error: "❌ No model selected for the research pipeline." };
+    return { error: "No model selected for the research pipeline." };
   }
-  const model = ctx.model as Model<Api>;
-  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-  if (!auth.ok || !auth.apiKey) {
-    return { error: `❌ No API key for ${model.provider}.` };
-  }
-  return { auth: { model, apiKey: auth.apiKey, headers: auth.headers } };
+  return { auth: { model: ctx.model } };
 }
 
 /** Register the ask tool. */
@@ -126,18 +117,18 @@ export function registerAskTool(pi: ExtensionAPI): void {
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       configureEnv(ctx.cwd);
       onUpdate?.({
-        content: [{ type: "text" as const, text: "🔬 Researching knowledge base and web…" }],
+        content: [{ type: "text" as const, text: "Researching knowledge base and web…" }],
         details: {},
       });
 
       const question = (params.question ?? "").trim();
       if (!question) {
         return {
-          content: [{ type: "text" as const, text: "📭 No question provided." }],
+          content: [{ type: "text" as const, text: "No question provided." }],
           details: { jobId: "", statePath: "", digest: null },
         };
       }
-      const authResult = await resolveToolAuth(ctx);
+      const authResult = resolveToolAuth(ctx);
       if ("error" in authResult) {
         return {
           content: [{ type: "text" as const, text: authResult.error }],
@@ -159,13 +150,13 @@ export function registerAskTool(pi: ExtensionAPI): void {
 
       const deliver = (state: ResearchState, path: string): void => {
         pi.sendUserMessage(
-          `🔬 Deep research finished for "${question}":\n\n${renderToolResult(state, path)}`,
+          `Deep research finished for "${question}":\n\n${renderToolResult(state, path)}`,
           { deliverAs: "followUp" },
         );
       };
       const deliverFailure = (jobLabel: string, e: unknown): void => {
         const msg = e instanceof Error ? e.message : String(e);
-        pi.sendUserMessage(`🔬 Deep research ${jobLabel} for "${question}": ${msg.slice(0, 200)}`, {
+        pi.sendUserMessage(`Deep research ${jobLabel} for "${question}": ${msg.slice(0, 200)}`, {
           deliverAs: "followUp",
         });
       };
@@ -178,7 +169,7 @@ export function registerAskTool(pi: ExtensionAPI): void {
           content: [
             {
               type: "text" as const,
-              text: `🔬 Deep research started (job ${jobId}). Results will arrive as a follow-up message.`,
+              text: `Deep research started (job ${jobId}). Results will arrive as a follow-up message.`,
             },
           ],
           details: { jobId, statePath, mode: "deep" },

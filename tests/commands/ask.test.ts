@@ -15,10 +15,10 @@ import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.js";
 import type { ResearchDeps } from "../../extensions/research-engine/research-deps.js";
 import type { ResearchState } from "../../extensions/research-engine/state.js";
 
-vi.mock("../../extensions/research-engine/orchestrator.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../extensions/research-engine/orchestrator.js")>();
-  return { ...actual, runResearch: vi.fn() };
+vi.mock("../../extensions/research-engine/orchestrator.js", async () => {
+  const { DEFAULT_STAGE_MESSAGES } =
+    await import("../../extensions/research-engine/research-deps.js");
+  return { runResearch: vi.fn(), DEFAULT_STAGE_MESSAGES };
 });
 vi.mock("../../extensions/research-engine/deps.js", () => ({
   buildResearchDeps: vi.fn(() => ({})),
@@ -123,19 +123,22 @@ describe("/ask command — FSM orchestrator flow (T13)", () => {
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("No model selected"), "error");
   });
 
-  it("should notify and stop when auth fails", async () => {
-    const { createHandler, runResearch } = await importHandler();
+  it("should proceed without an API-key lookup (subprocesses resolve credentials)", async () => {
+    const { createHandler, runResearch, buildResearchDeps } = await importHandler();
     const notify = vi.fn();
+    runResearch.mockResolvedValue(fixtureState());
+    const getApiKeyAndHeaders = vi.fn().mockResolvedValue({ ok: false });
     const handler = createHandler({ sendUserMessage } as never);
     await handler(
       "What is x?",
       makeCtx({
         ui: { notify },
-        modelRegistry: { getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: false }) },
+        modelRegistry: { getApiKeyAndHeaders },
       }) as never,
     );
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("API key"), "error");
-    expect(runResearch).not.toHaveBeenCalled();
+    expect(getApiKeyAndHeaders).not.toHaveBeenCalled();
+    expect(runResearch).toHaveBeenCalled();
+    expect(buildResearchDeps).toHaveBeenCalled();
   });
 
   it("rpc: resolve immediately, deliver in background with answer + write-back status", async () => {
@@ -155,7 +158,7 @@ describe("/ask command — FSM orchestrator flow (T13)", () => {
     const elapsed = Date.now() - started;
 
     expect(elapsed).toBeLessThan(500);
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("🔍 Researching:"), "info");
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("Researching:"), "info");
     expect(runResearch).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ question: "What is x?", profile: ASK_DEEP_PROFILE }),

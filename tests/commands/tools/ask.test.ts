@@ -210,7 +210,7 @@ describe("ask tool — quick/deep modes (T14)", () => {
 
     const result = await runAskTool(tool, { question: "what is x" });
     const text = result.content[0].text;
-    expect(text).toContain("⚡ escalated to deep research: THIN_CANDIDATES (6<8 candidates)");
+    expect(text).toContain("escalated to deep research: THIN_CANDIDATES (6<8 candidates)");
     expect(text).toMatch(/\(job ask-esc-deep\)|\(job [^)]+\)/);
     expect(result.details.deepJobId).toBeDefined();
 

@@ -4,6 +4,14 @@ import { join, resolve } from "node:path";
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+// Passthrough self-mock + resetModules: with test.isolate=false a leaked
+// node:os mock (e.g. a homedir stub) can be baked into the cached env.js,
+// while this file's static homedir import gets the real one. resetModules
+// forces env.js to re-evaluate against this file's real node:os registration.
+vi.mock("node:os", async (importOriginal) => importOriginal<typeof import("node:os")>());
+
+vi.resetModules();
+
 // ---------------------------------------------------------------------------
 // expandTilde
 // ---------------------------------------------------------------------------

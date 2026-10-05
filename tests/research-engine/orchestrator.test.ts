@@ -1,7 +1,7 @@
 /**
  * Orchestrator runner tests: full pipeline with stub deps — happy path,
- * KB-covered short-circuit, escalation flow, degraded LLM failures,
- * /research facet fill, abort.
+ * KB-context injection, escalation flow, degraded failures, cycle
+ * advance, abort.
  *
  * @module tests/research-engine/orchestrator.test
  */
@@ -24,8 +24,15 @@ import type {
   LlmCallInput,
   LlmCallOutcome,
   KbDocWithTitle,
+  SearchSubagentOutcome,
 } from "../../extensions/research-engine/research-deps.js";
-import type { SearchWebResult } from "../../extensions/research-engine/search.js";
+
+vi.mock("../../common/subagent.js", () => ({
+  buildSubagentArgs: vi.fn(),
+  getPiInvocation: vi.fn(),
+  resolveSubagentTimeoutMs: vi.fn(() => 60_000),
+  runSubagent: vi.fn(),
+}));
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -47,27 +54,37 @@ const URLS = [
   "https://c.com/6",
 ];
 
+/** Search subagent stub returning the fixture URLs as sources. */
+function makeSearchSubagent(
+  mode: "ok" | "fail" = "ok",
+): ResearchDeps["searchSubagent"] & { mock: { calls: Array<[{ task: string }]> } } {
+  const fn = vi.fn((_input: { task: string }): Promise<SearchSubagentOutcome> => {
+    if (mode === "fail") return Promise.resolve({ ok: false, error: "429 rate limited" });
+    return Promise.resolve({
+      ok: true,
+      value: {
+        sources: URLS.map((u) => ({
+          url: u,
+          title: `T ${u}`,
+          snippet: "Suitable source.",
+          tier: 3,
+        })),
+        coveredFacets: ["mechanisms"],
+      },
+    });
+  });
+  return fn;
+}
+
 function makeLlm(mode: "ok" | "fail"): ResearchDeps["llm"] {
   return vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
     if (mode === "fail") return Promise.resolve({ ok: false, error: "429 rate limited" });
     const s = input.system;
-    if (s.includes("name: query-gen")) {
-      return Promise.resolve({ ok: true, value: { queries: ["q1", "q2"], kbSufficient: false } });
-    }
-    if (s.includes("name: rank")) {
-      return Promise.resolve({ ok: true, value: URLS });
-    }
     if (s.includes("name: summarizer")) {
       return Promise.resolve({ ok: true, value: "A solid grounded summary of the source." });
     }
     if (s.includes("name: judge")) {
       return Promise.resolve({ ok: true, value: { sufficient: true, gaps: [] } });
-    }
-    if (s.includes("name: reformulate")) {
-      return Promise.resolve({
-        ok: true,
-        value: { questions: ["q3"], coveredFacets: ["tooling"] },
-      });
     }
     if (s.includes("name: synthesis")) {
       return Promise.resolve({ ok: true, value: "The final synthesized answer." });
@@ -76,7 +93,12 @@ function makeLlm(mode: "ok" | "fail"): ResearchDeps["llm"] {
   });
 }
 
-function makeDeps(overrides: Partial<ResearchDeps> & { llm?: ResearchDeps["llm"] } = {}): {
+function makeDeps(
+  overrides: Partial<ResearchDeps> & {
+    llm?: ResearchDeps["llm"];
+    searchSubagent?: ResearchDeps["searchSubagent"];
+  } = {},
+): {
   deps: ResearchDeps;
   knowledgeDir: string;
   appendEntry: ReturnType<typeof vi.fn>;
@@ -89,6 +111,7 @@ function makeDeps(overrides: Partial<ResearchDeps> & { llm?: ResearchDeps["llm"]
   const progress: Array<[string, string]> = [];
   const deps: ResearchDeps = {
     llm: overrides.llm ?? makeLlm("ok"),
+    searchSubagent: overrides.searchSubagent ?? makeSearchSubagent("ok"),
     searchDocs: (): Promise<KbDocWithTitle[]> => Promise.resolve([]),
     fetchUrl: (url: string) =>
       Promise.resolve({ content: `<title>Doc ${url}</title><p>body content for ${url}</p>` }),
@@ -98,13 +121,6 @@ function makeDeps(overrides: Partial<ResearchDeps> & { llm?: ResearchDeps["llm"]
     appendEntry,
     notify,
     onProgress: (stage, message) => progress.push([stage, message]),
-    searchDeps: {
-      searchWeb: (): Promise<SearchWebResult> =>
-        Promise.resolve({
-          results: URLS.map((u) => ({ url: u, title: `T ${u}`, snippet: "s" })),
-          tier: 3,
-        }),
-    },
     fetchConcurrency: 2,
     ...overrides,
   };
@@ -147,43 +163,31 @@ describe("runResearch — orchestrator pipeline", () => {
     expect(loaded!.state.stage).toBe("DONE_SUFFICIENT");
   });
 
-  it("should short-circuit from QUERY_GEN when the KB covers the question", async () => {
+  it("should inject KB doc titles into the search subagent task", async () => {
     const kbDocs: KbDocWithTitle[] = [
-      { title: "A", path: "a.md", created: "2026-05-01" },
-      { title: "B", path: "b.md", created: "2026-06-01" },
-      { title: "C", path: "c.md", created: "2026-07-01" },
-      { title: "D", path: "d.md", created: "2026-08-01" },
+      { title: "Harness Overview", path: "harness-overview.md", created: "2026-05-01" },
+      { title: "Loop Anatomy", path: "loop-anatomy.md", created: "2026-06-01" },
     ];
-    const llm = vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
-      if (input.system.includes("name: query-gen")) {
-        return Promise.resolve({ ok: true, value: { queries: ["q1"], kbSufficient: true } });
-      }
-      return Promise.resolve({ ok: true, value: "KB-based answer." });
-    });
-    const { deps } = makeDeps({ llm, searchDocs: () => Promise.resolve(kbDocs) });
+    const searchSubagent = makeSearchSubagent();
+    const { deps } = makeDeps({ searchDocs: () => Promise.resolve(kbDocs), searchSubagent });
 
-    const state = await runResearch(deps, {
+    await runResearch(deps, {
       question: "what is x",
       mode: "breadth",
       profile: ASK_QUICK_PROFILE,
       jobId: "job-kb",
     });
 
-    expect(state.stage).toBe("DONE_SUFFICIENT");
-    expect(state.kbCovered).toBe(true);
-    expect(state.summaries).toEqual([]);
-    // No summarize calls: only query-gen + synthesis LLM calls happened
-    const systems = llm.mock.calls.map((c) => c[0].system);
-    expect(systems.some((s) => s.includes("name: summarizer"))).toBe(false);
+    const calls = searchSubagent.mock.calls;
+    const tasks = calls.map((c) => c[0].task);
+    expect(tasks[0]).toContain("Harness Overview");
+    expect(tasks[0]).toContain("Loop Anatomy");
+    expect(tasks[0]).toContain("context only");
   });
 
   it("should escalate to ESCALATED with appendEntry + notify on thin candidates", async () => {
     const llm = vi.fn((input: LlmCallInput): Promise<LlmCallOutcome> => {
       const s = input.system;
-      if (s.includes("name: query-gen")) {
-        return Promise.resolve({ ok: true, value: { queries: ["q1"], kbSufficient: false } });
-      }
-      if (s.includes("name: rank")) return Promise.resolve({ ok: true, value: URLS });
       if (s.includes("name: summarizer")) {
         // only 2 of 6 produce summaries → structural SOURCES fail
         const user = (input as { user?: string }).user ?? "";
@@ -219,11 +223,12 @@ describe("runResearch — orchestrator pipeline", () => {
   it("should degrade to DONE_DEGRADED when every LLM call fails", async () => {
     const { deps } = makeDeps({
       llm: makeLlm("fail"),
+      searchSubagent: makeSearchSubagent("fail"),
       writeBack: () =>
         Promise.resolve({
           created: [],
           updated: [],
-          skipped: ["write-back skipped: grouping LLM call failed: 429"],
+          skipped: ["write-back skipped: grouping failed: 429 rate limited"],
         }),
     });
 
@@ -238,10 +243,10 @@ describe("runResearch — orchestrator pipeline", () => {
     expect(state.synthesisError).toContain("429 rate limited");
     expect(state.llmErrorCount).toBeGreaterThan(0);
     expect(state.failures.length).toBeGreaterThan(0);
-    expect(state.writeback?.skipped[0]).toContain("grouping LLM call failed");
+    expect(state.writeback?.skipped[0]).toContain("grouping failed");
   });
 
-  it("should respect the /research profile breadth facet-fill", async () => {
+  it("should advance cycles with deterministic refine and record the question", async () => {
     const { deps } = makeDeps();
     const state = await runResearch(deps, {
       question: "AI agent guardrails",
@@ -249,8 +254,8 @@ describe("runResearch — orchestrator pipeline", () => {
       profile: RESEARCH_PROFILE,
       jobId: "job-research",
     });
-    // Facet fill expands cycle-1 queries to the full template (recorded in askedQuestions)
-    expect(state.askedQuestions.length).toBeGreaterThanOrEqual(5);
+    // The question is recorded per cycle; subagent handles query formulation.
+    expect(state.askedQuestions).toContain("AI agent guardrails");
     // Never sufficient within a single quick pass (6 < 15 target) → degraded terminal
     expect(["DONE_DEGRADED", "DONE_SUFFICIENT"]).toContain(state.stage);
   });
