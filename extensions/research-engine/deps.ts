@@ -61,7 +61,9 @@ export function buildResearchDeps(
   };
 
   const llm: ResearchDeps["llm"] = async (input) => {
-    if (ctx.mode === "tui") ctx.ui.setWorkingMessage(input.label ?? "Researching…");
+    const label = input.label ?? "Researching…";
+    if (ctx.mode === "tui") ctx.ui.setWorkingMessage(label);
+    researchDeps.onDetail?.(label);
     const args = buildSubagentArgs({
       provider: subagent.provider,
       modelId: subagent.modelId,
@@ -84,6 +86,7 @@ export function buildResearchDeps(
     input,
   ): Promise<SearchSubagentOutcome> => {
     if (ctx.mode === "tui") ctx.ui.setWorkingMessage("Searching…");
+    researchDeps.onDetail?.("Searching…");
     const args = buildSearchAgentArgs({
       provider: subagent.provider,
       modelId: subagent.modelId,
@@ -100,7 +103,7 @@ export function buildResearchDeps(
     return { ok: false, error: res.error };
   };
 
-  return {
+  const researchDeps: ResearchDeps = {
     llm,
     searchSubagent,
     searchDocs: async (query) => {
@@ -139,6 +142,7 @@ export function buildResearchDeps(
     allowEscalation: opts.allowEscalation,
     fetchTimeoutMs: 20_000,
   };
+  return researchDeps;
 }
 
 /** Re-exported for tests that build write-back inputs. */

@@ -75,6 +75,12 @@ export interface ResearchDeps {
   knowledgeDir: string;
   now?: () => number;
   onProgress?: (stage: ResearchStage, message: string) => void;
+  /**
+   * Fine-grained progress channel: labels and i/N counters emitted by
+   * the transports and stage executors (all modes; TUI keeps
+   * setWorkingMessage alongside).
+   */
+  onDetail?: (message: string) => void;
   appendEntry?: (customType: string, data: unknown) => void;
   notify?: (message: string) => void;
   signal?: AbortSignal;

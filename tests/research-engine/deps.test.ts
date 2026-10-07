@@ -150,6 +150,35 @@ describe("buildResearchDeps", () => {
     expect(ui.setWorkingMessage).toHaveBeenCalledWith("Label…");
   });
 
+  it("llm: invokes onDetail with the call label in rpc mode", async () => {
+    const m = importDeps();
+    const { ctx } = makeCtx("rpc");
+    const deps = m.buildResearchDeps(ctx as never, AUTH, {});
+    const onDetail = vi.fn();
+    deps.onDetail = onDetail;
+    m.runSubagent.mockResolvedValue({ ok: true, text: "v", value: "v" });
+
+    await deps.llm(LLM_INPUT);
+    expect(onDetail).toHaveBeenCalledWith("Label…");
+
+    // A missing label falls back to the default research message.
+    onDetail.mockClear();
+    await deps.llm({ system: "sys", user: "u", parse: (t: string) => t });
+    expect(onDetail).toHaveBeenCalledWith("Researching…");
+  });
+
+  it("searchSubagent: invokes onDetail with the searching label in rpc mode", async () => {
+    const m = importDeps();
+    const { ctx } = makeCtx("rpc");
+    const deps = m.buildResearchDeps(ctx as never, AUTH, {});
+    const onDetail = vi.fn();
+    deps.onDetail = onDetail;
+    m.runSubagent.mockResolvedValue({ ok: true, text: "{}", value: undefined });
+
+    await deps.searchSubagent({ task: "find sources" });
+    expect(onDetail).toHaveBeenCalledWith("Searching…");
+  });
+
   it("searchSubagent: spawns the web_search subagent and maps outcomes", async () => {
     const m = importDeps();
     const { ctx } = makeCtx("rpc");

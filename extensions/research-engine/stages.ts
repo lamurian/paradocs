@@ -77,6 +77,23 @@ function errMessage(e: unknown): string {
  * @returns Deps whose llm/searchSubagent feed the breaker.
  */
 export function guardDepsWithBreaker(deps: ResearchDeps, breaker: StageBreaker): ResearchDeps {
+  // Consecutive-failure counter for the k/3 detail notices; resets with
+  // the breaker on success.
+  let consecutiveFailures = 0;
+  const noteFailure = (error?: string): void => {
+    consecutiveFailures++;
+    deps.onDetail?.(
+      `subagent failure ${consecutiveFailures}/${BREAKER_LIMIT}: ${error ?? "unknown error"}`,
+    );
+  };
+  const noteOutcome = (ok: boolean, error?: string): void => {
+    breaker.record(ok, ok ? undefined : error);
+    if (ok) {
+      consecutiveFailures = 0;
+      return;
+    }
+    noteFailure(error);
+  };
   return {
     ...deps,
     llm: async (input) => {
@@ -87,7 +104,7 @@ export function guardDepsWithBreaker(deps: ResearchDeps, breaker: StageBreaker):
       } catch (e: unknown) {
         res = { ok: false, error: errMessage(e) };
       }
-      breaker.record(res.ok, res.ok ? undefined : res.error);
+      noteOutcome(res.ok, res.ok ? undefined : res.error);
       return res;
     },
     searchSubagent: async (input) => {
@@ -98,7 +115,7 @@ export function guardDepsWithBreaker(deps: ResearchDeps, breaker: StageBreaker):
       } catch (e: unknown) {
         res = { ok: false, error: errMessage(e) };
       }
-      breaker.record(res.ok, res.ok ? undefined : res.error);
+      noteOutcome(res.ok, res.ok ? undefined : res.error);
       return res;
     },
   };

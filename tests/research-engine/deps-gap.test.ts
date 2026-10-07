@@ -88,6 +88,35 @@ describe("buildResearchDeps — tui branches and searchDocs", () => {
     expect(res).toEqual({ ok: true, value: { sufficient: true } });
   });
 
+  it("fires both the tui working message and onDetail in the llm transport", async () => {
+    const m = await importFresh();
+    m.runSubagent.mockResolvedValue({ ok: true, value: { sufficient: true } });
+    const { ctx, ui } = tuiContext();
+    const deps = m.buildResearchDeps(ctx, AUTH);
+    const onDetail = vi.fn();
+    deps.onDetail = onDetail;
+
+    await deps.llm({ system: "s", user: "u", parse: (t: string) => t });
+
+    expect(ui.setWorkingMessage).toHaveBeenCalledWith("Researching…");
+    expect(onDetail).toHaveBeenCalledWith("Researching…");
+  });
+
+  it("fires both the tui working message and onDetail in the searchSubagent transport", async () => {
+    const m = await importFresh();
+    m.runSubagent.mockResolvedValue({ ok: true, value: { sources: [], coveredFacets: [] } });
+    const { ctx, ui } = tuiContext();
+    const deps = m.buildResearchDeps(ctx, AUTH);
+    const onDetail = vi.fn();
+    deps.onDetail = onDetail;
+
+    const res = await deps.searchSubagent({ task: "find sources" });
+
+    expect(ui.setWorkingMessage).toHaveBeenCalledWith("Searching…");
+    expect(onDetail).toHaveBeenCalledWith("Searching…");
+    expect(res.ok).toBe(true);
+  });
+
   it("sets the tui working message in the searchSubagent transport", async () => {
     const m = await importFresh();
     m.runSubagent.mockResolvedValue({ ok: true, value: { sources: [], coveredFacets: [] } });

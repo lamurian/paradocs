@@ -190,9 +190,14 @@ export async function stageSummarize(
   deps: ResearchDeps,
 ): Promise<ResearchEvent> {
   const okRecords = state.fetches.filter((f) => f.ok && f.content);
-  const outcomes = await mapLimit(okRecords, SUMMARIZE_CONCURRENCY, (rec) =>
-    summarizeOne(state, deps, rec),
-  );
+  const total = okRecords.length;
+  let completed = 0;
+  const outcomes = await mapLimit(okRecords, SUMMARIZE_CONCURRENCY, async (rec) => {
+    const outcome = await summarizeOne(state, deps, rec);
+    completed++;
+    deps.onDetail?.(`summarized ${completed}/${total}`);
+    return outcome;
+  });
   const items: SummaryItem[] = [];
   const failures: FailureRecord[] = [];
   let llmErrors = 0;

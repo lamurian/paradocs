@@ -153,9 +153,21 @@ describe("runStage breaker integration", () => {
       i++;
       return Promise.resolve({ ok: false, error: msg });
     });
-    const deps = baseDeps(llm, knowledgeDir);
+    const detailMessages: string[] = [];
+    const deps: ResearchDeps = {
+      ...baseDeps(llm, knowledgeDir),
+      onDetail: (message: string) => detailMessages.push(message),
+    };
 
     const event = await runStage(summarizeState(3), deps, () => NOW);
+
+    // T1: one 'subagent failure k/3' notice per recorded failure.
+    const failureDetails = detailMessages.filter((m) => m.startsWith("subagent failure "));
+    expect(failureDetails).toEqual([
+      "subagent failure 1/3: err-one",
+      "subagent failure 2/3: err-two",
+      "subagent failure 3/3: err-three",
+    ]);
 
     expect(event.type).toBe("synthesized");
     if (event.type === "synthesized") {
@@ -215,8 +227,10 @@ describe("runResearch breaker path", () => {
       if (s.includes("name: synthesis")) return Promise.resolve({ ok: false, error: "boom-syn" });
       return Promise.resolve({ ok: false, error: "unused" });
     });
+    const detailMessages: string[] = [];
     const deps: ResearchDeps = {
       ...baseDeps(llm, knowledgeDir),
+      onDetail: (message: string) => detailMessages.push(message),
       searchSubagent: vi.fn(
         (): Promise<SearchSubagentOutcome> =>
           Promise.resolve({
@@ -245,6 +259,13 @@ describe("runResearch breaker path", () => {
     // Three summarize failures in a row trip the breaker → degraded terminal.
     expect(state.stage).toBe("DONE_DEGRADED");
     expect(state.synthesisError).toBe("boom-sum");
+    // T1: the breaker notices surfaced as detail messages up to the trip.
+    const failureDetails = detailMessages.filter((m) => m.startsWith("subagent failure "));
+    expect(failureDetails).toEqual([
+      "subagent failure 1/3: boom-sum",
+      "subagent failure 2/3: boom-sum",
+      "subagent failure 3/3: boom-sum",
+    ]);
     // Checkpoint written for the job.
     const { loadCheckpoint, checkpointPathFor } =
       await import("../../extensions/research-engine/checkpoint.js");

@@ -64,8 +64,20 @@ export async function stageFetch(
     ...new Set(state.candidates.map((c) => c.canonicalUrl).filter((u) => !visited.has(u))),
   ];
   const tiers = new Map(state.candidates.map((c) => [c.canonicalUrl, c.tier]));
+  // Wrap the fetch dep so every completed URL emits a 'fetched i/N'
+  // detail message (success or failure — the fetch attempt completed).
+  const total = urls.length;
+  let completed = 0;
+  const fetchFn: ResearchDeps["fetchUrl"] = async (url, timeoutMs, signal) => {
+    try {
+      return await deps.fetchUrl(url, timeoutMs, signal);
+    } finally {
+      completed++;
+      deps.onDetail?.(`fetched ${completed}/${total}`);
+    }
+  };
   const records: FetchRecord[] = await fetchRecords(urls, {
-    fetchFn: deps.fetchUrl,
+    fetchFn,
     concurrency: deps.fetchConcurrency,
     timeoutMs: deps.fetchTimeoutMs,
     tiers,

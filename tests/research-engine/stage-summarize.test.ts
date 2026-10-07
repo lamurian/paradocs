@@ -75,6 +75,7 @@ describe("SUMMARIZE fan-out (T4)", () => {
 
     const knowledgeDir = mkdtempSync(join(homedir(), "t4-fanout-"));
     dirs.push(knowledgeDir);
+    const detailMessages: string[] = [];
     const deps: ResearchDeps = {
       llm,
       searchSubagent: vi.fn(() =>
@@ -93,6 +94,7 @@ describe("SUMMARIZE fan-out (T4)", () => {
       knowledgeDir,
       now: () => Date.parse("2026-10-02T10:00:00Z"),
       fetchConcurrency: 2,
+      onDetail: (message: string) => detailMessages.push(message),
     };
 
     const state = await runResearch(deps, {
@@ -116,5 +118,11 @@ describe("SUMMARIZE fan-out (T4)", () => {
     // The cycle continued: terminal state reached with 5 summaries
     expect(state.summaries).toHaveLength(5);
     expect(["DONE_SUFFICIENT", "DONE_DEGRADED"]).toContain(state.stage);
+    // T1: one 'summarized i/N' per completed source — the failing URL
+    // still completes (as a failure), so i reaches N over 6 records.
+    const summarizeDetails = detailMessages.filter((m) => m.startsWith("summarized "));
+    expect([...summarizeDetails].sort()).toEqual(
+      Array.from({ length: 6 }, (_, i) => `summarized ${i + 1}/6`).sort(),
+    );
   });
 });
