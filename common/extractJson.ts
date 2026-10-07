@@ -42,6 +42,70 @@ export function extractJson(text: string): unknown {
   return null;
 }
 
+/** Tags whose markup marks hallucinated tool-call blocks. */
+const TOOL_CALL_TAG_PATTERN = "function_calls?|tool_calls?|tool_use|toolcall|invoke";
+
+/** Marker substrings that identify tool-call markup in fenced content. */
+const TOOL_CALL_MARKERS = [
+  "function_calls",
+  "function_call",
+  "tool_calls",
+  "tool_call",
+  "tool_use",
+  "toolcall",
+  "invoke",
+];
+
+/**
+ * Remove tool-call-markup blocks from LLM output.
+ *
+ * Models occasionally hallucinate tool calls in free-text responses
+ * (e.g. bare function_calls/invoke tags or fenced tool_use JSON), which
+ * breaks naive JSON extraction. This strips:
+ * - fenced code blocks whose content mentions tool-call markers
+ *   (function_calls, tool_call, tool_use, invoke, toolcall);
+ * - bare paired markup tags for those markers, including nested
+ *   function_calls wrapping invoke blocks, and orphan tags left by
+ *   truncated output.
+ * Surrounding non-markup text is preserved.
+ *
+ * @param text - Raw LLM output text.
+ * @returns Text with tool-call markup removed.
+ */
+export function stripToolCallLikeBlocks(text: string): string {
+  if (!text) return text;
+  let out = text;
+
+  // Fenced blocks whose content mentions a tool-call marker.
+  out = out.replace(/```[^\n]*\n([\s\S]*?)```/g, (block, inner: string) =>
+    hasToolCallMarker(inner) ? "" : block,
+  );
+
+  // Bare paired markup: <tag ...> ... </tag>. Repeat to unwrap nesting
+  // (function_calls wrapping invoke blocks).
+  const paired = new RegExp(
+    `<\\/?(${TOOL_CALL_TAG_PATTERN})(\\s[^>]*)?>[\\s\\S]*?<\\/?(${TOOL_CALL_TAG_PATTERN})(\\s[^>]*)?>`,
+    "gi",
+  );
+  for (let i = 0; i < 10; i++) {
+    const next = out.replace(paired, "");
+    if (next === out) break;
+    out = next;
+  }
+
+  // Orphan open/close tags left by truncated tool-call output.
+  out = out.replace(new RegExp(`<\\/?(${TOOL_CALL_TAG_PATTERN})(\\s[^>]*)?\\s*>`, "gi"), "");
+
+  // Collapse the blank runs removals leave behind, trim edges.
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Whether a string mentions any tool-call markup marker. */
+function hasToolCallMarker(s: string): boolean {
+  const lower = s.toLowerCase();
+  return TOOL_CALL_MARKERS.some((m) => lower.includes(m));
+}
+
 /**
  * Try parsing a string as JSON, optionally with trailing comma fix.
  *

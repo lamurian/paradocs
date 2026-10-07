@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { extractJson } from "../../common/extractJson.js";
+import { extractJson, stripToolCallLikeBlocks } from "../../common/extractJson.js";
 
 describe("extractJson", () => {
   it("should parse clean JSON as-is", () => {
@@ -74,5 +74,38 @@ describe("extractJson", () => {
 
   it("should return null for unparseable text with markdown but no JSON", () => {
     expect(extractJson("```\nThis is a code block without JSON.\n```")).toBeNull();
+  });
+});
+
+describe("stripToolCallLikeBlocks", () => {
+  it("should remove fenced blocks containing tool-call markers", () => {
+    const text =
+      'Intro.\n\n```json\n{"type": "tool_use", "name": "list_directory"}\n```\n\n{"notes": []}';
+    expect(stripToolCallLikeBlocks(text)).toBe('Intro.\n\n{"notes": []}');
+  });
+
+  it("should keep fenced blocks without tool-call markers", () => {
+    const text = '```json\n{"keep": true}\n```\n\n{"answer": 2}';
+    expect(stripToolCallLikeBlocks(text)).toBe(text);
+  });
+
+  it("should remove bare function_calls/invoke markup and keep surrounding text", () => {
+    const text =
+      'Planning.\n\n<function_calls>\n<invoke name="list_directory" path="/kb">\n</invoke>\n</function_calls>\n\nDone. {"notes": []}';
+    expect(stripToolCallLikeBlocks(text)).toBe('Planning.\n\nDone. {"notes": []}');
+  });
+
+  it("should remove a lone tool_use block", () => {
+    const text = '<tool_use>\n<name>list_directory</name>\n</tool_use>\n\n{"ok": true}';
+    expect(stripToolCallLikeBlocks(text)).toBe('{"ok": true}');
+  });
+
+  it("should leave plain prose mentioning tool names untouched", () => {
+    const text = "The invoke helper wraps tool_call responses for list_directory.";
+    expect(stripToolCallLikeBlocks(text)).toBe(text);
+  });
+
+  it("should return empty text unchanged", () => {
+    expect(stripToolCallLikeBlocks("")).toBe("");
   });
 });

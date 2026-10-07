@@ -16,7 +16,7 @@ import { writeDraftNote } from "./draft.js";
 import { toSubagentModel } from "./types.js";
 import { resolveAllCitations, updateExistingNote, createNewNotes } from "./writeback-helpers.js";
 import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
-import { extractJson } from "../../common/extractJson.js";
+import { extractJson, stripToolCallLikeBlocks } from "../../common/extractJson.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import { buildSubagentArgs, resolveSubagentTimeoutMs, runSubagent } from "../../common/subagent.js";
 import { searchDocs } from "../para-knowledge/db-sqlite.js";
@@ -69,21 +69,34 @@ Rules:
 /**
  * Parse and validate the grouping LLM response (lenient).
  *
+ * Tool-call-like markup (hallucinated function_calls/invoke blocks) is
+ * stripped before JSON extraction. Note entries are validated
+ * individually: entries lacking string title/content are dropped, so one
+ * malformed entry never nulls a response that still carries valid notes.
  * Missing \`outdated\` arrays default to [] (models omit empty arrays);
- * missing or non-array \`notes\` yields null.
+ * null only when \`notes\` is missing or has zero valid entries.
  *
  * @param text - Raw LLM response text.
- * @returns Parsed grouping result, or null when the shape is invalid.
+ * @returns Parsed grouping result, or null when no valid note remains.
  */
 export function parseGrouping(text: string): GroupingResult | null {
-  const parsed = extractJson(text);
+  const parsed = extractJson(stripToolCallLikeBlocks(text));
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const obj = parsed as Partial<GroupingResult>;
+  const obj = parsed as { notes?: unknown; outdated?: unknown };
   if (!Array.isArray(obj.notes)) return null;
+  const notes = obj.notes.filter(isUsableNote) as GroupedNote[];
+  if (notes.length === 0) return null;
   return {
-    notes: obj.notes,
-    outdated: Array.isArray(obj.outdated) ? obj.outdated : [],
+    notes,
+    outdated: Array.isArray(obj.outdated) ? (obj.outdated as GroupedOutdated[]) : [],
   };
+}
+
+/** A note entry is usable when it carries string title and content. */
+function isUsableNote(entry: unknown): boolean {
+  if (typeof entry !== "object" || entry === null) return false;
+  const note = entry as { title?: unknown; content?: unknown };
+  return typeof note.title === "string" && typeof note.content === "string";
 }
 
 /** Default grouping call: one lean subagent with GROUPING_PROMPT. */
