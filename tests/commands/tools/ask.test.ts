@@ -1,5 +1,8 @@
 /**
- * Tests for the ask tool — quick/deep modes, escalation UX, digest (T14).
+ * Tests for the ask tool — quick/deep modes, escalation UX, digest (T14),
+ * progress streaming via onUpdate (T3).
+ *
+ * Fixtures and harness live in helpers/ask-tool-fixtures.ts.
  *
  * @module tests/commands/tools/ask.test
  */
@@ -20,10 +23,14 @@ vi.mock("../../../extensions/research-engine/deps.js", () => ({
 }));
 
 import {
-  ASK_QUICK_PROFILE,
-  ASK_DEEP_PROFILE,
-} from "../../../extensions/research-engine/profiles.js";
+  baseState,
+  ESCALATED,
+  DEEP_DONE,
+  runAskTool,
+  importTool,
+} from "./helpers/ask-tool-fixtures.js";
 
+import type { ToolUpdate } from "./helpers/ask-tool-fixtures.js";
 import type { ResearchState } from "../../../extensions/research-engine/state.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -45,120 +52,6 @@ afterEach(() => {
   delete process.env.KNOWLEDGE_DIR;
   delete process.env.KNOWLEDGE_DB;
 });
-
-function baseState(overrides: Partial<ResearchState> = {}): ResearchState {
-  return {
-    jobId: "ask-x",
-    question: "what is x",
-    mode: "breadth",
-    profile: ASK_QUICK_PROFILE,
-    stage: "DONE_SUFFICIENT",
-    cycle: 1,
-    startedAt: 0,
-    deadlineAt: 1,
-    queries: ["q1"],
-    kbDocs: [],
-    kbSufficient: null,
-    kbFreshRatio: null,
-    kbCovered: false,
-    candidates: [],
-    lastRankCount: 10,
-    fetches: [],
-    summaries: Array.from({ length: 5 }, (_, i) => ({
-      url: `https://a.com/${i}`,
-      canonicalUrl: `https://a.com/${i}`,
-      summary: `summary ${i}`,
-    })),
-    visited: ["https://a.com/0"],
-    askedQuestions: ["q1"],
-    coveredFacets: [],
-    gaps: [],
-    cycles: [{ cycle: 1, questions: ["q1"], candidates: 10, fetched: 5, summarized: 5 }],
-    failures: [],
-    llmErrorCount: 0,
-    deadlineHit: false,
-    degraded: false,
-    synthesis: "Quick answer.",
-    writeback: { created: ["Resources/n.md"], updated: [], skipped: [] },
-    trace: [],
-    ...overrides,
-  };
-}
-
-const ESCALATED: ResearchState = baseState({
-  jobId: "ask-esc",
-  stage: "ESCALATED",
-  summaries: [
-    { url: "https://a.com/0", canonicalUrl: "https://a.com/0", summary: "s0" },
-    { url: "https://a.com/1", canonicalUrl: "https://a.com/1", summary: "s1" },
-  ],
-  lastRankCount: 6,
-  synthesis: undefined,
-  gaps: ["more sources"],
-  cycles: [{ cycle: 1, questions: ["old q"], candidates: 6, fetched: 6, summarized: 2 }],
-  askedQuestions: ["old q"],
-  visited: ["https://a.com/0"],
-  escalation: {
-    from: "ASSESS",
-    escalate: true,
-    reason: "THIN_CANDIDATES (6<8 candidates)",
-    guards: { lastRankCount: 6 },
-  },
-});
-
-const DEEP_DONE: ResearchState = baseState({
-  jobId: "ask-esc-deep",
-  profile: ASK_DEEP_PROFILE,
-  synthesis: "Deep answer.",
-  summaries: [{ url: "https://deep.com/1", canonicalUrl: "https://deep.com/1", summary: "d1" }],
-});
-
-function makeToolCtx(): Record<string, unknown> {
-  return {
-    cwd: "/test",
-    mode: "rpc",
-    model: { id: "m", provider: "p" },
-    modelRegistry: {
-      getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "sk-test" }),
-    },
-  };
-}
-
-async function runAskTool(
-  tool: Record<string, unknown>,
-  params: Record<string, unknown>,
-): Promise<{ content: Array<{ type: string; text: string }>; details: Record<string, unknown> }> {
-  const fn = tool.execute as (
-    id: string,
-    p: Record<string, unknown>,
-    sig: undefined,
-    up: undefined,
-    ctx: Record<string, unknown>,
-  ) => Promise<{
-    content: Array<{ type: string; text: string }>;
-    details: Record<string, unknown>;
-  }>;
-  return fn("call", params, undefined, undefined, makeToolCtx());
-}
-
-async function importTool(pi: { sendUserMessage: ReturnType<typeof vi.fn> }): Promise<{
-  tool: Record<string, unknown>;
-  runResearch: ReturnType<typeof vi.fn>;
-  buildResearchDeps: ReturnType<typeof vi.fn>;
-}> {
-  vi.resetModules();
-  const { registerAskTool } = await import("../../../extensions/commands/tools/ask.js");
-  const orch = await import("../../../extensions/research-engine/orchestrator.js");
-  const deps = await import("../../../extensions/research-engine/deps.js");
-  vi.clearAllMocks();
-  const registerTool = vi.fn();
-  registerAskTool({ registerTool, on: vi.fn(), ...pi } as never);
-  return {
-    tool: registerTool.mock.calls[0][0] as Record<string, unknown>,
-    runResearch: vi.mocked(orch.runResearch),
-    buildResearchDeps: vi.mocked(deps.buildResearchDeps),
-  };
-}
 
 describe("ask tool — quick/deep modes (T14)", () => {
   it("should register with KNOWLEDGE_DIR in description and guidelines", async () => {
@@ -259,6 +152,69 @@ describe("ask tool — quick/deep modes (T14)", () => {
     const delivered = pi.sendUserMessage.mock.calls[0];
     expect(delivered[0]).toContain("Deep research finished");
     expect(delivered[1]).toEqual({ deliverAs: "followUp" });
+  });
+
+  it("quick: streams stage/detail progress via onUpdate before the final result (T3)", async () => {
+    const pi = { sendUserMessage: vi.fn() };
+    const { tool, runResearch } = await importTool(pi);
+    runResearch.mockImplementation(((deps: {
+      onProgress?: (stage: string, message: string) => void;
+      onDetail?: (message: string) => void;
+    }) => {
+      deps.onProgress?.("FETCH", "fetching…");
+      deps.onDetail?.("fetched 2/5");
+      deps.onProgress?.("SYNTHESIZE", "synthesizing…");
+      return Promise.resolve(baseState());
+    }) as never);
+
+    const updates: ToolUpdate[] = [];
+    const result = await runAskTool(tool, { question: "what is x" }, (u) => updates.push(u));
+
+    expect(updates.length).toBeGreaterThanOrEqual(4);
+    expect(updates[0].content[0].text).toContain("Researching knowledge base and web…");
+    expect(
+      updates.some((u) => u.content[0].text === "fetching…" && u.details.stage === "FETCH"),
+    ).toBe(true);
+    expect(updates.some((u) => u.content[0].text === "fetched 2/5")).toBe(true);
+    expect(
+      updates.some(
+        (u) => u.content[0].text === "synthesizing…" && u.details.stage === "SYNTHESIZE",
+      ),
+    ).toBe(true);
+
+    // Final rendering unchanged: answer + digest + state path.
+    const text = result.content[0].text;
+    expect(text).toContain("Quick answer.");
+    expect(text).toContain("Digest:");
+    expect(text).toContain("sources: 5");
+    expect(text).toContain(`State: ${join(kbDir, ".research")}`);
+    expect(result.details.digest).toMatchObject({ sourceCount: 5 });
+  });
+
+  it("deep: stays silent beyond the startup update (T3)", async () => {
+    const pi = { sendUserMessage: vi.fn() };
+    const { tool, runResearch } = await importTool(pi);
+    let resolveRun: (s: ResearchState) => void = () => {};
+    runResearch.mockReturnValue(
+      new Promise<ResearchState>((r) => {
+        resolveRun = r;
+      }),
+    );
+
+    const updates: ToolUpdate[] = [];
+    const result = await runAskTool(tool, { question: "broad topic", mode: "deep" }, (u) =>
+      updates.push(u),
+    );
+
+    expect(result.details.mode).toBe("deep");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].content[0].text).toContain("Researching knowledge base and web…");
+    const depsArg = runResearch.mock.calls[0][0] as Record<string, unknown>;
+    expect(depsArg.onProgress).toBeUndefined();
+    expect(depsArg.onDetail).toBeUndefined();
+
+    resolveRun(DEEP_DONE);
+    await vi.waitFor(() => expect(pi.sendUserMessage).toHaveBeenCalledTimes(1));
   });
 
   it("should seed avoidQuestions/knownSources from the digest params", async () => {

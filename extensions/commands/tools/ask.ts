@@ -148,6 +148,23 @@ export function registerAskTool(pi: ExtensionAPI): void {
       };
       const deps = buildResearchDeps(ctx, auth, { allowEscalation: !deep });
 
+      if (!deep) {
+        // Quick mode streams stage/detail progress as tool-execution updates
+        // (RPC pattern, same as explore); deep mode stays silent.
+        deps.onProgress = (stage, message) => {
+          onUpdate?.({
+            content: [{ type: "text" as const, text: message }],
+            details: { stage },
+          });
+        };
+        deps.onDetail = (message) => {
+          onUpdate?.({
+            content: [{ type: "text" as const, text: message }],
+            details: {},
+          });
+        };
+      }
+
       const deliver = (state: ResearchState, path: string): void => {
         pi.sendUserMessage(
           `Deep research finished for "${question}":\n\n${renderToolResult(state, path)}`,
