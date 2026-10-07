@@ -64,16 +64,29 @@ function fixtureState(overrides: Partial<ResearchState> = {}): ResearchState {
   };
 }
 
+/**
+ * Build a mock ctx.ui with a spy for every UI channel.
+ *
+ * @param overrides - Replace specific spies (e.g. share a setStatus mock).
+ * @returns Mock UI object.
+ */
+function makeUi(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    notify: vi.fn(),
+    setWorkingVisible: vi.fn(),
+    setWorkingMessage: vi.fn(),
+    setStatus: vi.fn(),
+    custom: vi.fn(),
+    ...overrides,
+  };
+}
+
 function makeCtx(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    ui: {
-      notify: vi.fn(),
-      setWorkingVisible: vi.fn(),
-      setWorkingMessage: vi.fn(),
-      custom: vi.fn(),
-    },
+    ui: makeUi(),
     cwd: "/test",
     mode: "rpc",
+    hasUI: true,
     model: { id: "m", provider: "p" },
     modelRegistry: {
       getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: "sk-test" }),
@@ -132,7 +145,7 @@ describe("/ask command — FSM orchestrator flow (T13)", () => {
     await handler(
       "What is x?",
       makeCtx({
-        ui: { notify },
+        ui: makeUi({ notify }),
         modelRegistry: { getApiKeyAndHeaders },
       }) as never,
     );
@@ -150,7 +163,8 @@ describe("/ask command — FSM orchestrator flow (T13)", () => {
       }),
     );
     const notify = vi.fn();
-    const ctx = makeCtx({ ui: { notify } });
+    const setStatus = vi.fn();
+    const ctx = makeCtx({ ui: makeUi({ notify, setStatus }) });
     const handler = createHandler({ sendUserMessage } as never);
 
     const started = Date.now();
@@ -171,6 +185,61 @@ describe("/ask command — FSM orchestrator flow (T13)", () => {
     expect(message).toContain("## Answer: What is x?");
     expect(message).toContain("Synthesized answer about x.");
     expect(message).toContain("created: Resources/new-note.md");
+  });
+
+  it("rpc: sets 'Researcher: {q}' status before the run, updates it, clears at the end", async () => {
+    const { createHandler, runResearch } = await importHandler();
+    let resolveRun: (s: ResearchState) => void = () => {};
+    runResearch.mockReturnValue(
+      new Promise<ResearchState>((r) => {
+        resolveRun = r;
+      }),
+    );
+    const setStatus = vi.fn();
+    const ui = makeUi({ setStatus });
+    const handler = createHandler({ sendUserMessage } as never);
+
+    const started = Date.now();
+    await handler("What is x?", makeCtx({ ui }) as never);
+    expect(Date.now() - started).toBeLessThan(500);
+
+    // Initial status is set before the pipeline starts.
+    expect(setStatus).toHaveBeenNthCalledWith(1, "research", "Researcher: What is x?");
+    expect(setStatus.mock.invocationCallOrder[0]).toBeLessThan(
+      runResearch.mock.invocationCallOrder[0],
+    );
+
+    // onProgress and onDetail both update the same status key mid-run.
+    const deps = runResearch.mock.calls[0][0] as ResearchDeps;
+    deps.onProgress?.("SEARCH", "searching…");
+    deps.onDetail?.("fetched 1/3");
+    expect(setStatus).toHaveBeenCalledWith("research", "Researcher: What is x? — searching…");
+    expect(setStatus).toHaveBeenCalledWith("research", "Researcher: What is x? — fetched 1/3");
+
+    resolveRun(fixtureState());
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalledTimes(1));
+    // The key is cleared after delivery.
+    expect(setStatus).toHaveBeenLastCalledWith("research", undefined);
+    // TUI channels stay silent in rpc mode.
+    expect(ui.setWorkingMessage).not.toHaveBeenCalled();
+  });
+
+  it("rpc: clears the status key after a failed run and keeps notify(error)", async () => {
+    const { createHandler, runResearch } = await importHandler();
+    runResearch.mockRejectedValue(new Error("synthesis timed out after 60000ms"));
+    const notify = vi.fn();
+    const setStatus = vi.fn();
+    const ui = makeUi({ notify, setStatus });
+    const handler = createHandler({ sendUserMessage } as never);
+    await handler("What is x?", makeCtx({ ui }) as never);
+
+    expect(setStatus).toHaveBeenNthCalledWith(1, "research", "Researcher: What is x?");
+    await vi.waitFor(() => expect(setStatus).toHaveBeenCalledWith("research", undefined));
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("Research failed: synthesis timed out"),
+      "error",
+    );
+    expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
   it("T11: render synthesis failures with the real error message", async () => {
@@ -205,12 +274,7 @@ describe("/ask command — FSM orchestrator flow (T13)", () => {
       deps.onProgress?.("WRITE_BACK", "writing back…");
       return Promise.resolve(fixtureState());
     }) as never);
-    const ui = {
-      notify: vi.fn(),
-      setWorkingVisible: vi.fn(),
-      setWorkingMessage: vi.fn(),
-      custom: vi.fn(),
-    };
+    const ui = makeUi();
     const handler = createHandler({ sendUserMessage } as never);
     await handler("What is x?", makeCtx({ mode: "tui", ui }) as never);
 
@@ -220,6 +284,7 @@ describe("/ask command — FSM orchestrator flow (T13)", () => {
     expect(ui.setWorkingMessage).toHaveBeenCalledWith("summarizing…");
     expect(ui.setWorkingMessage).toHaveBeenCalledWith("writing back…");
     expect(ui.setWorkingVisible).toHaveBeenLastCalledWith(false);
+    expect(ui.setStatus).not.toHaveBeenCalled();
     expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("## Answer: What is x?"));
   });
 

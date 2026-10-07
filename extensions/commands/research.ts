@@ -81,8 +81,21 @@ export function createHandler(pi: ExtensionAPI) {
     if (!auth) return;
     configureEnv(ctx.cwd);
 
+    // Non-tui UI modes (rpc/json/print with a live UI) surface pipeline
+    // progress in the footer status bar; the key is cleared in the delivery
+    // finally block on both success and failure so it never lingers.
+    const statusKey = ctx.mode !== "tui" && ctx.hasUI ? "research" : undefined;
+
     const deps = buildResearchDeps(ctx, auth, {});
-    if (ctx.mode === "tui") {
+    if (statusKey) {
+      ctx.ui.setStatus(statusKey, `Researcher: ${topic}`);
+      deps.onProgress = (_stage: ResearchStage, message: string) => {
+        ctx.ui.setStatus(statusKey, `Researcher: ${topic} — ${message}`);
+      };
+      deps.onDetail = (message: string) => {
+        ctx.ui.setStatus(statusKey, `Researcher: ${topic} — ${message}`);
+      };
+    } else if (ctx.mode === "tui") {
       deps.onProgress = (_stage: ResearchStage, message: string) => {
         ctx.ui.setWorkingVisible(true);
         ctx.ui.setWorkingMessage(message);
@@ -109,13 +122,17 @@ export function createHandler(pi: ExtensionAPI) {
       return;
     }
 
-    void run
-      .then((state) => {
+    // rpc/json/print: never block the prompt ack — deliver in the background.
+    void (async () => {
+      try {
+        const state = await run;
         pi.sendUserMessage(renderResearchReport(topic, state));
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         ctx.ui.notify(`Research failed: ${msg.slice(0, 200)}`, "error");
-      });
+      } finally {
+        if (statusKey) ctx.ui.setStatus(statusKey, undefined);
+      }
+    })();
   };
 }
