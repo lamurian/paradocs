@@ -167,6 +167,33 @@ describe("buildResearchDeps", () => {
     expect(onDetail).toHaveBeenCalledWith("Researching…");
   });
 
+  it("llm: passes thinking medium for the synthesis role, minimal otherwise", async () => {
+    const m = importDeps();
+    const { ctx } = makeCtx("rpc");
+    const deps = m.buildResearchDeps(ctx as never, AUTH, {});
+    m.runSubagent.mockResolvedValue({ ok: true, text: "v", value: "v" });
+    // Mirror the real builder's flag emission so argv assertions are meaningful.
+    m.buildSubagentArgs.mockImplementation((i: { thinking?: string; task: string }) => [
+      "ARGS",
+      "--thinking",
+      i.thinking ?? "minimal",
+      i.task,
+    ]);
+    const cases = [
+      ["synthesis", "medium"],
+      ["summarize", "minimal"],
+      ["judge", "minimal"],
+    ] as const;
+    for (const [role, thinking] of cases) {
+      await deps.llm({ ...LLM_INPUT, role });
+      const input = m.buildSubagentArgs.mock.calls.at(-1)?.[0] as { thinking?: string };
+      expect(input.thinking).toBe(role === "synthesis" ? "medium" : undefined);
+      const args = (m.runSubagent.mock.calls.at(-1)?.[0] as { args: string[] }).args;
+      expect(args.filter((a) => a === "--thinking")).toHaveLength(1);
+      expect(args[args.indexOf("--thinking") + 1]).toBe(thinking);
+    }
+  });
+
   it("searchSubagent: invokes onDetail with the searching label in rpc mode", async () => {
     const m = importDeps();
     const { ctx } = makeCtx("rpc");

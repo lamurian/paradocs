@@ -70,6 +70,9 @@ export function buildResearchDeps(
       systemPrompt: input.system,
       task: input.user,
       extraArgs: ["--no-tools"],
+      // Role-aware thinking: synthesis runs with medium; other roles keep
+      // the builder's default (minimal).
+      ...(input.role === "synthesis" ? { thinking: "medium" } : {}),
     });
     const res = await runSubagent({
       args,

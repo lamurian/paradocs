@@ -30,7 +30,8 @@ export type SpawnImpl = (
 /** Per-role default timeouts (ms); env-overridable. */
 const ROLE_TIMEOUTS: Record<string, number> = {
   search: 120_000,
-  synthesis: 120_000,
+  /** Backstop budget for the long synthesis call (role-aware thinking). */
+  synthesis: 300_000,
   grouping: 120_000,
   summarize: 60_000,
   judge: 60_000,
@@ -45,6 +46,7 @@ const ROLE_TIMEOUTS: Record<string, number> = {
  * finally the task as the positional prompt.
  *
  * @param input - Provider/model ids, literal system prompt text, task, role extras.
+ *   `thinking` sets the --thinking level (default "minimal").
  * @returns Full argv array.
  */
 export function buildSubagentArgs(input: {
@@ -53,6 +55,8 @@ export function buildSubagentArgs(input: {
   systemPrompt: string;
   task: string;
   extraArgs?: string[];
+  /** --thinking level; defaults to "minimal". */
+  thinking?: string;
 }): string[] {
   return [
     "--mode",
@@ -63,7 +67,7 @@ export function buildSubagentArgs(input: {
     ...(input.extraArgs ?? []),
     "--offline",
     "--thinking",
-    "minimal",
+    input.thinking ?? "minimal",
     "--no-context-files",
     "--no-skills",
     "--provider",
@@ -103,8 +107,8 @@ export function getPiInvocation(args: string[]): { command: string; args: string
  * Resolve the timeout for a subagent role.
  *
  * Precedence: explicit override → PI_SUBAGENT_TIMEOUT_MS_<ROLE> →
- * PI_SUBAGENT_TIMEOUT_MS → role default (search/synthesis/grouping 120s,
- * summarize/judge 60s).
+ * PI_SUBAGENT_TIMEOUT_MS → role default (search/grouping 120s,
+ * synthesis 300s backstop, summarize/judge 60s).
  *
  * @param role - Pipeline role (search, summarize, judge, synthesis, grouping).
  * @param overrideMs - Explicit timeout from the caller.

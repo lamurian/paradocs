@@ -9,7 +9,11 @@
 
 import { describe, it, expect, afterEach } from "vitest";
 
-import { getPiInvocation } from "../../common/subagent-args.js";
+import {
+  buildSubagentArgs,
+  getPiInvocation,
+  resolveSubagentTimeoutMs,
+} from "../../common/subagent-args.js";
 
 const ORIGINAL_ARGV1 = process.argv[1];
 const ORIGINAL_EXEC = Object.getOwnPropertyDescriptor(process, "execPath");
@@ -56,5 +60,63 @@ describe("getPiInvocation branches", () => {
     setArgv1("/$bunfs/root/index.js");
     const res = getPiInvocation(["--version"]);
     expect(res.command).toBe("pi");
+  });
+});
+
+// ── Role-aware budgets and thinking ───────────────────────────────────
+
+/** Run fn with synthesis timeout env vars cleared, restoring them after. */
+function withoutTimeoutEnv(fn: () => void): void {
+  const prevRole = process.env.PI_SUBAGENT_TIMEOUT_MS_SYNTHESIS;
+  const prevGlobal = process.env.PI_SUBAGENT_TIMEOUT_MS;
+  try {
+    delete process.env.PI_SUBAGENT_TIMEOUT_MS_SYNTHESIS;
+    delete process.env.PI_SUBAGENT_TIMEOUT_MS;
+    fn();
+  } finally {
+    if (prevRole === undefined) delete process.env.PI_SUBAGENT_TIMEOUT_MS_SYNTHESIS;
+    else process.env.PI_SUBAGENT_TIMEOUT_MS_SYNTHESIS = prevRole;
+    if (prevGlobal === undefined) delete process.env.PI_SUBAGENT_TIMEOUT_MS;
+    else process.env.PI_SUBAGENT_TIMEOUT_MS = prevGlobal;
+  }
+}
+
+describe("resolveSubagentTimeoutMs — synthesis role budget", () => {
+  it("returns 300000 for synthesis by default (backstop budget)", () => {
+    withoutTimeoutEnv(() => {
+      expect(resolveSubagentTimeoutMs("synthesis")).toBe(300_000);
+    });
+  });
+
+  it("keeps env overrides winning over the synthesis default", () => {
+    withoutTimeoutEnv(() => {
+      process.env.PI_SUBAGENT_TIMEOUT_MS = "9000";
+      expect(resolveSubagentTimeoutMs("synthesis")).toBe(9_000);
+      process.env.PI_SUBAGENT_TIMEOUT_MS_SYNTHESIS = "45000";
+      expect(resolveSubagentTimeoutMs("synthesis")).toBe(45_000);
+    });
+  });
+});
+
+describe("buildSubagentArgs — thinking level", () => {
+  const BASE = { provider: "p", modelId: "m", systemPrompt: "s", task: "t" };
+
+  /** Thinking values paired with each --thinking flag occurrence. */
+  function thinkingLevels(args: string[]): string[] {
+    return args
+      .map((a, i) => (a === "--thinking" ? args[i + 1] : undefined))
+      .filter((v): v is string => v !== undefined);
+  }
+
+  it("emits a single --thinking minimal pair by default", () => {
+    const args = buildSubagentArgs(BASE);
+    expect(args.filter((a) => a === "--thinking")).toHaveLength(1);
+    expect(thinkingLevels(args)).toEqual(["minimal"]);
+  });
+
+  it("emits exactly one --thinking medium pair when thinking is set", () => {
+    const args = buildSubagentArgs({ ...BASE, thinking: "medium" });
+    expect(args.filter((a) => a === "--thinking")).toHaveLength(1);
+    expect(thinkingLevels(args)).toEqual(["medium"]);
   });
 });
