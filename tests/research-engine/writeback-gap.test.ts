@@ -1,7 +1,8 @@
 /**
- * Gap tests for writeback.ts uncovered paths: the default subagentGrouping
- * path (no injected groupingFn), the draft-note success/failure branches,
- * and the unresolved-citation skip in writeback-helpers.resolveAllCitations.
+ * Gap tests for writeback.ts uncovered paths: the default planFn/fillFn
+ * path via mocked runSubagent (no injected calls), the draft-note
+ * success/failure branches, and the unresolved-citation skip in
+ * writeback-helpers.resolveAllCitations.
  *
  * Uses the async resetModules importFresh pattern — with test.isolate=false
  * the shared module cache can hold stale mock bindings; see writeback.test.
@@ -51,17 +52,27 @@ const KB_DIR = "/tmp/re-kb-gap-test";
 type WriteBackToKB = typeof import("../../extensions/research-engine/writeback.js").writeBackToKB;
 type ResolveCitation = MockedFunction<typeof import("../../common/citation.js").resolveCitation>;
 
+interface PlanModule {
+  parsePlan: (text: string) => unknown;
+  PLAN_PROMPT: string;
+  FILL_PROMPT: string;
+}
+
 interface Harness {
   writeBackToKB: WriteBackToKB;
+  planModule: PlanModule;
   runSubagent: ReturnType<typeof vi.fn>;
+  buildSubagentArgs: ReturnType<typeof vi.fn>;
   writeDraftNote: ReturnType<typeof vi.fn>;
   resolveCitation: ResolveCitation;
-  validateDocuments: ReturnType<typeof vi.fn>;
+  createFilesOnDisk: ReturnType<typeof vi.fn>;
 }
 
 /**
  * Reset the module cache and re-import mocked deps + the subject so the
  * returned spies are the instances the fresh writeback.js is bound to.
+ * The plan module is imported inside the same reset window so its
+ * parsePlan identity matches the one writeback.js captured.
  */
 async function importFresh(): Promise<Harness> {
   vi.resetModules();
@@ -74,6 +85,7 @@ async function importFresh(): Promise<Harness> {
   const dbSqlite = await import("../../extensions/para-knowledge/db-sqlite.js");
   const batchHelpers = await import("../../extensions/batch-create/batch-helpers.js");
   const fsPromises = await import("node:fs/promises");
+  const planModule = await import("../../extensions/research-engine/writeback-plan.js");
   const { writeBackToKB } = await import("../../extensions/research-engine/writeback.js");
 
   vi.mocked(notesDb.ensureNotesDb).mockResolvedValue({} as never);
@@ -99,10 +111,12 @@ async function importFresh(): Promise<Harness> {
 
   return {
     writeBackToKB,
+    planModule,
     runSubagent: vi.mocked(subagent.runSubagent),
+    buildSubagentArgs: vi.mocked(subagent.buildSubagentArgs),
     writeDraftNote: vi.mocked(draft.writeDraftNote),
     resolveCitation: vi.mocked(citation.resolveCitation),
-    validateDocuments: vi.mocked(batchHelpers.validateDocuments),
+    createFilesOnDisk: vi.mocked(batchHelpers.createFilesOnDisk),
   };
 }
 
@@ -117,7 +131,15 @@ const MODEL = { id: "m", provider: "p" } as never;
 
 const CTX = { cwd: "/test", model: MODEL } as never;
 
-describe("writeback gap paths — default grouping, draft branches, citations", () => {
+/** One runSubagent mock response per call: plan (parse present) vs fill. */
+type RunOpts = { parse?: (text: string) => unknown };
+const planValue = {
+  plan: [{ title: "N", tags: ["t"], sources: ["https://gap.example/1"] }],
+  outdated: [],
+};
+const fillValue = { ok: true, text: "Body.", value: "## Summary\n\nBody." };
+
+describe("writeback gap paths — default plan/fill, draft branches, citations", () => {
   beforeEach(() => {
     process.env.KNOWLEDGE_DIR = KB_DIR;
     process.env.KNOWLEDGE_DB = "notes.db";
@@ -128,26 +150,48 @@ describe("writeback gap paths — default grouping, draft branches, citations", 
     delete process.env.KNOWLEDGE_DB;
   });
 
-  it("routes grouping through the default subagent path when no groupingFn is injected", async () => {
+  it("routes through the default plan then fill subagent calls when nothing is injected", async () => {
     const m = await importFresh();
-    m.runSubagent.mockResolvedValue({
-      ok: true,
-      value: { notes: [], outdated: [] },
-    });
+    m.runSubagent.mockImplementation(
+      (opts: RunOpts) =>
+        Promise.resolve(opts.parse ? { ok: true, text: "", value: planValue } : fillValue) as never,
+    );
+    m.createFilesOnDisk.mockResolvedValue([
+      { path: KB_DIR + "/Resources/n.md", title: "N", relPath: "Resources/n.md" },
+    ] as never);
 
     const result = await m.writeBackToKB(RESULT, CTX);
 
-    expect(m.runSubagent).toHaveBeenCalledTimes(1);
-    const call = m.runSubagent.mock.calls[0][0] as Record<string, unknown>;
-    expect(call.args).toEqual(["--lean-args"]);
-    expect(call.cwd).toBe("/test");
-    expect(call.timeoutMs).toBe(1000);
-    expect(call.parse).toEqual(expect.any(Function));
-    expect(result.created).toEqual([]);
+    expect(m.runSubagent).toHaveBeenCalledTimes(2);
+    const [planCall, fillCall] = m.runSubagent.mock.calls.map(
+      (c) => c[0] as Record<string, unknown>,
+    );
+
+    // Plan call: parse via parsePlan, grouping budget, no tools, thinking medium
+    expect(planCall.parse).toBe(m.planModule.parsePlan);
+    expect(planCall.cwd).toBe("/test");
+    expect(planCall.timeoutMs).toBe(1000);
+    expect(planCall.args).toEqual(["--lean-args"]);
+
+    // Fill call: no parse, 60s per-note budget
+    expect(fillCall.parse).toBeUndefined();
+    expect(fillCall.timeoutMs).toBe(60_000);
+
+    // buildSubagentArgs options: role-appropriate system prompts + thinking
+    const argCalls = m.buildSubagentArgs.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    expect(argCalls[0].systemPrompt).toBe(m.planModule.PLAN_PROMPT);
+    expect(argCalls[0].task).toContain("https://gap.example/1");
+    expect(argCalls[0].thinking).toBe("medium");
+    expect(argCalls[0].extraArgs).toEqual(["--no-tools"]);
+    expect(argCalls[1].systemPrompt).toBe(m.planModule.FILL_PROMPT);
+    expect(argCalls[1].task).toContain("Title: N");
+    expect(argCalls[1].thinking).toBe("medium");
+
+    expect(result.created).toEqual(["Resources/n.md"]);
     expect(result.skipped).toEqual([]);
   });
 
-  it("retries the subagent once on failure, then writes the draft note", async () => {
+  it("retries the plan subagent once on failure, then writes the draft note", async () => {
     const m = await importFresh();
     m.runSubagent.mockResolvedValue({ ok: false, error: "subagent down" });
     m.writeDraftNote.mockReturnValue(KB_DIR + "/.research/drafts/job-gap.md");
@@ -155,6 +199,8 @@ describe("writeback gap paths — default grouping, draft branches, citations", 
     const result = await m.writeBackToKB(RESULT, CTX);
 
     expect(m.runSubagent).toHaveBeenCalledTimes(2);
+    const parseFlags = m.runSubagent.mock.calls.map((c) => (c[0] as RunOpts).parse);
+    expect(parseFlags.every((p) => typeof p === "function")).toBe(true);
     expect(result.skipped).toContain("write-back skipped: grouping failed: subagent down");
     expect(result.skipped).toContain("draft: " + KB_DIR + "/.research/drafts/job-gap.md");
   });
@@ -187,7 +233,27 @@ describe("writeback gap paths — default grouping, draft branches, citations", 
             },
       ),
     );
-    m.runSubagent.mockResolvedValue({ ok: true, value: { notes: [], outdated: [] } });
+    m.runSubagent.mockImplementation(
+      (opts: RunOpts) =>
+        Promise.resolve(
+          opts.parse
+            ? {
+                ok: true,
+                text: "",
+                value: {
+                  plan: [
+                    {
+                      title: "N",
+                      tags: [],
+                      sources: ["https://nocite.example/9"],
+                    },
+                  ],
+                  outdated: [],
+                },
+              }
+            : fillValue,
+        ) as never,
+    );
 
     const result = await m.writeBackToKB(
       {
@@ -198,5 +264,7 @@ describe("writeback gap paths — default grouping, draft branches, citations", 
     );
 
     expect(result.skipped).toContain("citation unresolved: https://nocite.example/9");
+    // The plan referenced the source, so it must not be double-flagged.
+    expect(result.skipped.some((s) => s.startsWith("source not planned:"))).toBe(false);
   });
 });

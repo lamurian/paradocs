@@ -1,61 +1,92 @@
 /**
- * T4: parseGrouping is lenient - strips hallucinated tool-call markup,
- * validates note entries individually, and defaults missing outdated to [].
+ * T6: parsePlan supersedes the T4 single-call parseGrouping assertions.
+ *
+ * The grouping mega-call is gone: the plan response is tiny structured
+ * JSON ({plan: [{title, tags, area, sources, keyIdea}], outdated: [...]}).
+ * Parsing stays lenient — hallucinated tool-call markup is stripped,
+ * entries are validated individually (malformed ones dropped, null only
+ * when zero valid remain), and optional entry fields get schema defaults.
  *
  * @module tests/research-engine/parse-grouping
  */
 
 import { describe, it, expect } from "vitest";
 
-import { parseGrouping } from "../../extensions/research-engine/writeback.js";
+import { parsePlan } from "../../extensions/research-engine/writeback-plan.js";
 
-describe("parseGrouping (T4)", () => {
-  it("defaults missing outdated to []", () => {
-    const n = { title: "N", content: "C", tags: ["t"] };
-    expect(parseGrouping(JSON.stringify({ notes: [n] }))).toEqual({ notes: [n], outdated: [] });
-  });
+describe("parsePlan (T6)", () => {
+  const entry = {
+    title: "N",
+    tags: ["t"],
+    area: "Areas",
+    sources: ["https://a.example/1"],
+    keyIdea: "k",
+  };
 
-  it("keeps both arrays unchanged when present", () => {
-    const n = { title: "N", content: "C", tags: [] };
+  it("keeps plan and outdated arrays when present", () => {
     const o = { path: "Resources/o.md", reason: "r", content: "c" };
-    expect(parseGrouping(JSON.stringify({ notes: [n], outdated: [o] }))).toEqual({
-      notes: [n],
+    expect(parsePlan(JSON.stringify({ plan: [entry], outdated: [o] }))).toEqual({
+      plan: [entry],
       outdated: [o],
     });
   });
 
-  it("returns null when notes is missing or not an array", () => {
-    expect(parseGrouping("{}")).toBeNull();
-    expect(parseGrouping('{"notes":"nope"}')).toBeNull();
-    expect(parseGrouping("not json")).toBeNull();
+  it("defaults missing outdated to [] and fills optional entry fields", () => {
+    const r = parsePlan(
+      JSON.stringify({ plan: [{ title: "Bare", sources: ["https://b.example/2"] }] }),
+    );
+    expect(r).toEqual({
+      plan: [
+        {
+          title: "Bare",
+          tags: [],
+          area: "Resources",
+          sources: ["https://b.example/2"],
+          keyIdea: "",
+        },
+      ],
+      outdated: [],
+    });
   });
 
-  it("parses a tool-markup-prefixed response with a valid notes array", () => {
-    const n = { title: "N", content: "C", tags: ["t"] };
+  it("returns null when plan is missing or not an array", () => {
+    expect(parsePlan("{}")).toBeNull();
+    expect(parsePlan('{"plan":"nope"}')).toBeNull();
+    expect(parsePlan("not json")).toBeNull();
+  });
+
+  it("parses a tool-markup-prefixed response with a valid plan array", () => {
     const markup =
       '<function_calls>\n<invoke name="list_directory" path="/kb">\n</invoke>\n</function_calls>';
-    const text = `${markup}\n${JSON.stringify({ notes: [n] })}`;
-    expect(parseGrouping(text)).toEqual({ notes: [n], outdated: [] });
+    const text = `${markup}\n${JSON.stringify({ plan: [entry] })}`;
+    expect(parsePlan(text)).toEqual({ plan: [entry], outdated: [] });
   });
 
-  it("parses a fenced tool-call block followed by a valid notes object", () => {
-    const n = { title: "N", content: "C" };
+  it("parses a fenced tool-call block followed by a valid plan object", () => {
     const text =
       '```json\n{"type": "tool_use", "name": "list_directory", "input": {"path": "/kb"}}\n```\n\n' +
-      JSON.stringify({ notes: [n] });
-    expect(parseGrouping(text)).toEqual({ notes: [n], outdated: [] });
+      JSON.stringify({ plan: [entry] });
+    expect(parsePlan(text)).toEqual({ plan: [entry], outdated: [] });
   });
 
-  it("yields only valid entries when notes mix malformed and valid entries", () => {
-    const good = { title: "Good", content: "Body", tags: ["g"] };
+  it("yields only valid entries when the plan mixes malformed and valid entries", () => {
     const response = {
-      notes: [good, { title: "No content" }, { content: "No title" }, null, "junk", 42],
+      plan: [
+        entry,
+        { title: "No sources" },
+        { title: "", sources: ["https://x.example/1"] },
+        { sources: ["https://y.example/1"] },
+        { title: "Bad urls", sources: ["ok", 42] },
+        null,
+        "junk",
+        42,
+      ],
     };
-    expect(parseGrouping(JSON.stringify(response))).toEqual({ notes: [good], outdated: [] });
+    expect(parsePlan(JSON.stringify(response))).toEqual({ plan: [entry], outdated: [] });
   });
 
-  it("returns null when every note entry is malformed", () => {
-    const response = { notes: [{ title: 1 }, { content: 2 }, {}, null, "junk"] };
-    expect(parseGrouping(JSON.stringify(response))).toBeNull();
+  it("returns null when every plan entry is malformed", () => {
+    const response = { plan: [{ title: 1 }, { sources: [] }, {}, null, "junk"] };
+    expect(parsePlan(JSON.stringify(response))).toBeNull();
   });
 });

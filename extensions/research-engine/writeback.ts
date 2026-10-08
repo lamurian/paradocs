@@ -1,125 +1,146 @@
 /**
  * Knowledge base write-back — routes research results into PARA notes.
  *
- * Resolves citations for each unique source URL, groups sources into
- * atomic notes via one subagent call (GROUPING_PROMPT, retried once),
- * then routes: outdated notes → read/merge/reindex under KNOWLEDGE_DIR,
- * new notes → batch-create path (atomicity + citation validation, create,
- * index, auto-link). When grouping fails after the retry, a draft note
- * with sources + citekeys + synthesis is dumped to
- * KNOWLEDGE_DIR/.research/drafts/<jobId>.md — research is never discarded.
+ * Decomposed into plan -> concurrent fills -> route: (1) a tiny structured
+ * plan call (PLAN_PROMPT, thinking medium, grouping budget) maps sources +
+ * citekeys + KB context to per-note entries {title, tags, area, source
+ * urls, key idea}; (2) per-note fill calls run concurrently (limit 4,
+ * thinking medium, 60s each) produce one markdown body each; (3) the
+ * assembled GroupingResult feeds the unchanged routing step: outdated
+ * notes -> read/merge/reindex under KNOWLEDGE_DIR, new notes ->
+ * batch-create path. Degradation: a failed fill drops only that note with
+ * a 'note skipped: {title} ({error})' line; a failed plan call triggers
+ * exactly one corrective retry quoting the bad output (surfaced via
+ * ctx.onProgress), then a draft note with sources + citekeys + synthesis
+ * is dumped to KNOWLEDGE_DIR/.research/drafts/<jobId>.md — research is
+ * never discarded.
  *
  * @module extensions/research-engine/writeback
  */
 
-import { writeDraftNote } from "./draft.js";
 import { toSubagentModel } from "./types.js";
+import { assembleFills, draftFallbackLines, unplannedSourceLines } from "./writeback-assembly.js";
 import { resolveAllCitations, updateExistingNote, createNewNotes } from "./writeback-helpers.js";
+import {
+  PLAN_PROMPT,
+  FILL_PROMPT,
+  buildKbContext,
+  buildSourcesStr,
+  mapEntrySources,
+  fillUser,
+  parsePlan,
+  planFailureReason,
+  planWithRetry,
+} from "./writeback-plan.js";
 import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
-import { extractJson, stripToolCallLikeBlocks } from "../../common/extractJson.js";
 import { ensureNotesDb } from "../../common/notesDb.js";
 import { buildSubagentArgs, resolveSubagentTimeoutMs, runSubagent } from "../../common/subagent.js";
 import { searchDocs } from "../para-knowledge/db-sqlite.js";
 
-import type { ResearchResult, WritebackResult } from "./types.js";
+import type { ResearchResult, RuntimeModel, WritebackResult } from "./types.js";
 import type { GroupedNote, GroupedOutdated } from "./writeback-helpers.js";
+import type { PlanResult, WritebackCallInput, WritebackCallResult } from "./writeback-plan.js";
 
-/** Minimal context surface the write-back needs from commands or tools. */
-export interface WritebackContext {
-  /** Working directory for env config resolution. */
-  cwd: string;
-  /** Runtime model (atomicity subagent) + provider/modelId for grouping. */
-  model: import("./types.js").RuntimeModel;
-  /** Parent abort signal (pipeline cancellation). */
-  signal?: AbortSignal;
-  /**
-   * Injectable grouping call for tests. Defaults to the grouping
-   * subagent (GROUPING_PROMPT, --no-tools, 120s timeout).
-   */
-  groupingFn?: (input: {
-    system: string;
-    user: string;
-    timeoutMs?: number;
-    signal?: AbortSignal;
-  }) => Promise<{ ok: boolean; value?: GroupingResult; error?: string }>;
-}
+/** Max concurrent per-note fill subagent calls. */
+const FILL_CONCURRENCY = 4;
+/** Per-note fill subagent budget (ms): one markdown body. */
+const FILL_TIMEOUT_MS = 60_000;
 
-/** Parsed shape of the grouping LLM response. */
+/** Assembled grouping result feeding the unchanged routing step. */
 export interface GroupingResult {
   notes: GroupedNote[];
   outdated: GroupedOutdated[];
 }
 
-/** System prompt instructing the LLM to group sources and detect outdated notes. */
-export const GROUPING_PROMPT = `You group research sources into atomic knowledge base notes and detect outdated existing notes.
-
-Return ONLY valid JSON. No markdown fences, no explanatory text.
-{
-  "notes": [{"title": "...", "content": "...", "tags": ["..."], "area": "Resources", "source": "url"}],
-  "outdated": [{"path": "Resources/foo.md", "reason": "...", "content": "refreshed markdown body"}]
+/** Minimal context surface the write-back needs from commands or tools. */
+export interface WritebackContext {
+  /** Working directory for env config resolution. */
+  cwd: string;
+  /** Runtime model (atomicity subagent) + provider/modelId for plan/fill. */
+  model: RuntimeModel;
+  /** Parent abort signal (pipeline cancellation). */
+  signal?: AbortSignal;
+  /** Progress messages surfaced to the caller (e.g. onDetail -> status bar). */
+  onProgress?: (message: string) => void;
+  /** Injectable plan call for tests. Defaults to the plan subagent. */
+  planFn?: (input: WritebackCallInput) => Promise<WritebackCallResult<PlanResult>>;
+  /** Injectable per-note fill call for tests. Defaults to the fill subagent. */
+  fillFn?: (input: WritebackCallInput) => Promise<WritebackCallResult<string>>;
 }
 
-Rules:
-- Each note covers exactly one key idea (atomic principle). Recommended body: ## Summary, ## Key Points, ## Sources.
-- Cite sources in note content using @citekey notation from the resolved citations list.
-- area is one of "Resources", "Areas", "Projects" (default "Resources").
-- Mark an existing note outdated ONLY when the new sources supersede it; provide the refreshed markdown body in "content".
-- Keep tags short and reusable.`;
+/** Run one lean write-back subagent call (plan or fill), never throws. */
+async function runWritebackCall<T>(
+  ctx: WritebackContext,
+  input: WritebackCallInput,
+  timeoutMs: number,
+  parse?: (text: string) => T | null,
+): Promise<WritebackCallResult<T>> {
+  const sub = toSubagentModel(ctx.model);
+  const args = buildSubagentArgs({
+    provider: sub.provider,
+    modelId: sub.modelId,
+    systemPrompt: input.system,
+    task: input.user,
+    extraArgs: ["--no-tools"],
+    thinking: "medium",
+  });
+  const res = await runSubagent<T>({
+    args,
+    cwd: ctx.cwd,
+    timeoutMs,
+    signal: input.signal ?? ctx.signal,
+    parse,
+  });
+  if (res.ok) return { ok: true, value: res.value ?? undefined };
+  return { ok: false, error: res.error };
+}
+
+/** Default plan call: one lean subagent mapping sources to tiny entries. */
+function subagentPlan(ctx: WritebackContext): NonNullable<WritebackContext["planFn"]> {
+  return (input) =>
+    runWritebackCall<PlanResult>(
+      ctx,
+      input,
+      input.timeoutMs ?? resolveSubagentTimeoutMs("grouping"),
+      parsePlan,
+    );
+}
+
+/** Default fill call: one lean subagent producing a single note body. */
+function subagentFill(ctx: WritebackContext): NonNullable<WritebackContext["fillFn"]> {
+  return (input) => runWritebackCall<string>(ctx, input, input.timeoutMs ?? FILL_TIMEOUT_MS);
+}
 
 /**
- * Parse and validate the grouping LLM response (lenient).
+ * Map items with bounded concurrency, preserving result order.
  *
- * Tool-call-like markup (hallucinated function_calls/invoke blocks) is
- * stripped before JSON extraction. Note entries are validated
- * individually: entries lacking string title/content are dropped, so one
- * malformed entry never nulls a response that still carries valid notes.
- * Missing \`outdated\` arrays default to [] (models omit empty arrays);
- * null only when \`notes\` is missing or has zero valid entries.
- *
- * @param text - Raw LLM response text.
- * @returns Parsed grouping result, or null when no valid note remains.
+ * @param items - Items to map.
+ * @param limit - Max concurrent fn invocations.
+ * @param fn - Async mapper for one item.
+ * @returns Results in input order.
  */
-export function parseGrouping(text: string): GroupingResult | null {
-  const parsed = extractJson(stripToolCallLikeBlocks(text));
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const obj = parsed as { notes?: unknown; outdated?: unknown };
-  if (!Array.isArray(obj.notes)) return null;
-  const notes = obj.notes.filter(isUsableNote) as GroupedNote[];
-  if (notes.length === 0) return null;
-  return {
-    notes,
-    outdated: Array.isArray(obj.outdated) ? (obj.outdated as GroupedOutdated[]) : [],
+async function mapWithLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i]);
+    }
   };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
-/** A note entry is usable when it carries string title and content. */
-function isUsableNote(entry: unknown): boolean {
-  if (typeof entry !== "object" || entry === null) return false;
-  const note = entry as { title?: unknown; content?: unknown };
-  return typeof note.title === "string" && typeof note.content === "string";
-}
-
-/** Default grouping call: one lean subagent with GROUPING_PROMPT. */
-function subagentGrouping(ctx: WritebackContext): NonNullable<WritebackContext["groupingFn"]> {
-  return async (input) => {
-    const sub = toSubagentModel(ctx.model);
-    const args = buildSubagentArgs({
-      provider: sub.provider,
-      modelId: sub.modelId,
-      systemPrompt: input.system,
-      task: input.user,
-      extraArgs: ["--no-tools"],
-    });
-    const res = await runSubagent<GroupingResult>({
-      args,
-      cwd: ctx.cwd,
-      timeoutMs: input.timeoutMs ?? resolveSubagentTimeoutMs("grouping"),
-      signal: input.signal ?? ctx.signal,
-      parse: parseGrouping,
-    });
-    if (res.ok) return { ok: true, value: res.value ?? undefined };
-    return { ok: false, error: res.error };
-  };
+/** Compose a '<label>: <detail> (<error>)' skip line from a caught error. */
+function errLine(label: string, detail: string, e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  return `${label}: ${detail} (${msg.slice(0, 80)})`;
 }
 
 /**
@@ -127,7 +148,8 @@ function subagentGrouping(ctx: WritebackContext): NonNullable<WritebackContext["
  *
  * @param result - Merged research results (sources carry citation
  *                 metadata; jobId/synthesis feed the draft fallback).
- * @param ctx - Context providing cwd, model, optional grouping override.
+ * @param ctx - Context providing cwd, model, optional plan/fill overrides
+ *              and an onProgress channel for retry/skip notices.
  * @returns Paths created/updated and a list of skipped items.
  */
 export async function writeBackToKB(
@@ -144,70 +166,64 @@ export async function writeBackToKB(
   const citations = await resolveAllCitations(result.sources, ctx.cwd);
   skipped.push(...citations.skipped);
 
-  // 2. KB context for the grouping prompt (deterministic search)
+  // 2. KB context for the plan prompt (deterministic search)
   const db = await ensureNotesDb(ctx.cwd);
-  const kbDocs = searchDocs(db, result.questions.join(" "), {}, 10);
-  const kbCtx =
-    kbDocs.length === 0
-      ? "No existing documents found."
-      : kbDocs
-          .map(
-            (d) =>
-              `- **${d.title}** (\`${d.path}\`)${d.created ? ` (date: ${d.created.slice(0, 10)})` : ""}: ${d.body.slice(0, 300)}`,
-          )
-          .join("\n");
-  const sourcesStr = result.sources
-    .map(
-      (s) =>
-        `- ${s.url}${s.title ? ` (${s.title})` : ""} (@${citations.citekeys.get(s.url) ?? "unresolved"}): ${s.snippet}`,
-    )
-    .join("\n");
+  const kbCtx = buildKbContext(searchDocs(db, result.questions.join(" "), {}, 10));
+  const sourcesStr = buildSourcesStr(result.sources, citations.citekeys);
 
-  // 3. One subagent call: group sources into notes + detect outdated notes.
-  //    Retry once on failure; on final failure dump a draft note.
-  const grouping = ctx.groupingFn ?? subagentGrouping(ctx);
-  const input = {
-    system: GROUPING_PROMPT,
-    user: `Research sources:\n${sourcesStr}\n\nExisting KB docs:\n${kbCtx}`,
-    timeoutMs: resolveSubagentTimeoutMs("grouping"),
-    signal: ctx.signal,
-  };
-  let result1 = await grouping(input);
-  if (!result1.ok || !result1.value) result1 = await grouping(input);
-  const grouped = result1;
-
-  if (!grouped.ok || !grouped.value) {
-    const reason = grouped.ok ? "invalid grouping response" : (grouped.error ?? "grouping failed");
-    skipped.push(`write-back skipped: grouping failed: ${reason}`);
-    try {
-      const path = writeDraftNote(knowledgeDir, {
-        jobId: result.jobId ?? "unknown-job",
-        question: result.questions[0],
-        sources: result.sources,
-        citekeys: citations.citekeys,
-        synthesis: result.synthesis,
-      });
-      skipped.push(`draft: ${path}`);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      skipped.push(`draft failed: ${msg.slice(0, 200)}`);
-    }
+  // 3. Plan call with exactly one corrective retry, then the draft fallback.
+  const plan = ctx.planFn ?? subagentPlan(ctx);
+  const planned = await planWithRetry(
+    plan,
+    {
+      system: PLAN_PROMPT,
+      user: `Research sources:\n${sourcesStr}\n\nExisting KB docs:\n${kbCtx}`,
+      timeoutMs: resolveSubagentTimeoutMs("grouping"),
+      signal: ctx.signal,
+    },
+    ctx.onProgress,
+  );
+  if (!planned.ok || !planned.value) {
+    skipped.push(`write-back skipped: grouping failed: ${planFailureReason(planned)}`);
+    skipped.push(...draftFallbackLines(knowledgeDir, result, citations.citekeys));
     return { created, updated, skipped };
   }
 
-  // 4. Update outdated notes
-  for (const note of grouped.value.outdated) {
+  // 4. Surface sources the plan never referenced (never discard silently).
+  skipped.push(...unplannedSourceLines(result.sources, planned.value.plan, ctx.onProgress));
+
+  // 5. Concurrent per-note fills (limit 4); a failed fill drops only that note.
+  const fill = ctx.fillFn ?? subagentFill(ctx);
+  const mapped = planned.value.plan.map((entry) => ({
+    entry,
+    lines: mapEntrySources(entry, result.sources, citations.citekeys),
+  }));
+  const fills = await mapWithLimit(mapped, FILL_CONCURRENCY, async ({ entry, lines }) => {
+    const res = await fill({
+      system: FILL_PROMPT,
+      user: fillUser(entry, lines),
+      timeoutMs: FILL_TIMEOUT_MS,
+      signal: ctx.signal,
+    });
+    return { entry, res };
+  });
+  const { notes, skipped: fillSkips } = assembleFills(fills);
+  for (const line of fillSkips) ctx.onProgress?.(line);
+  skipped.push(...fillSkips);
+  const grouped: GroupingResult = { notes, outdated: planned.value.outdated };
+
+  // 6. Update outdated notes
+  for (const note of grouped.outdated) {
     try {
       await updateExistingNote(note, knowledgeDir, ctx.cwd);
       updated.push(note.path);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      skipped.push(`update failed: ${note.path} (${msg.slice(0, 80)})`);
+      skipped.push(errLine("update failed", note.path, e));
     }
   }
 
-  // 5. Create new notes via the batch-create path
-  const batch = await createNewNotes(grouped.value.notes, ctx.model, db, knowledgeDir, ctx.cwd);
+  // 7. Create new notes via the batch-create path
+  const batch = await createNewNotes(grouped.notes, ctx.model, db, knowledgeDir, ctx.cwd);
   created.push(...batch.created);
   skipped.push(...batch.skipped);
 

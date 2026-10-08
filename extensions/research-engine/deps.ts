@@ -127,6 +127,9 @@ export function buildResearchDeps(
         cwd: ctx.cwd,
         model: auth.model,
         signal: opts.signal,
+        // Write-back retry/skip notices ride the same detail channel the
+        // commands/tools already surface (status bar / onUpdate).
+        onProgress: (message) => researchDeps.onDetail?.(message),
       };
       return writeBackToKB(
         {
