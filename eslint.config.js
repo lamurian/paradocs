@@ -50,6 +50,26 @@ module.exports = tseslint.config(
       ],
     },
   },
+  // Relative imports must use .ts specifiers: jiti resolves "./x.js" -> x.ts
+  // through several failed attempts (about 12ms per import vs about 0.4ms).
+  // esquery regex literals cannot contain "/", so match a leading "." and a
+  // trailing ".js" as two chained attribute selectors.
+  {
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...[
+          "ImportDeclaration",
+          "ExportNamedDeclaration",
+          "ExportAllDeclaration",
+          "ImportExpression",
+        ].map((node) => ({
+          selector: `${node}[source.value=/^\\./][source.value=/\\.js$/]`,
+          message: "Use .ts for relative specifiers (jiti resolution cost).",
+        })),
+      ],
+    },
+  },
   {
     ignores: ["**/node_modules/**", ".pi/**"],
   },
