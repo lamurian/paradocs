@@ -1,0 +1,6 @@
+{
+  "finalize": {
+    "maxPathsPerTask": 200,
+    "maxTaskBytes": 2000000
+  }
+}
