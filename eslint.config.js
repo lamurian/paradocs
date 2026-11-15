@@ -51,6 +51,6 @@ module.exports = tseslint.config(
     },
   },
   {
-    ignores: ["**/node_modules/**"],
+    ignores: ["**/node_modules/**", ".pi/**"],
   },
 );
