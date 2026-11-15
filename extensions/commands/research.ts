@@ -9,14 +9,14 @@
  * @module extensions/commands/research
  */
 
-import { configureEnv } from "../../common/env.js";
-import { buildResearchDeps } from "../research-engine/deps.js";
-import { DEFAULT_STAGE_MESSAGES, runResearch } from "../research-engine/orchestrator.js";
-import { RESEARCH_PROFILE } from "../research-engine/profiles.js";
-import { renderAnswerBody, renderWritebackLines } from "../research-engine/render.js";
+import { configureEnv } from "../../common/env.ts";
+import { buildResearchDeps } from "../research-engine/deps.ts";
+import { DEFAULT_STAGE_MESSAGES, runResearch } from "../research-engine/orchestrator.ts";
+import { RESEARCH_PROFILE } from "../research-engine/profiles.ts";
+import { renderAnswerBody, renderWritebackLines } from "../research-engine/render.ts";
 
-import type { ResearchAuth } from "../research-engine/deps.js";
-import type { ResearchStage, ResearchState } from "../research-engine/state.js";
+import type { ResearchAuth } from "../research-engine/deps.ts";
+import type { ResearchStage, ResearchState } from "../research-engine/state.ts";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 /** Command description shown in /commands. */

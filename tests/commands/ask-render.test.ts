@@ -8,25 +8,25 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { renderAskAnswer } from "../../extensions/commands/ask.js";
+import { renderAskAnswer } from "../../extensions/commands/ask.ts";
 
 // Heavy transitive modules are mocked so their real code never loads in
 // this worker (partial top-level loads corrupt v8 coverage attribution
 // in full-suite runs). Renderer tests need none of their behavior.
-vi.mock("../../extensions/research-engine/deps.js", () => ({
+vi.mock("../../extensions/research-engine/deps.ts", () => ({
   buildResearchDeps: vi.fn(() => ({})),
 }));
-vi.mock("../../extensions/research-engine/orchestrator.js", async () => {
+vi.mock("../../extensions/research-engine/orchestrator.ts", async () => {
   const { DEFAULT_STAGE_MESSAGES } =
-    await import("../../extensions/research-engine/research-deps.js");
+    await import("../../extensions/research-engine/research-deps.ts");
   return { runResearch: vi.fn(), DEFAULT_STAGE_MESSAGES };
 });
-vi.mock("../../extensions/research-engine/writeback.js", () => ({
+vi.mock("../../extensions/research-engine/writeback.ts", () => ({
   writeBackToKB: vi.fn(),
   parseGrouping: vi.fn(),
 }));
 
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
 const EMOJI = /\p{Extended_Pictographic}/u;
 
@@ -150,7 +150,7 @@ describe("renderAskAnswer (T7)", () => {
   });
 
   it("research_engine renderResult emits no emojis and applies the fallback chain", async () => {
-    const { renderResult } = await import("../../extensions/research-engine/index.js");
+    const { renderResult } = await import("../../extensions/research-engine/index.ts");
     const state = baseState({
       synthesis: undefined,
       summaries: [

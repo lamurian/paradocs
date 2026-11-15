@@ -4,7 +4,7 @@
  * for native Markdown extraction.
  */
 
-import { getObscuraConfig } from "../../common/env.js";
+import { getObscuraConfig } from "../../common/env.ts";
 
 interface CdpMessage {
   id?: number;

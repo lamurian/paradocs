@@ -10,17 +10,17 @@
  * @module extensions/research-engine/deps
  */
 
-import { buildSearchAgentArgs, parseSearchResult } from "./runner.js";
-import { writeBackToKB } from "./writeback.js";
-import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
-import { fetchUrlWithTimeout } from "../../common/fetchUrl.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
-import { buildSubagentArgs, resolveSubagentTimeoutMs, runSubagent } from "../../common/subagent.js";
-import { searchDocs } from "../para-knowledge/db-sqlite.js";
+import { buildSearchAgentArgs, parseSearchResult } from "./runner.ts";
+import { writeBackToKB } from "./writeback.ts";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.ts";
+import { fetchUrlWithTimeout } from "../../common/fetchUrl.ts";
+import { ensureNotesDb } from "../../common/notesDb.ts";
+import { buildSubagentArgs, resolveSubagentTimeoutMs, runSubagent } from "../../common/subagent.ts";
+import { searchDocs } from "../para-knowledge/db-sqlite.ts";
 
-import type { ResearchDeps, SearchSubagentOutcome } from "./research-deps.js";
-import type { ResearchSource, RuntimeModel, SubagentModel, WritebackResult } from "./types.js";
-import type { WritebackContext } from "./writeback.js";
+import type { ResearchDeps, SearchSubagentOutcome } from "./research-deps.ts";
+import type { ResearchSource, RuntimeModel, SubagentModel, WritebackResult } from "./types.ts";
+import type { WritebackContext } from "./writeback.ts";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 /** Resolved model auth for the pipeline (subprocess resolves credentials itself). */

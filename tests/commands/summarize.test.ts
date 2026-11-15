@@ -20,7 +20,7 @@ describe("summarize command handler", () => {
   });
 
   it("should show usage when no URL is provided", async () => {
-    const { createHandler } = await import("../../extensions/commands/summarize.js");
+    const { createHandler } = await import("../../extensions/commands/summarize.ts");
     const handler = createHandler(mockPi as never);
 
     await handler("", mockCtx as never);
@@ -30,7 +30,7 @@ describe("summarize command handler", () => {
   });
 
   it("should show usage for whitespace-only input", async () => {
-    const { createHandler } = await import("../../extensions/commands/summarize.js");
+    const { createHandler } = await import("../../extensions/commands/summarize.ts");
     const handler = createHandler(mockPi as never);
 
     await handler("   ", mockCtx as never);
@@ -40,7 +40,7 @@ describe("summarize command handler", () => {
   });
 
   it("should send a summarization prompt for a valid URL", async () => {
-    const { createHandler } = await import("../../extensions/commands/summarize.js");
+    const { createHandler } = await import("../../extensions/commands/summarize.ts");
     const handler = createHandler(mockPi as never);
 
     await handler("https://example.com/article", mockCtx as never);
@@ -58,7 +58,7 @@ describe("formatSummarizePrompt", () => {
   let module: { formatSummarizePrompt: (url: string) => string };
 
   beforeAll(async () => {
-    module = await import("../../extensions/commands/summarize.js");
+    module = await import("../../extensions/commands/summarize.ts");
     formatSummarizePrompt = module.formatSummarizePrompt;
   });
 

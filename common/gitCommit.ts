@@ -12,7 +12,7 @@ import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { getKnowledgeConfig } from "./env.js";
+import { getKnowledgeConfig } from "./env.ts";
 
 /**
  * Commit a message to the knowledge base git repository.

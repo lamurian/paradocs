@@ -12,10 +12,10 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { createDb, initDb, indexFile } from "./db-sqlite.js";
-import { scanAllParaDirs, parseFile } from "./files.js";
+import { createDb, initDb, indexFile } from "./db-sqlite.ts";
+import { scanAllParaDirs, parseFile } from "./files.ts";
 
-import type { DocIndex } from "./db-sqlite.js";
+import type { DocIndex } from "./db-sqlite.ts";
 
 /**
  * Scan all PARA directories under `knowledgeDir` and index every `.md`

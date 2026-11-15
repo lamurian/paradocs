@@ -7,9 +7,9 @@
  * @module extensions/research-engine/stage-effects
  */
 
-import { buildSummarizeEffects } from "./effects.js";
+import { buildSummarizeEffects } from "./effects.ts";
 
-import type { Effect, ResearchStage, ResearchState } from "./state.js";
+import type { Effect, ResearchStage, ResearchState } from "./state.ts";
 
 function dedupe(values: string[]): string[] {
   return [...new Set(values.filter((v) => v.length > 0))];

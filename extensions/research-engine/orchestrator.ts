@@ -6,16 +6,16 @@
  * @module extensions/research-engine/orchestrator
  */
 
-import { saveCheckpoint } from "./checkpoint.js";
-import { runStage, DEFAULT_STAGE_MESSAGES } from "./stages.js";
-import { TERMINAL_STAGES, transition } from "./transition.js";
+import { saveCheckpoint } from "./checkpoint.ts";
+import { runStage, DEFAULT_STAGE_MESSAGES } from "./stages.ts";
+import { TERMINAL_STAGES, transition } from "./transition.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { ResearchDeps } from "./research-deps.js";
-import type { Effect, GateProfile, ResearchState, SummaryItem } from "./state.js";
+import type { ResearchEvent } from "./events.ts";
+import type { ResearchDeps } from "./research-deps.ts";
+import type { Effect, GateProfile, ResearchState, SummaryItem } from "./state.ts";
 
-export { DEFAULT_STAGE_MESSAGES } from "./research-deps.js";
-export type { ResearchDeps, LlmCallInput, LlmCallOutcome } from "./research-deps.js";
+export { DEFAULT_STAGE_MESSAGES } from "./research-deps.ts";
+export type { ResearchDeps, LlmCallInput, LlmCallOutcome } from "./research-deps.ts";
 
 /** Input for one research run. */
 export interface RunResearchInput {

@@ -18,9 +18,9 @@ import {
   loadCheckpoint,
   researchStateDir,
   saveCheckpoint,
-} from "../../extensions/research-engine/checkpoint.js";
+} from "../../extensions/research-engine/checkpoint.ts";
 
-import type { ResearchState, TransitionRecord } from "../../extensions/research-engine/state.js";
+import type { ResearchState, TransitionRecord } from "../../extensions/research-engine/state.ts";
 
 let knowledgeDir: string;
 

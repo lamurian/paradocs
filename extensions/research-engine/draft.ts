@@ -11,7 +11,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import type { ResearchSource } from "./types.js";
+import type { ResearchSource } from "./types.ts";
 
 /** Subdirectory under KNOWLEDGE_DIR holding draft notes. */
 export const DRAFT_SUBDIR = ".research/drafts";

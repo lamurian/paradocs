@@ -10,14 +10,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { autoLink } from "./autoLink.js";
-import { configureEnv, getKnowledgeConfig } from "./env.js";
-import { ensureNotesDb } from "./notesDb.js";
-import { slugify } from "./slug.js";
-import { formatFrontmatter } from "./yaml.js";
-import { indexFile } from "../extensions/para-knowledge/db-sqlite.js";
+import { autoLink } from "./autoLink.ts";
+import { configureEnv, getKnowledgeConfig } from "./env.ts";
+import { ensureNotesDb } from "./notesDb.ts";
+import { slugify } from "./slug.ts";
+import { formatFrontmatter } from "./yaml.ts";
+import { indexFile } from "../extensions/para-knowledge/db-sqlite.ts";
 
-import type { DocIndex } from "../extensions/para-knowledge/db-sqlite.js";
+import type { DocIndex } from "../extensions/para-knowledge/db-sqlite.ts";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 

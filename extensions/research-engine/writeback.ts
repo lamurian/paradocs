@@ -18,9 +18,9 @@
  * @module extensions/research-engine/writeback
  */
 
-import { toSubagentModel } from "./types.js";
-import { assembleFills, draftFallbackLines, unplannedSourceLines } from "./writeback-assembly.js";
-import { resolveAllCitations, updateExistingNote, createNewNotes } from "./writeback-helpers.js";
+import { toSubagentModel } from "./types.ts";
+import { assembleFills, draftFallbackLines, unplannedSourceLines } from "./writeback-assembly.ts";
+import { resolveAllCitations, updateExistingNote, createNewNotes } from "./writeback-helpers.ts";
 import {
   PLAN_PROMPT,
   FILL_PROMPT,
@@ -31,15 +31,15 @@ import {
   parsePlan,
   planFailureReason,
   planWithRetry,
-} from "./writeback-plan.js";
-import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
-import { buildSubagentArgs, resolveSubagentTimeoutMs, runSubagent } from "../../common/subagent.js";
-import { searchDocs } from "../para-knowledge/db-sqlite.js";
+} from "./writeback-plan.ts";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.ts";
+import { ensureNotesDb } from "../../common/notesDb.ts";
+import { buildSubagentArgs, resolveSubagentTimeoutMs, runSubagent } from "../../common/subagent.ts";
+import { searchDocs } from "../para-knowledge/db-sqlite.ts";
 
-import type { ResearchResult, RuntimeModel, WritebackResult } from "./types.js";
-import type { GroupedNote, GroupedOutdated } from "./writeback-helpers.js";
-import type { PlanResult, WritebackCallInput, WritebackCallResult } from "./writeback-plan.js";
+import type { ResearchResult, RuntimeModel, WritebackResult } from "./types.ts";
+import type { GroupedNote, GroupedOutdated } from "./writeback-helpers.ts";
+import type { PlanResult, WritebackCallInput, WritebackCallResult } from "./writeback-plan.ts";
 
 /** Max concurrent per-note fill subagent calls. */
 const FILL_CONCURRENCY = 4;

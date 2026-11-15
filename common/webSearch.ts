@@ -8,11 +8,11 @@
  * @module common/webSearch
  */
 
-import { searchNativeHttp } from "../extensions/web-search/native.js";
-import { searchSearxng } from "../extensions/web-search/searxng.js";
-import { searchTavily } from "../extensions/web-search/tavily.js";
+import { searchNativeHttp } from "../extensions/web-search/native.ts";
+import { searchSearxng } from "../extensions/web-search/searxng.ts";
+import { searchTavily } from "../extensions/web-search/tavily.ts";
 
-import type { SearchResult } from "../extensions/web-search/native.js";
+import type { SearchResult } from "../extensions/web-search/native.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────
 

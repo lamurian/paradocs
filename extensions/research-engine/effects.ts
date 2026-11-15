@@ -10,10 +10,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { stripBoilerplate } from "./fetcher.js";
-import { extractJson } from "../../common/extractJson.js";
+import { stripBoilerplate } from "./fetcher.ts";
+import { extractJson } from "../../common/extractJson.ts";
 
-import type { Effect, FetchRecord, JudgeResult } from "./state.js";
+import type { Effect, FetchRecord, JudgeResult } from "./state.ts";
 
 // ── Long-document policy ──────────────────────────────────────────────
 

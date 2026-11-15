@@ -14,9 +14,9 @@ import {
   stageAssess,
   stageSynthesize,
   synthesisFallback,
-} from "../../extensions/research-engine/stage-assess.js";
+} from "../../extensions/research-engine/stage-assess.ts";
 
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
 /** Minimal research state covering the fields assess/synthesize read. */
 function state(overrides: Partial<ResearchState> = {}): ResearchState {

@@ -6,11 +6,11 @@
  * @module extensions/research-engine/writeback-assembly
  */
 
-import { writeDraftNote } from "./draft.js";
+import { writeDraftNote } from "./draft.ts";
 
-import type { ResearchResult, ResearchSource } from "./types.js";
-import type { GroupedNote } from "./writeback-helpers.js";
-import type { PlanEntry, WritebackCallResult } from "./writeback-plan.js";
+import type { ResearchResult, ResearchSource } from "./types.ts";
+import type { GroupedNote } from "./writeback-helpers.ts";
+import type { PlanEntry, WritebackCallResult } from "./writeback-plan.ts";
 
 /** One fill outcome: the planned entry plus its subagent call result. */
 export interface FillOutcome {

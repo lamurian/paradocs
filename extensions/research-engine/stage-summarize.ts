@@ -5,11 +5,11 @@
  * @module extensions/research-engine/stage-summarize
  */
 
-import { parseSummaryText, planSummarization, prompt } from "./effects.js";
+import { parseSummaryText, planSummarization, prompt } from "./effects.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { LlmCallInput, LlmCallOutcome, ResearchDeps } from "./research-deps.js";
-import type { FailureRecord, FetchRecord, ResearchState, SummaryItem } from "./state.js";
+import type { ResearchEvent } from "./events.ts";
+import type { LlmCallInput, LlmCallOutcome, ResearchDeps } from "./research-deps.ts";
+import type { FailureRecord, FetchRecord, ResearchState, SummaryItem } from "./state.ts";
 
 /** Summarizer concurrency across sources. */
 const SUMMARIZE_CONCURRENCY = 4;

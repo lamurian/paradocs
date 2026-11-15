@@ -24,7 +24,7 @@ describe("findParaMdFiles", () => {
   });
 
   it("should find .md files in all PARA directories", async () => {
-    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.js");
+    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.ts");
 
     writeFileSync(join(tmpDir, "Areas", "area-doc.md"), "---\ntitle: Area Doc\n---\nBody", "utf-8");
     writeFileSync(
@@ -48,7 +48,7 @@ describe("findParaMdFiles", () => {
   });
 
   it("should skip non-.md files", async () => {
-    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.js");
+    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.ts");
 
     writeFileSync(join(tmpDir, "Areas", "notes.md"), "# Notes", "utf-8");
     writeFileSync(join(tmpDir, "Areas", "data.json"), "{}", "utf-8");
@@ -60,13 +60,13 @@ describe("findParaMdFiles", () => {
   });
 
   it("should return empty array when no PARA dirs have files", async () => {
-    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.js");
+    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.ts");
     const files = await findParaMdFiles(tmpDir);
     expect(files).toEqual([]);
   });
 
   it("should return files sorted alphabetically", async () => {
-    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.js");
+    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.ts");
 
     writeFileSync(join(tmpDir, "Areas", "zeta.md"), "# Z", "utf-8");
     writeFileSync(join(tmpDir, "Areas", "alpha.md"), "# A", "utf-8");
@@ -79,7 +79,7 @@ describe("findParaMdFiles", () => {
   });
 
   it("should handle missing PARA directories gracefully", async () => {
-    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.js");
+    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.ts");
     // tmpDir has all PARA dirs, but let's test with an empty base dir
     const emptyDir = mkdtempSync(join(homedir(), "scanner-empty-"));
     try {
@@ -92,7 +92,7 @@ describe("findParaMdFiles", () => {
   });
 
   it("should handle some missing PARA directories", async () => {
-    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.js");
+    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.ts");
     // Only create Areas, skip Projects and Resources
     mkdirSync(join(tmpDir, "Areas"), { recursive: true });
     writeFileSync(join(tmpDir, "Areas", "doc.md"), "# Doc", "utf-8");
@@ -107,7 +107,7 @@ describe("findParaMdFiles", () => {
   });
 
   it("should return absolute paths", async () => {
-    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.js");
+    const { findParaMdFiles } = await import("../../extensions/yaml-enforcer/scanner.ts");
 
     writeFileSync(join(tmpDir, "Areas", "abs-test.md"), "# Test", "utf-8");
 

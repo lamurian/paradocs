@@ -11,11 +11,11 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { configureEnv, getKnowledgeConfig } from "./env.js";
-import { createDb, initDb } from "../extensions/para-knowledge/db-sqlite.js";
-import { rebuildDb } from "../extensions/para-knowledge/rebuild.js";
+import { configureEnv, getKnowledgeConfig } from "./env.ts";
+import { createDb, initDb } from "../extensions/para-knowledge/db-sqlite.ts";
+import { rebuildDb } from "../extensions/para-knowledge/rebuild.ts";
 
-import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.js";
+import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.ts";
 
 // ── Lazy singleton ──────────────────────────────────────────────────
 

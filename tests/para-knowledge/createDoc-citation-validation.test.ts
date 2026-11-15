@@ -11,10 +11,10 @@ import { join } from "node:path";
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.js";
+import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.ts";
 
 // Mock atomicity validation — always passes to avoid sub-agent spawning
-vi.mock("../../common/atomicity.js", () => ({
+vi.mock("../../common/atomicity.ts", () => ({
   validateAtomicity: vi.fn().mockResolvedValue({ valid: true, message: "Mocked pass." }),
   validateDocumentsAtomicity: vi.fn(),
   AtomicityResult: {},
@@ -85,7 +85,7 @@ describe("create_para_doc citation validation", () => {
   > {
     vi.resetModules();
     const { registerCreateDocTool } =
-      await import("../../extensions/para-knowledge/tools/createDoc.js");
+      await import("../../extensions/para-knowledge/tools/createDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

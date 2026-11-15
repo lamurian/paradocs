@@ -12,25 +12,25 @@ import { join } from "node:path";
 
 import { afterAll, describe, it, expect, vi } from "vitest";
 
-import { runResearch } from "../../extensions/research-engine/orchestrator.js";
-import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.js";
+import { runResearch } from "../../extensions/research-engine/orchestrator.ts";
+import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.ts";
 import {
   BREAKER_LIMIT,
   createBreaker,
   guardDepsWithBreaker,
   runStage,
-} from "../../extensions/research-engine/stages.js";
-import { transition } from "../../extensions/research-engine/transition.js";
+} from "../../extensions/research-engine/stages.ts";
+import { transition } from "../../extensions/research-engine/transition.ts";
 
 import type {
   ResearchDeps,
   LlmCallInput,
   LlmCallOutcome,
   SearchSubagentOutcome,
-} from "../../extensions/research-engine/research-deps.js";
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+} from "../../extensions/research-engine/research-deps.ts";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
-vi.mock("../../common/subagent.js", () => ({
+vi.mock("../../common/subagent.ts", () => ({
   buildSubagentArgs: vi.fn(),
   getPiInvocation: vi.fn(),
   resolveSubagentTimeoutMs: vi.fn(() => 60_000),
@@ -268,7 +268,7 @@ describe("runResearch breaker path", () => {
     ]);
     // Checkpoint written for the job.
     const { loadCheckpoint, checkpointPathFor } =
-      await import("../../extensions/research-engine/checkpoint.js");
+      await import("../../extensions/research-engine/checkpoint.ts");
     const loaded = loadCheckpoint(checkpointPathFor(knowledgeDir, "job-break-e2e"));
     expect(loaded).not.toBeNull();
   });

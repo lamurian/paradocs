@@ -3,7 +3,7 @@
  * Fallback when SearXNG is unavailable.
  */
 
-import { getApiKeys } from "../../common/env.js";
+import { getApiKeys } from "../../common/env.ts";
 
 const ACADEMIC_DOMAINS = [
   "pubmed.ncbi.nlm.nih.gov",

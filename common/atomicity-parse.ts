@@ -7,7 +7,7 @@
  * @module common/atomicity-parse
  */
 
-import type { AtomicityResult } from "./atomicity.js";
+import type { AtomicityResult } from "./atomicity.ts";
 
 // ── JSON extraction ─────────────────────────────────────────────────
 

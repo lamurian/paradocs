@@ -13,9 +13,9 @@ import { join } from "node:path";
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.js";
+import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.ts";
 
-import type { SqliteDb } from "../../extensions/para-knowledge/sqlite-types.js";
+import type { SqliteDb } from "../../extensions/para-knowledge/sqlite-types.ts";
 describe("validateCitations with ref.bib citekeys (T9)", () => {
   let tmpDir: string;
   let dbPath: string;
@@ -38,7 +38,7 @@ describe("validateCitations with ref.bib citekeys (T9)", () => {
   });
 
   it("accepts a citekey present only in the bib set", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const result = validateCitations("Cites @onlyInBib here.", db, new Set(["onlyInBib"]));
     expect(result.valid).toBe(true);
@@ -46,7 +46,7 @@ describe("validateCitations with ref.bib citekeys (T9)", () => {
   });
 
   it("rejects a citekey in neither the table nor the bib set", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const result = validateCitations("Cites @nowhere here.", db, new Set(["onlyInBib"]));
     expect(result.valid).toBe(false);
@@ -54,7 +54,7 @@ describe("validateCitations with ref.bib citekeys (T9)", () => {
   });
 
   it("still rejects @? even when a bib set is provided", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const result = validateCitations("Unresolved @?.", db, new Set(["onlyInBib"]));
     expect(result.valid).toBe(false);
@@ -62,7 +62,7 @@ describe("validateCitations with ref.bib citekeys (T9)", () => {
   });
 
   it("accepts a citekey present in both the table and the bib set", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const result = validateCitations("Cites @inBoth2024.", db, new Set(["inBoth2024"]));
     expect(result.valid).toBe(true);
@@ -70,7 +70,7 @@ describe("validateCitations with ref.bib citekeys (T9)", () => {
   });
 
   it("checks duplicate citations in content only once", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const result = validateCitations("@dup2023 appears twice: @dup2023.", db, new Set<string>());
     expect(result.valid).toBe(false);
@@ -91,7 +91,7 @@ describe("loadRefBibCitekeys", () => {
 
   it("parses citekeys from ref.bib entries", async () => {
     const { writeFileSync } = await import("node:fs");
-    const { loadRefBibCitekeys } = await import("../../common/citation-validation.js");
+    const { loadRefBibCitekeys } = await import("../../common/citation-validation.ts");
 
     writeFileSync(
       join(tmpDir, "ref.bib"),
@@ -107,7 +107,7 @@ describe("loadRefBibCitekeys", () => {
   });
 
   it("returns an empty set when ref.bib is missing", async () => {
-    const { loadRefBibCitekeys } = await import("../../common/citation-validation.js");
+    const { loadRefBibCitekeys } = await import("../../common/citation-validation.ts");
 
     const keys = loadRefBibCitekeys(join(tmpDir, "no-such-dir"));
     expect(keys.size).toBe(0);

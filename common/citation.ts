@@ -11,10 +11,10 @@
 import { appendFile, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { getKnowledgeConfig } from "./env.js";
-import { ensureNotesDb } from "./notesDb.js";
+import { getKnowledgeConfig } from "./env.ts";
+import { ensureNotesDb } from "./notesDb.ts";
 
-import type { SqliteDb } from "../extensions/para-knowledge/db-sqlite.js";
+import type { SqliteDb } from "../extensions/para-knowledge/db-sqlite.ts";
 
 // ── Constants ───────────────────────────────────────────────────────
 

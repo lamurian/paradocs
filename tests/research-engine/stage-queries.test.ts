@@ -10,18 +10,18 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.js";
+import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.ts";
 import {
   kbFreshRatio,
   stageQueryGen,
   stageRefine,
-} from "../../extensions/research-engine/stage-queries.js";
+} from "../../extensions/research-engine/stage-queries.ts";
 
 import type {
   ResearchDeps,
   KbDocWithTitle,
-} from "../../extensions/research-engine/research-deps.js";
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+} from "../../extensions/research-engine/research-deps.ts";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
 const NOW = Date.parse("2026-10-02T00:00:00Z");
 

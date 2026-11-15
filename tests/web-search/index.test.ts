@@ -15,8 +15,8 @@ import type { Mock } from "vitest";
 
 // Spy on the real configureEnv so we can assert it is invoked, without
 // breaking the shared env module used by the searxng/tavily backends.
-vi.mock("../../common/env.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../common/env.js")>();
+vi.mock("../../common/env.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../common/env.ts")>();
   return {
     ...actual,
     configureEnv: vi.fn(actual.configureEnv),
@@ -99,7 +99,7 @@ describe("web_search extension", () => {
   }
 
   it("should register a tool named web_search", async () => {
-    const extension = (await import("../../extensions/web-search/index.js")).default;
+    const extension = (await import("../../extensions/web-search/index.ts")).default;
     extension(mockPi as unknown as ExtensionAPI);
 
     expect(mockPi.registerTool).toHaveBeenCalledTimes(1);
@@ -107,10 +107,10 @@ describe("web_search extension", () => {
   });
 
   it("should call configureEnv with ctx.cwd before searching", async () => {
-    const { configureEnv } = await import("../../common/env.js");
+    const { configureEnv } = await import("../../common/env.ts");
     vi.mocked(configureEnv).mockClear();
 
-    const extension = (await import("../../extensions/web-search/index.js")).default;
+    const extension = (await import("../../extensions/web-search/index.ts")).default;
     extension(mockPi as unknown as ExtensionAPI);
     const tool = registeredTool();
 
@@ -123,7 +123,7 @@ describe("web_search extension", () => {
   });
 
   it("should run the search through the shared orchestrator and format output", async () => {
-    const extension = (await import("../../extensions/web-search/index.js")).default;
+    const extension = (await import("../../extensions/web-search/index.ts")).default;
     extension(mockPi as unknown as ExtensionAPI);
     const tool = registeredTool();
 

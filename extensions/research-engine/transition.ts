@@ -10,17 +10,17 @@
  * @module extensions/research-engine/transition
  */
 
-import { TERMINAL_STAGES } from "./events.js";
-import { HANDLERS, commit } from "./transition-handlers.js";
+import { TERMINAL_STAGES } from "./events.ts";
+import { HANDLERS, commit } from "./transition-handlers.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { ResearchState } from "./state.js";
-import type { Transition } from "./transition-handlers.js";
+import type { ResearchEvent } from "./events.ts";
+import type { ResearchState } from "./state.ts";
+import type { Transition } from "./transition-handlers.ts";
 
-export { TERMINAL_STAGES } from "./events.js";
-export { stageEffects } from "./stage-effects.js";
-export type { ResearchEvent } from "./events.js";
-export type { Transition } from "./transition-handlers.js";
+export { TERMINAL_STAGES } from "./events.ts";
+export { stageEffects } from "./stage-effects.ts";
+export type { ResearchEvent } from "./events.ts";
+export type { Transition } from "./transition-handlers.ts";
 
 /** abort event → CANCELLED with a checkpoint effect. */
 function abortedTransition(prev: ResearchState, event: ResearchEvent, now: number): Transition {

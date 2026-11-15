@@ -9,12 +9,12 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
-import { ensureNotesDb } from "../../../common/notesDb.js";
-import { indexFile } from "../db-sqlite.js";
-import { parseFrontmatter, formatFrontmatter } from "../frontmatter.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.ts";
+import { ensureNotesDb } from "../../../common/notesDb.ts";
+import { indexFile } from "../db-sqlite.ts";
+import { parseFrontmatter, formatFrontmatter } from "../frontmatter.ts";
 
-import type { DocIndex } from "../db-sqlite.js";
+import type { DocIndex } from "../db-sqlite.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 interface ResolvedFields {

@@ -13,14 +13,14 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { canonicalizeUrl } from "./fetcher.js";
-import { extractJson } from "../../common/extractJson.js";
-import { buildSubagentArgs } from "../../common/subagent.js";
+import { canonicalizeUrl } from "./fetcher.ts";
+import { extractJson } from "../../common/extractJson.ts";
+import { buildSubagentArgs } from "../../common/subagent.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { ResearchDeps } from "./research-deps.js";
-import type { Candidate, KbDocGist, ResearchState } from "./state.js";
-import type { SearchSubagentValue } from "./types.js";
+import type { ResearchEvent } from "./events.ts";
+import type { ResearchDeps } from "./research-deps.ts";
+import type { Candidate, KbDocGist, ResearchState } from "./state.ts";
+import type { SearchSubagentValue } from "./types.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

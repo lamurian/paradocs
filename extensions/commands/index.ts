@@ -9,17 +9,17 @@
  * @module extensions/commands/index
  */
 
-import { createHandler as createAskHandler, description as askDescription } from "./ask.js";
+import { createHandler as createAskHandler, description as askDescription } from "./ask.ts";
 import {
   createHandler as createResearchHandler,
   description as researchDescription,
-} from "./research.js";
-import { createSplitHandler, splitDescription } from "./split.js";
+} from "./research.ts";
+import { createSplitHandler, splitDescription } from "./split.ts";
 import {
   createHandler as createSummarizeHandler,
   description as summarizeDescription,
-} from "./summarize.js";
-import { registerAskTool } from "./tools/ask.js";
+} from "./summarize.ts";
+import { registerAskTool } from "./tools/ask.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

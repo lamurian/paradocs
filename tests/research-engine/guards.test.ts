@@ -13,9 +13,9 @@ import {
   combineJudgment,
   synthesizeGaps,
   evaluateEscalation,
-} from "../../extensions/research-engine/guards.js";
+} from "../../extensions/research-engine/guards.ts";
 
-import type { GateProfile } from "../../extensions/research-engine/state.js";
+import type { GateProfile } from "../../extensions/research-engine/state.ts";
 
 const NOW = Date.parse("2026-10-02T00:00:00Z");
 

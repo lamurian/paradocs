@@ -13,7 +13,7 @@ import {
   stripBoilerplate,
   isAuthoritative,
   fetchRecords,
-} from "../../extensions/research-engine/fetcher.js";
+} from "../../extensions/research-engine/fetcher.ts";
 
 describe("canonicalizeUrl (T7)", () => {
   it("should strip utm params, trailing slashes, and arXiv v-suffixes to one key", () => {

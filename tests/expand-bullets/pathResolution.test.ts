@@ -65,7 +65,7 @@ tags: [test]
       "utf-8",
     );
 
-    const mod = await import("../../extensions/expand-bullets/index.js");
+    const mod = await import("../../extensions/expand-bullets/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -127,7 +127,7 @@ tags: [test]
       "utf-8",
     );
 
-    const mod = await import("../../extensions/expand-bullets/index.js");
+    const mod = await import("../../extensions/expand-bullets/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

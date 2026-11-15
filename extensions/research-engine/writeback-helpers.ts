@@ -8,20 +8,20 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { loadRefBibCitekeys, validateCitations } from "../../common/citation-validation.js";
-import { resolveCitation } from "../../common/citation.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
+import { loadRefBibCitekeys, validateCitations } from "../../common/citation-validation.ts";
+import { resolveCitation } from "../../common/citation.ts";
+import { ensureNotesDb } from "../../common/notesDb.ts";
 import {
   validateDocuments,
   createFilesOnDisk,
   indexDocumentsInDb,
   autoLinkBatch,
-} from "../batch-create/batch-helpers.js";
-import { indexFile } from "../para-knowledge/db-sqlite.js";
-import { parseFrontmatter, formatFrontmatter } from "../para-knowledge/frontmatter.js";
+} from "../batch-create/batch-helpers.ts";
+import { indexFile } from "../para-knowledge/db-sqlite.ts";
+import { parseFrontmatter, formatFrontmatter } from "../para-knowledge/frontmatter.ts";
 
-import type { ResearchSource, RuntimeModel } from "./types.js";
-import type { SqliteDb } from "../para-knowledge/sqlite-types.js";
+import type { ResearchSource, RuntimeModel } from "./types.ts";
+import type { SqliteDb } from "../para-knowledge/sqlite-types.ts";
 
 /** One grouped atomic note produced by the LLM. */
 export interface GroupedNote {

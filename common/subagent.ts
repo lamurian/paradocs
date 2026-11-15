@@ -13,13 +13,13 @@
 
 import { spawn } from "node:child_process";
 
-import { getPiInvocation } from "./subagent-args.js";
+import { getPiInvocation } from "./subagent-args.ts";
 
-import type { SpawnImpl, SubagentProcess } from "./subagent-args.js";
+import type { SpawnImpl, SubagentProcess } from "./subagent-args.ts";
 
 // Re-exported for import stability (deps, runner, writeback, tests).
-export { buildSubagentArgs, getPiInvocation, resolveSubagentTimeoutMs } from "./subagent-args.js";
-export type { SpawnImpl, SubagentProcess } from "./subagent-args.js";
+export { buildSubagentArgs, getPiInvocation, resolveSubagentTimeoutMs } from "./subagent-args.ts";
+export type { SpawnImpl, SubagentProcess } from "./subagent-args.ts";
 
 /** Result of one subagent run. Errors always carry the real cause. */
 export type SubagentResult<T> = { ok: true; text: string; value: T } | { ok: false; error: string };

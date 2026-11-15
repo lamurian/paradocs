@@ -63,7 +63,7 @@ describe("batch_create_para_docs path resolution", () => {
 
   it("should create document files inside KNOWLEDGE_DIR, not ctx.cwd", async () => {
     vi.resetModules();
-    const mod = await import("../../extensions/batch-create/index.js");
+    const mod = await import("../../extensions/batch-create/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -134,7 +134,7 @@ describe("batch_create_para_docs path resolution", () => {
 
     const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
 
-    const mod = await import("../../extensions/batch-create/index.js");
+    const mod = await import("../../extensions/batch-create/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

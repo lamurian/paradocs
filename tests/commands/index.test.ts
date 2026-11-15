@@ -8,18 +8,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Heavy transitive modules are mocked so their real code never loads in
 // this worker (partial top-level loads corrupt v8 coverage attribution
 // in full-suite runs). Registration tests need none of their behavior.
-vi.mock("../../extensions/research-engine/orchestrator.js", () => ({
+vi.mock("../../extensions/research-engine/orchestrator.ts", () => ({
   runResearch: vi.fn(),
   DEFAULT_STAGE_MESSAGES: {},
 }));
-vi.mock("../../extensions/research-engine/deps.js", () => ({
+vi.mock("../../extensions/research-engine/deps.ts", () => ({
   buildResearchDeps: vi.fn(() => ({})),
 }));
-vi.mock("../../extensions/research-engine/writeback.js", () => ({
+vi.mock("../../extensions/research-engine/writeback.ts", () => ({
   writeBackToKB: vi.fn(),
   parseGrouping: vi.fn(),
 }));
-vi.mock("../../common/atomicity.js", () => ({
+vi.mock("../../common/atomicity.ts", () => ({
   validateAtomicity: vi.fn(),
 }));
 
@@ -53,7 +53,7 @@ describe("commands index", () => {
   }
 
   it("should register /ask command with description and handler", async () => {
-    const mod = await import("../../extensions/commands/index.js");
+    const mod = await import("../../extensions/commands/index.ts");
     mod.default(mockPi as never);
 
     const call = getCommandConfig("ask");
@@ -66,7 +66,7 @@ describe("commands index", () => {
   });
 
   it("should register /research command", async () => {
-    const mod = await import("../../extensions/commands/index.js");
+    const mod = await import("../../extensions/commands/index.ts");
     mod.default(mockPi as never);
 
     const call = getCommandConfig("research");
@@ -77,7 +77,7 @@ describe("commands index", () => {
   });
 
   it("should register /summarize command", async () => {
-    const mod = await import("../../extensions/commands/index.js");
+    const mod = await import("../../extensions/commands/index.ts");
     mod.default(mockPi as never);
 
     const call = getCommandConfig("summarize");
@@ -88,14 +88,14 @@ describe("commands index", () => {
   });
 
   it("should register exactly 4 commands", async () => {
-    const mod = await import("../../extensions/commands/index.js");
+    const mod = await import("../../extensions/commands/index.ts");
     mod.default(mockPi as never);
 
     expect(registerCommand).toHaveBeenCalledTimes(4);
   });
 
   it("should register the ask tool", async () => {
-    const mod = await import("../../extensions/commands/index.js");
+    const mod = await import("../../extensions/commands/index.ts");
     mod.default(mockPi as never);
 
     const toolCalls = (mockPi.registerTool as ReturnType<typeof vi.fn>).mock.calls;
@@ -107,7 +107,7 @@ describe("commands index", () => {
   });
 
   it("should create /ask handler that works without TUI mode", async () => {
-    const mod = await import("../../extensions/commands/index.js");
+    const mod = await import("../../extensions/commands/index.ts");
     mod.default(mockPi as never);
 
     const call = getCommandConfig("ask");

@@ -14,11 +14,11 @@ import { fileURLToPath } from "node:url";
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../../../extensions/research-engine/orchestrator.js", () => ({
+vi.mock("../../../extensions/research-engine/orchestrator.ts", () => ({
   runResearch: vi.fn(),
   DEFAULT_STAGE_MESSAGES: {},
 }));
-vi.mock("../../../extensions/research-engine/deps.js", () => ({
+vi.mock("../../../extensions/research-engine/deps.ts", () => ({
   buildResearchDeps: vi.fn(() => ({})),
 }));
 
@@ -28,10 +28,10 @@ import {
   DEEP_DONE,
   runAskTool,
   importTool,
-} from "./helpers/ask-tool-fixtures.js";
+} from "./helpers/ask-tool-fixtures.ts";
 
-import type { ToolUpdate } from "./helpers/ask-tool-fixtures.js";
-import type { ResearchState } from "../../../extensions/research-engine/state.js";
+import type { ToolUpdate } from "./helpers/ask-tool-fixtures.ts";
+import type { ResearchState } from "../../../extensions/research-engine/state.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ASK_TOOL_TS = pathResolve(HERE, "../../../extensions/commands/tools/ask.ts");

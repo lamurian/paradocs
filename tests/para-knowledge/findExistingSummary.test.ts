@@ -52,7 +52,7 @@ This is a unique body of text for similarity matching in the find existing summa
     );
 
     const { createDb, initDb, indexFile } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(resolve(knowledgeDir, "notes.db"));
     initDb(db);
     const body =
@@ -72,7 +72,7 @@ This is a unique body of text for similarity matching in the find existing summa
     db.close();
 
     const { registerFindExistingSummaryTool } =
-      await import("../../extensions/para-knowledge/tools/findExistingSummary.js");
+      await import("../../extensions/para-knowledge/tools/findExistingSummary.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -131,7 +131,7 @@ Completely different content that should not match.`,
     );
 
     const { createDb, initDb, indexFile } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(resolve(knowledgeDir, "notes.db"));
     initDb(db);
     indexFile(db, {
@@ -149,7 +149,7 @@ Completely different content that should not match.`,
     db.close();
 
     const { registerFindExistingSummaryTool } =
-      await import("../../extensions/para-knowledge/tools/findExistingSummary.js");
+      await import("../../extensions/para-knowledge/tools/findExistingSummary.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

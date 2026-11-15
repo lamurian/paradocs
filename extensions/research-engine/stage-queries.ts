@@ -9,9 +9,9 @@
  * @module extensions/research-engine/stage-queries
  */
 
-import type { ResearchEvent } from "./events.js";
-import type { ResearchDeps } from "./research-deps.js";
-import type { KbDocGist, ResearchState } from "./state.js";
+import type { ResearchEvent } from "./events.ts";
+import type { ResearchDeps } from "./research-deps.ts";
+import type { KbDocGist, ResearchState } from "./state.ts";
 
 /**
  * Deterministic KB freshness ratio for the kbCovered formula.

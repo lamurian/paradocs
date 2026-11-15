@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { parsePlan } from "../../extensions/research-engine/writeback-plan.js";
+import { parsePlan } from "../../extensions/research-engine/writeback-plan.ts";
 
 describe("parsePlan (T6)", () => {
   const entry = {

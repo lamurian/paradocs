@@ -50,7 +50,7 @@ describe("list_para_tags env integration", () => {
   it("should use KNOWLEDGE_DIR from project .pi/.env when env var is not set", async () => {
     // Create notes.db with a tagged document
     const { createDb, initDb, indexFile } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const dbPath = resolve(knowledgeDir, "notes.db");
     mkdirSync(knowledgeDir, { recursive: true });
     const db = createDb(dbPath);
@@ -79,7 +79,7 @@ describe("list_para_tags env integration", () => {
 
     vi.resetModules();
     const { registerListTagsTool } =
-      await import("../../extensions/para-knowledge/tools/listTags.js");
+      await import("../../extensions/para-knowledge/tools/listTags.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

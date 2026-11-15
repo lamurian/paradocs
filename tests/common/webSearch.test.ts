@@ -46,7 +46,7 @@ describe("searchWeb shared module", () => {
   });
 
   it("should return SearchOutput shape with results", async () => {
-    const { searchWeb } = await import("../../common/webSearch.js");
+    const { searchWeb } = await import("../../common/webSearch.ts");
 
     const result = await searchWeb("test query");
 
@@ -58,7 +58,7 @@ describe("searchWeb shared module", () => {
   });
 
   it("should include title, url, snippet, and source_label on each result", async () => {
-    const { searchWeb } = await import("../../common/webSearch.js");
+    const { searchWeb } = await import("../../common/webSearch.ts");
 
     const result = await searchWeb("test query");
 
@@ -73,7 +73,7 @@ describe("searchWeb shared module", () => {
 
   it("should pass tier parameter to SearXNG when forced", async () => {
     // Verify that when tier=1 is passed, categories is scientific_publications
-    const { searchWeb } = await import("../../common/webSearch.js");
+    const { searchWeb } = await import("../../common/webSearch.ts");
 
     // Use tier=1 to force academic search
     await searchWeb("quantum computing", { tier: 1 });
@@ -129,7 +129,7 @@ describe("searchWeb shared module", () => {
     // Need TAVILY_KEY in env for Tavily to attempt
     process.env.TAVILY_KEY = "test-key";
 
-    const { searchWeb } = await import("../../common/webSearch.js");
+    const { searchWeb } = await import("../../common/webSearch.ts");
 
     const result = await searchWeb("test query", { tier: 3 });
 
@@ -160,7 +160,7 @@ describe("searchWeb shared module", () => {
       }),
     );
 
-    const { searchWeb } = await import("../../common/webSearch.js");
+    const { searchWeb } = await import("../../common/webSearch.ts");
 
     const result = await searchWeb("test query", { tier: 3 });
 
@@ -172,7 +172,7 @@ describe("searchWeb shared module", () => {
   it("should return empty results when fetch fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
 
-    const { searchWeb } = await import("../../common/webSearch.js");
+    const { searchWeb } = await import("../../common/webSearch.ts");
 
     const result = await searchWeb("failing query");
 

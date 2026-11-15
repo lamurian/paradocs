@@ -54,7 +54,7 @@ describe("fetchUrlWithTimeout", () => {
       }),
     );
 
-    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.js");
+    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.ts");
     const result = await fetchUrlWithTimeout("https://example.com/fast", 5000);
 
     expect(result).toHaveProperty("content");
@@ -67,7 +67,7 @@ describe("fetchUrlWithTimeout", () => {
     // A fetch that never resolves
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
 
-    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.js");
+    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.ts");
 
     const resultPromise = fetchUrlWithTimeout("https://example.com/slow", 100);
 
@@ -82,7 +82,7 @@ describe("fetchUrlWithTimeout", () => {
   });
 
   it("should return error on invalid URL", async () => {
-    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.js");
+    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.ts");
 
     const result = await fetchUrlWithTimeout("not-a-url", 5000);
 
@@ -123,7 +123,7 @@ describe("fetchUrlAsText shared module", () => {
   });
 
   it("should return error when URL is invalid", async () => {
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.js");
+    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
 
     const result = await fetchUrlAsText("not-a-valid-url");
 
@@ -131,7 +131,7 @@ describe("fetchUrlAsText shared module", () => {
   });
 
   it("should return error for unsupported protocol", async () => {
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.js");
+    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
 
     const result = await fetchUrlAsText("ftp://example.com/file");
 
@@ -155,7 +155,7 @@ describe("fetchUrlAsText shared module", () => {
       }),
     );
 
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.js");
+    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
     const result = await fetchUrlAsText("https://example.com/test");
 
     if ("error" in result) {
@@ -170,7 +170,7 @@ describe("fetchUrlAsText shared module", () => {
   it("should return error shape when all engines fail", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
 
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.js");
+    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
     const result = await fetchUrlAsText("https://example.com/failing");
 
     expect(result).toHaveProperty("error");

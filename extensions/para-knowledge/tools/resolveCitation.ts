@@ -9,7 +9,7 @@
 
 import { Type } from "typebox";
 
-import { resolveCitation } from "../../../common/citation.js";
+import { resolveCitation } from "../../../common/citation.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

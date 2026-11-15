@@ -39,7 +39,7 @@ describe("resolve_citation ref.bib path", () => {
   it("should write ref.bib to KNOWLEDGE_DIR, not ctx.cwd", async () => {
     vi.resetModules();
     const { registerResolveCitationTool } =
-      await import("../../extensions/para-knowledge/tools/resolveCitation.js");
+      await import("../../extensions/para-knowledge/tools/resolveCitation.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

@@ -56,7 +56,7 @@ describe("checkPdfContentType", () => {
         headers: new Map([["content-type", "application/pdf"]]),
       }),
     );
-    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.js");
+    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await checkPdfContentType("https://example.com/doc.pdf")).toBe(true);
   });
 
@@ -68,13 +68,13 @@ describe("checkPdfContentType", () => {
         headers: new Map([["content-type", "text/html"]]),
       }),
     );
-    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.js");
+    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await checkPdfContentType("https://example.com/doc.html")).toBe(false);
   });
 
   it("should return false when fetch throws", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
-    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.js");
+    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await checkPdfContentType("https://example.com/doc.pdf")).toBe(false);
   });
 
@@ -84,7 +84,7 @@ describe("checkPdfContentType", () => {
       headers: new Map([["content-type", "application/pdf"]]),
     });
     vi.stubGlobal("fetch", mockFetch);
-    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.js");
+    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.ts");
     await checkPdfContentType("https://example.com/redirect");
     expect(mockFetch.mock.calls[0][1].redirect).toBe("follow");
   });
@@ -97,7 +97,7 @@ describe("checkPdfContentType", () => {
         headers: new Map([["content-type", "Application/PDF"]]),
       }),
     );
-    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.js");
+    const { checkPdfContentType } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await checkPdfContentType("https://example.com/doc.pdf")).toBe(true);
   });
 });
@@ -124,7 +124,7 @@ describe("tryExtractPdf", () => {
         headers: new Map([["content-type", "text/html"]]),
       }),
     );
-    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.js");
+    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await tryExtractPdf("https://example.com/doc.html")).toBeNull();
   });
 
@@ -141,7 +141,7 @@ describe("tryExtractPdf", () => {
       }),
     );
 
-    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.js");
+    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.ts");
     const result = await tryExtractPdf("https://example.com/pdf/12345");
 
     expect(result).not.toBeNull();
@@ -161,7 +161,7 @@ describe("tryExtractPdf", () => {
       }),
     );
 
-    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.js");
+    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.ts");
     const result = await tryExtractPdf("https://example.com/doc.pdf");
 
     expect(result).not.toBeNull();
@@ -173,7 +173,7 @@ describe("tryExtractPdf", () => {
       throw new Error("Command failed: which pdftotext");
     });
 
-    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.js");
+    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.ts");
     const result = await tryExtractPdf("https://example.com/doc.pdf");
 
     expect(result).not.toBeNull();
@@ -195,7 +195,7 @@ describe("tryExtractPdf", () => {
         .mockResolvedValueOnce({ ok: false, status: 404 }),
     );
 
-    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.js");
+    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await tryExtractPdf("https://example.com/404.pdf")).toBeNull();
   });
 
@@ -213,7 +213,7 @@ describe("tryExtractPdf", () => {
         .mockRejectedValueOnce(new Error("Network error")),
     );
 
-    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.js");
+    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await tryExtractPdf("https://example.com/doc.pdf")).toBeNull();
   });
 
@@ -231,7 +231,7 @@ describe("tryExtractPdf", () => {
         .mockResolvedValueOnce({ ok: true, body: null }),
     );
 
-    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.js");
+    const { tryExtractPdf } = await import("../../extensions/link-summarizer/pdf.ts");
     expect(await tryExtractPdf("https://example.com/doc.pdf")).toBeNull();
   });
 });

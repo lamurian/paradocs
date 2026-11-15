@@ -8,8 +8,8 @@
  * @module extensions/research-engine/guards
  */
 
-import { isAuthoritative, registrableDomain } from "./fetcher.js";
-import { FETCH_P50_MAX_MS, FETCH_RATE_MIN, LLM_ERROR_BUDGET, MIN_CANDIDATES } from "./profiles.js";
+import { isAuthoritative, registrableDomain } from "./fetcher.ts";
+import { FETCH_P50_MAX_MS, FETCH_RATE_MIN, LLM_ERROR_BUDGET, MIN_CANDIDATES } from "./profiles.ts";
 
 import type {
   DecisionRecord,
@@ -18,7 +18,7 @@ import type {
   JudgeResult,
   KbDocGist,
   StructuralResult,
-} from "./state.js";
+} from "./state.ts";
 
 // ── kbCovered ─────────────────────────────────────────────────────────
 

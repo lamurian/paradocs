@@ -18,9 +18,9 @@ import {
   parseSynthesis,
   prompt,
   WHOLE_DOC_MAX,
-} from "../../extensions/research-engine/effects.js";
+} from "../../extensions/research-engine/effects.ts";
 
-import type { FetchRecord } from "../../extensions/research-engine/state.js";
+import type { FetchRecord } from "../../extensions/research-engine/state.ts";
 
 function rec(content: string, url = "https://a.com/1"): FetchRecord {
   return { url, canonicalUrl: url, ok: true, content, fetchedAt: 0 };

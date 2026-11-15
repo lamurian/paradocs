@@ -7,7 +7,7 @@
  * - `docs_fts` — FTS5 full-text search index
  */
 
-import type { SqliteDb, DocIndex } from "./sqlite-types.js";
+import type { SqliteDb, DocIndex } from "./sqlite-types.ts";
 
 // ── Insert or update a document ──
 

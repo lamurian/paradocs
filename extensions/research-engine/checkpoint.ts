@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { CheckpointFile, ResearchState } from "./state.js";
+import type { CheckpointFile, ResearchState } from "./state.ts";
 
 /** Subdirectory under KNOWLEDGE_DIR holding research checkpoints. */
 export const RESEARCH_STATE_SUBDIR = ".research";

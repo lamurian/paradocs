@@ -10,14 +10,14 @@
  * @module extensions/research-engine/stages
  */
 
-import { stageAssess, stageSynthesize, stageWriteBack } from "./stage-assess.js";
-import { stageQueryGen, stageRefine } from "./stage-queries.js";
-import { stageFetch, stageRank, stageSearch } from "./stage-sources.js";
-import { stageSummarize } from "./stage-summarize.js";
+import { stageAssess, stageSynthesize, stageWriteBack } from "./stage-assess.ts";
+import { stageQueryGen, stageRefine } from "./stage-queries.ts";
+import { stageFetch, stageRank, stageSearch } from "./stage-sources.ts";
+import { stageSummarize } from "./stage-summarize.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { LlmCallOutcome, ResearchDeps, SearchSubagentOutcome } from "./research-deps.js";
-import type { ResearchState } from "./state.js";
+import type { ResearchEvent } from "./events.ts";
+import type { LlmCallOutcome, ResearchDeps, SearchSubagentOutcome } from "./research-deps.ts";
+import type { ResearchState } from "./state.ts";
 
 /** Consecutive subagent failures that abort a stage. */
 export const BREAKER_LIMIT = 3;
@@ -181,5 +181,5 @@ async function runStageExecutor(
   }
 }
 
-export type { ResearchDeps } from "./research-deps.js";
-export { DEFAULT_STAGE_MESSAGES } from "./research-deps.js";
+export type { ResearchDeps } from "./research-deps.ts";
+export { DEFAULT_STAGE_MESSAGES } from "./research-deps.ts";

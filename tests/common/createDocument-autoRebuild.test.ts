@@ -75,7 +75,7 @@ Body of ${slug}. UNIQUE_TERM_${slug}.;`;
     vi.resetModules();
 
     // Create a new document — this should trigger a rebuild first
-    const { createDocument } = await import("../../common/createDocument.js");
+    const { createDocument } = await import("../../common/createDocument.ts");
 
     const result = await createDocument(
       {
@@ -93,7 +93,7 @@ Body of ${slug}. UNIQUE_TERM_${slug}.;`;
 
     // Verify all docs are searchable
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(resolve(knowledgeDir, "notes.db"));
     initDb(db);
 
@@ -122,7 +122,7 @@ Body of ${slug}. UNIQUE_TERM_${slug}.;`;
 
     vi.resetModules();
 
-    const { createDocument } = await import("../../common/createDocument.js");
+    const { createDocument } = await import("../../common/createDocument.ts");
 
     const result = await createDocument(
       {
@@ -140,7 +140,7 @@ Body of ${slug}. UNIQUE_TERM_${slug}.;`;
 
     // Should find the new doc
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(resolve(knowledgeDir, "notes.db"));
     initDb(db);
 
@@ -158,7 +158,7 @@ Body of ${slug}. UNIQUE_TERM_${slug}.;`;
     writeExistingDoc("Resources", "existing-doc", "Existing Doc");
 
     vi.resetModules();
-    const { createDocument } = await import("../../common/createDocument.js");
+    const { createDocument } = await import("../../common/createDocument.ts");
 
     await createDocument(
       {
@@ -186,7 +186,7 @@ Body of ${slug}. UNIQUE_TERM_${slug}.;`;
 
     // Both docs should be findable
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(resolve(knowledgeDir, "notes.db"));
     initDb(db);
 

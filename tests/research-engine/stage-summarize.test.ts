@@ -12,17 +12,17 @@ import { join } from "node:path";
 
 import { afterAll, describe, it, expect, vi } from "vitest";
 
-import { runResearch } from "../../extensions/research-engine/orchestrator.js";
-import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.js";
+import { runResearch } from "../../extensions/research-engine/orchestrator.ts";
+import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.ts";
 
 import type {
   ResearchDeps,
   LlmCallInput,
   LlmCallOutcome,
   KbDocWithTitle,
-} from "../../extensions/research-engine/research-deps.js";
+} from "../../extensions/research-engine/research-deps.ts";
 
-vi.mock("../../common/subagent.js", () => ({
+vi.mock("../../common/subagent.ts", () => ({
   buildSubagentArgs: vi.fn(),
   getPiInvocation: vi.fn(),
   resolveSubagentTimeoutMs: vi.fn(() => 60_000),

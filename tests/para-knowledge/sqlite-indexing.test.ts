@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import type { SqliteDb, DocIndex } from "../../extensions/para-knowledge/sqlite-types.js";
+import type { SqliteDb, DocIndex } from "../../extensions/para-knowledge/sqlite-types.ts";
 
 function makeDoc(overrides: Partial<DocIndex> = {}): DocIndex {
   return {
@@ -22,7 +22,7 @@ describe("indexFile", () => {
   let db: SqliteDb;
 
   beforeEach(async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     initDb(db);
   });
@@ -32,7 +32,7 @@ describe("indexFile", () => {
   });
 
   it("should insert a document into files, tags, and FTS5 tables", async () => {
-    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc();
     indexFile(db, doc);
 
@@ -59,7 +59,7 @@ describe("indexFile", () => {
   });
 
   it("should update an existing document", async () => {
-    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc();
     indexFile(db, doc);
 
@@ -90,7 +90,7 @@ describe("indexFile", () => {
   });
 
   it("should handle empty tags array", async () => {
-    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc({ tags: [] });
     indexFile(db, doc);
 
@@ -101,7 +101,7 @@ describe("indexFile", () => {
   });
 
   it("should handle empty body", async () => {
-    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc({ body: "" });
     expect(() => indexFile(db, doc)).not.toThrow();
 
@@ -112,7 +112,7 @@ describe("indexFile", () => {
   });
 
   it("should handle special characters in path and tags", async () => {
-    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc({
       path: "Projects/doc-with-hyphens_and_underscores.md",
       tags: ["c++", "c#", "tag:with:colons"],
@@ -130,7 +130,7 @@ describe("getFileTags", () => {
   let db: SqliteDb;
 
   beforeEach(async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     initDb(db);
   });
@@ -141,7 +141,7 @@ describe("getFileTags", () => {
 
   it("should return tags for an indexed file", async () => {
     const { indexFile, getFileTags } =
-      await import("../../extensions/para-knowledge/sqlite-indexing.js");
+      await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc({ tags: ["alpha", "beta", "gamma"] });
     indexFile(db, doc);
 
@@ -150,14 +150,14 @@ describe("getFileTags", () => {
   });
 
   it("should return empty array for a non-existent file", async () => {
-    const { getFileTags } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { getFileTags } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const tags = getFileTags(db, "nonexistent.md");
     expect(tags).toEqual([]);
   });
 
   it("should return tags in alphabetical order", async () => {
     const { indexFile, getFileTags } =
-      await import("../../extensions/para-knowledge/sqlite-indexing.js");
+      await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc({ tags: ["zebra", "apple", "banana"] });
     indexFile(db, doc);
 
@@ -170,7 +170,7 @@ describe("removeFile", () => {
   let db: SqliteDb;
 
   beforeEach(async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     initDb(db);
   });
@@ -181,7 +181,7 @@ describe("removeFile", () => {
 
   it("should remove a document from all tables", async () => {
     const { indexFile, removeFile, getFileTags } =
-      await import("../../extensions/para-knowledge/sqlite-indexing.js");
+      await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc = makeDoc();
     indexFile(db, doc);
     removeFile(db, doc.path);
@@ -204,13 +204,13 @@ describe("removeFile", () => {
   });
 
   it("should not throw when removing a non-existent file", async () => {
-    const { removeFile } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { removeFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     expect(() => removeFile(db, "nonexistent.md")).not.toThrow();
   });
 
   it("should remove only the specified file", async () => {
     const { indexFile, removeFile, getFileTags } =
-      await import("../../extensions/para-knowledge/sqlite-indexing.js");
+      await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     const doc1 = makeDoc({ path: "Projects/doc1.md", tags: ["shared"] });
     const doc2 = makeDoc({ path: "Projects/doc2.md", tags: ["shared"] });
     indexFile(db, doc1);
@@ -231,7 +231,7 @@ describe("removeFile", () => {
 
 describe("recomputeStats", () => {
   it("should not throw (no-op for FTS5)", async () => {
-    const { recomputeStats } = await import("../../extensions/para-knowledge/sqlite-indexing.js");
+    const { recomputeStats } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
     // Pass null since it's a no-op and doesn't use the db parameter
     expect(() => recomputeStats(null as unknown as SqliteDb)).not.toThrow();
   });

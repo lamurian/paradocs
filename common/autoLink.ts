@@ -13,7 +13,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.js";
+import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.ts";
 
 // ── Constants ──────────────────────────────────────────────────────
 

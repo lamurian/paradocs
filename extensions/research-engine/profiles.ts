@@ -8,7 +8,7 @@
  * @module extensions/research-engine/profiles
  */
 
-import type { GateProfile } from "./state.js";
+import type { GateProfile } from "./state.ts";
 
 /** Rank-stage minimum below which candidates are considered too thin. */
 export const MIN_CANDIDATES = 8;

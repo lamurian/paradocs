@@ -49,7 +49,7 @@ describe("createDocument shared module", () => {
   });
 
   it("should create a markdown file with frontmatter in KNOWLEDGE_DIR", async () => {
-    const { createDocument } = await import("../../common/createDocument.js");
+    const { createDocument } = await import("../../common/createDocument.ts");
 
     const result = await createDocument(
       {
@@ -75,7 +75,7 @@ describe("createDocument shared module", () => {
   });
 
   it("should place document in the specified area", async () => {
-    const { createDocument } = await import("../../common/createDocument.js");
+    const { createDocument } = await import("../../common/createDocument.ts");
 
     await createDocument(
       {
@@ -92,7 +92,7 @@ describe("createDocument shared module", () => {
   });
 
   it("should include YAML frontmatter with title, tags, and source", async () => {
-    const { createDocument } = await import("../../common/createDocument.js");
+    const { createDocument } = await import("../../common/createDocument.ts");
 
     await createDocument(
       {

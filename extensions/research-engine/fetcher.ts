@@ -6,12 +6,12 @@
  * @module extensions/research-engine/fetcher
  */
 
-import { extractMetadata } from "./metadata.js";
+import { extractMetadata } from "./metadata.ts";
 
-import type { FetchRecord } from "./state.js";
+import type { FetchRecord } from "./state.ts";
 
-export { extractMetadata } from "./metadata.js";
-export type { PageMetadata } from "./metadata.js";
+export { extractMetadata } from "./metadata.ts";
+export type { PageMetadata } from "./metadata.ts";
 
 // ── Canonicalization ──────────────────────────────────────────────────
 

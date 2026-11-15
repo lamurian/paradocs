@@ -8,7 +8,7 @@
  * are automatically quoted to produce valid YAML.
  */
 
-import type { Frontmatter } from "./types.js";
+import type { Frontmatter } from "./types.ts";
 
 // ── Constants ───────────────────────────────────────────────────────
 

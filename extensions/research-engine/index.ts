@@ -10,15 +10,15 @@
 
 import { Type } from "typebox";
 
-import { buildResearchDeps } from "./deps.js";
-import { runResearch } from "./orchestrator.js";
-import { ASK_DEEP_PROFILE } from "./profiles.js";
-import { renderAnswerBody, renderWritebackLines } from "./render.js";
-import { buildDigest } from "./state.js";
-import { configureEnv } from "../../common/env.js";
+import { buildResearchDeps } from "./deps.ts";
+import { runResearch } from "./orchestrator.ts";
+import { ASK_DEEP_PROFILE } from "./profiles.ts";
+import { renderAnswerBody, renderWritebackLines } from "./render.ts";
+import { buildDigest } from "./state.ts";
+import { configureEnv } from "../../common/env.ts";
 
-import type { ResearchAuth } from "./deps.js";
-import type { ResearchState } from "./state.js";
+import type { ResearchAuth } from "./deps.ts";
+import type { ResearchState } from "./state.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Render the tool result text from a terminal research state. */

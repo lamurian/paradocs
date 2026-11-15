@@ -49,7 +49,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     const results = await searchSearxng("quantum computing", 1);
 
     expect(results).toHaveLength(3);
@@ -67,7 +67,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     await searchSearxng("quantum", 1);
 
     const url = new URL(mockFetch.mock.calls[0][0] as string);
@@ -81,7 +81,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     await searchSearxng("climate", 2);
 
     const url = new URL(mockFetch.mock.calls[0][0] as string);
@@ -97,7 +97,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     await searchSearxng("news", 3);
 
     const url = new URL(mockFetch.mock.calls[0][0] as string);
@@ -111,7 +111,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     await searchSearxng("python", 2, undefined, "it");
 
     const url = new URL(mockFetch.mock.calls[0][0] as string);
@@ -124,7 +124,7 @@ describe("searchSearxng", () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     const results = await searchSearxng("test", 3);
 
     expect(results).toEqual([]);
@@ -134,7 +134,7 @@ describe("searchSearxng", () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error("Connection refused"));
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     const results = await searchSearxng("test", 3);
 
     expect(results).toEqual([]);
@@ -147,7 +147,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     const results = await searchSearxng("test", 3);
 
     expect(results).toEqual([]);
@@ -160,7 +160,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     const results = await searchSearxng("test", 3);
 
     expect(results).toEqual([]);
@@ -176,7 +176,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     await searchSearxng("test", 3);
 
     const url = new URL(mockFetch.mock.calls[0][0] as string);
@@ -191,7 +191,7 @@ describe("searchSearxng", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchSearxng } = await import("../../extensions/web-search/searxng.js");
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
     await searchSearxng("test", 3);
 
     const url = new URL(mockFetch.mock.calls[0][0] as string);

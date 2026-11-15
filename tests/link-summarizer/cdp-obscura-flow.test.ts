@@ -66,7 +66,7 @@ describe("tryObscura complex flows", () => {
         return ctrl.ws;
       }),
     );
-    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.js");
+    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.ts");
     const promise = tryObscura("https://example.com/article");
 
     await vi.waitFor(() => expect(vi.mocked(globalThis.WebSocket)).toHaveBeenCalled(), {
@@ -191,7 +191,7 @@ describe("tryObscura complex flows", () => {
         return ctrl.ws;
       }),
     );
-    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.js");
+    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.ts");
     const promise = tryObscura("https://example.com");
 
     await vi.waitFor(() => expect(vi.mocked(globalThis.WebSocket)).toHaveBeenCalled(), {

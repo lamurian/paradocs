@@ -10,30 +10,30 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { fetchUrlWithTimeout } from "../../common/fetchUrl.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
-import { runSubagent, buildSubagentArgs, resolveSubagentTimeoutMs } from "../../common/subagent.js";
-import { searchDocs } from "../../extensions/para-knowledge/db-sqlite.js";
-import { buildResearchDeps } from "../../extensions/research-engine/deps.js";
-import { buildSearchAgentArgs } from "../../extensions/research-engine/runner.js";
-import { writeBackToKB } from "../../extensions/research-engine/writeback.js";
+import { fetchUrlWithTimeout } from "../../common/fetchUrl.ts";
+import { ensureNotesDb } from "../../common/notesDb.ts";
+import { runSubagent, buildSubagentArgs, resolveSubagentTimeoutMs } from "../../common/subagent.ts";
+import { searchDocs } from "../../extensions/para-knowledge/db-sqlite.ts";
+import { buildResearchDeps } from "../../extensions/research-engine/deps.ts";
+import { buildSearchAgentArgs } from "../../extensions/research-engine/runner.ts";
+import { writeBackToKB } from "../../extensions/research-engine/writeback.ts";
 
-vi.mock("../../common/subagent.js", () => ({
+vi.mock("../../common/subagent.ts", () => ({
   buildSubagentArgs: vi.fn((i: Record<string, unknown>) => ["ARGS", i.task]),
   resolveSubagentTimeoutMs: vi.fn(() => 60_000),
   runSubagent: vi.fn(),
 }));
-vi.mock("../../extensions/research-engine/runner.js", () => ({
+vi.mock("../../extensions/research-engine/runner.ts", () => ({
   buildSearchAgentArgs: vi.fn((i: Record<string, unknown>) => ["SEARCH-ARGS", i.task]),
   parseSearchResult: vi.fn(),
 }));
-vi.mock("../../common/fetchUrl.js", () => ({
+vi.mock("../../common/fetchUrl.ts", () => ({
   fetchUrlWithTimeout: vi.fn(),
   fetchUrlAsText: vi.fn(),
 }));
-vi.mock("../../common/notesDb.js", () => ({ ensureNotesDb: vi.fn() }));
-vi.mock("../../extensions/para-knowledge/db-sqlite.js", () => ({ searchDocs: vi.fn() }));
-vi.mock("../../extensions/research-engine/writeback.js", () => ({ writeBackToKB: vi.fn() }));
+vi.mock("../../common/notesDb.ts", () => ({ ensureNotesDb: vi.fn() }));
+vi.mock("../../extensions/para-knowledge/db-sqlite.ts", () => ({ searchDocs: vi.fn() }));
+vi.mock("../../extensions/research-engine/writeback.ts", () => ({ writeBackToKB: vi.fn() }));
 
 const AUTH = { model: { id: "mimo-v2.5", provider: "opencode-go" } as never };
 

@@ -19,8 +19,8 @@ import { describe, it, expect, vi } from "vitest";
 // common/subagent.js (a bare vi.fn()), which makes buildSubagentArgs return
 // undefined. resetModules forces runner.js to re-evaluate against this
 // file's registration — importOriginal, i.e. the real implementation.
-vi.mock("../../common/subagent.js", async (importOriginal) =>
-  importOriginal<typeof import("../../common/subagent.js")>(),
+vi.mock("../../common/subagent.ts", async (importOriginal) =>
+  importOriginal<typeof import("../../common/subagent.ts")>(),
 );
 
 vi.resetModules();
@@ -31,9 +31,9 @@ const {
   buildSearchTask,
   parseSearchResult,
   runSearchStage,
-} = await import("../../extensions/research-engine/runner.js");
+} = await import("../../extensions/research-engine/runner.ts");
 
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RESEARCHER_MD = resolve(HERE, "../../extensions/research-engine/prompts/researcher.md");

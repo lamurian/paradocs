@@ -34,7 +34,7 @@ describe("resolveCitation shared module", () => {
   });
 
   it("should create a new citation with fallback metadata and write ref.bib", async () => {
-    const { resolveCitation } = await import("../../common/citation.js");
+    const { resolveCitation } = await import("../../common/citation.ts");
 
     const result = await resolveCitation(
       {
@@ -65,7 +65,7 @@ describe("resolveCitation shared module", () => {
   });
 
   it("should detect an existing citation and return isNew=false", async () => {
-    const { resolveCitation } = await import("../../common/citation.js");
+    const { resolveCitation } = await import("../../common/citation.ts");
 
     // First call creates the citation
     const first = await resolveCitation(
@@ -98,7 +98,7 @@ describe("resolveCitation shared module", () => {
   });
 
   it("should fail gracefully when no metadata and citation.js cannot parse", async () => {
-    const { resolveCitation } = await import("../../common/citation.js");
+    const { resolveCitation } = await import("../../common/citation.ts");
 
     const result = await resolveCitation(
       { source: "https://example.com/no-metadata" },
@@ -112,7 +112,7 @@ describe("resolveCitation shared module", () => {
   });
 
   it("should fall back with title+year alone, author defaults to unknown (T10)", async () => {
-    const { resolveCitation } = await import("../../common/citation.js");
+    const { resolveCitation } = await import("../../common/citation.ts");
 
     const result = await resolveCitation(
       { source: "https://promptessor.com/blog/llm-guardrails-guide", title: "T", year: 2026 },
@@ -128,7 +128,7 @@ describe("resolveCitation shared module", () => {
   });
 
   it("should still fail without a title even when year is present (T10)", async () => {
-    const { resolveCitation } = await import("../../common/citation.js");
+    const { resolveCitation } = await import("../../common/citation.ts");
 
     const result = await resolveCitation(
       { source: "https://genai.owasp.org/", year: 2026 },

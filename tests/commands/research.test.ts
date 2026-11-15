@@ -6,17 +6,17 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { RESEARCH_PROFILE } from "../../extensions/research-engine/profiles.js";
+import { RESEARCH_PROFILE } from "../../extensions/research-engine/profiles.ts";
 
-import type { ResearchDeps } from "../../extensions/research-engine/research-deps.js";
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchDeps } from "../../extensions/research-engine/research-deps.ts";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
-vi.mock("../../extensions/research-engine/orchestrator.js", async () => {
+vi.mock("../../extensions/research-engine/orchestrator.ts", async () => {
   const { DEFAULT_STAGE_MESSAGES } =
-    await import("../../extensions/research-engine/research-deps.js");
+    await import("../../extensions/research-engine/research-deps.ts");
   return { runResearch: vi.fn(), DEFAULT_STAGE_MESSAGES };
 });
-vi.mock("../../extensions/research-engine/deps.js", () => ({
+vi.mock("../../extensions/research-engine/deps.ts", () => ({
   buildResearchDeps: vi.fn(() => ({})),
 }));
 
@@ -83,8 +83,8 @@ describe("/research command — FSM orchestrator flow", () => {
 
   it("should use the wide research profile and deliver a Research Report", async () => {
     vi.resetModules();
-    const { createHandler } = await import("../../extensions/commands/research.js");
-    const { runResearch } = await import("../../extensions/research-engine/orchestrator.js");
+    const { createHandler } = await import("../../extensions/commands/research.ts");
+    const { runResearch } = await import("../../extensions/research-engine/orchestrator.ts");
     vi.clearAllMocks();
     vi.mocked(runResearch).mockResolvedValue(fixtureState());
 
@@ -104,8 +104,8 @@ describe("/research command — FSM orchestrator flow", () => {
 
   it("rpc: sets 'Researcher: {topic}' status before the run, updates it, clears at the end", async () => {
     vi.resetModules();
-    const { createHandler } = await import("../../extensions/commands/research.js");
-    const { runResearch } = await import("../../extensions/research-engine/orchestrator.js");
+    const { createHandler } = await import("../../extensions/commands/research.ts");
+    const { runResearch } = await import("../../extensions/research-engine/orchestrator.ts");
     vi.clearAllMocks();
     let resolveRun: (s: ResearchState) => void = () => {};
     vi.mocked(runResearch).mockReturnValue(
@@ -147,8 +147,8 @@ describe("/research command — FSM orchestrator flow", () => {
 
   it("rpc: clears the status key after a failed run and keeps notify(error)", async () => {
     vi.resetModules();
-    const { createHandler } = await import("../../extensions/commands/research.js");
-    const { runResearch } = await import("../../extensions/research-engine/orchestrator.js");
+    const { createHandler } = await import("../../extensions/commands/research.ts");
+    const { runResearch } = await import("../../extensions/research-engine/orchestrator.ts");
     vi.clearAllMocks();
     vi.mocked(runResearch).mockRejectedValue(new Error("search subagent crashed"));
     const notify = vi.fn();
@@ -174,8 +174,8 @@ describe("/research command — FSM orchestrator flow", () => {
 
   it("should notify usage errors without running the pipeline", async () => {
     vi.resetModules();
-    const { createHandler } = await import("../../extensions/commands/research.js");
-    const { runResearch } = await import("../../extensions/research-engine/orchestrator.js");
+    const { createHandler } = await import("../../extensions/commands/research.ts");
+    const { runResearch } = await import("../../extensions/research-engine/orchestrator.ts");
     vi.clearAllMocks();
     const notify = vi.fn();
     const handler = createHandler({ sendUserMessage } as never);
@@ -187,8 +187,8 @@ describe("/research command — FSM orchestrator flow", () => {
 
   it("tui: block with per-stage progress", async () => {
     vi.resetModules();
-    const { createHandler } = await import("../../extensions/commands/research.js");
-    const { runResearch } = await import("../../extensions/research-engine/orchestrator.js");
+    const { createHandler } = await import("../../extensions/commands/research.ts");
+    const { runResearch } = await import("../../extensions/research-engine/orchestrator.ts");
     vi.clearAllMocks();
     vi.mocked(runResearch).mockImplementation((deps: ResearchDeps) => {
       deps.onProgress?.("SEARCH", "searching…");

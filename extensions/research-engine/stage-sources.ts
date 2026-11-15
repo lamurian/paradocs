@@ -10,12 +10,12 @@
  * @module extensions/research-engine/stage-sources
  */
 
-import { fetchRecords } from "./fetcher.js";
-import { runSearchStage } from "./runner.js";
+import { fetchRecords } from "./fetcher.ts";
+import { runSearchStage } from "./runner.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { ResearchDeps } from "./research-deps.js";
-import type { Candidate, FetchRecord, ResearchState } from "./state.js";
+import type { ResearchEvent } from "./events.ts";
+import type { ResearchDeps } from "./research-deps.ts";
+import type { Candidate, FetchRecord, ResearchState } from "./state.ts";
 
 /**
  * SEARCH: run the search subagent (one call: queries + web_search +

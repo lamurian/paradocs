@@ -6,32 +6,32 @@ import { describe, it, expect, beforeEach } from "vitest";
  */
 describe("pending URL queue", () => {
   beforeEach(async () => {
-    const mod = await import("../../extensions/link-summarizer/tavily-extract.js");
+    const mod = await import("../../extensions/link-summarizer/tavily-extract.ts");
     mod.clearPending();
   });
 
   it("should start empty after clearing", async () => {
-    const mod = await import("../../extensions/link-summarizer/tavily-extract.js");
+    const mod = await import("../../extensions/link-summarizer/tavily-extract.ts");
     expect(mod.hasPending()).toBe(false);
     expect(mod.getPendingUrls()).toEqual([]);
   });
 
   it("should add a URL and report it as pending", async () => {
-    const mod = await import("../../extensions/link-summarizer/tavily-extract.js");
+    const mod = await import("../../extensions/link-summarizer/tavily-extract.ts");
     mod.addFailedUrl("https://example.com");
     expect(mod.hasPending()).toBe(true);
     expect(mod.getPendingUrls()).toEqual(["https://example.com"]);
   });
 
   it("should not duplicate URLs", async () => {
-    const mod = await import("../../extensions/link-summarizer/tavily-extract.js");
+    const mod = await import("../../extensions/link-summarizer/tavily-extract.ts");
     mod.addFailedUrl("https://example.com");
     mod.addFailedUrl("https://example.com");
     expect(mod.getPendingUrls()).toEqual(["https://example.com"]);
   });
 
   it("should clear all pending URLs", async () => {
-    const mod = await import("../../extensions/link-summarizer/tavily-extract.js");
+    const mod = await import("../../extensions/link-summarizer/tavily-extract.ts");
     mod.addFailedUrl("https://a.com");
     mod.addFailedUrl("https://b.com");
     mod.clearPending();
@@ -40,7 +40,7 @@ describe("pending URL queue", () => {
   });
 
   it("should handle multiple unique URLs", async () => {
-    const mod = await import("../../extensions/link-summarizer/tavily-extract.js");
+    const mod = await import("../../extensions/link-summarizer/tavily-extract.ts");
     mod.addFailedUrl("https://a.com");
     mod.addFailedUrl("https://b.com");
     mod.addFailedUrl("https://c.com");
@@ -51,7 +51,7 @@ describe("pending URL queue", () => {
   });
 
   it("should allow re-adding after clear", async () => {
-    const mod = await import("../../extensions/link-summarizer/tavily-extract.js");
+    const mod = await import("../../extensions/link-summarizer/tavily-extract.ts");
     mod.addFailedUrl("https://example.com");
     mod.clearPending();
     mod.addFailedUrl("https://example.com");

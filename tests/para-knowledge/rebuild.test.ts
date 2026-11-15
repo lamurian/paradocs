@@ -44,7 +44,7 @@ Body of ${slug}.`;
     writeDoc("Resources", "resource-alpha");
     writeDoc("Resources", "resource-beta");
 
-    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.js");
+    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.ts");
 
     const count = await rebuildDb(knowledgeDir);
 
@@ -56,7 +56,7 @@ Body of ${slug}.`;
 
     // Verify contents
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(dbPath);
     initDb(db);
 
@@ -78,7 +78,7 @@ Body of ${slug}.`;
     // Create knowledgeDir but no files in it
     mkdirSync(knowledgeDir, { recursive: true });
 
-    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.js");
+    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.ts");
 
     const count = await rebuildDb(knowledgeDir);
     expect(count).toBe(0);
@@ -92,7 +92,7 @@ Body of ${slug}.`;
     // First write a doc
     writeDoc("Resources", "original-doc");
 
-    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.js");
+    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.ts");
 
     // Rebuild — should index the one doc
     const count1 = await rebuildDb(knowledgeDir);
@@ -107,7 +107,7 @@ Body of ${slug}.`;
 
     const dbPath = resolve(knowledgeDir, "notes.db");
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(dbPath);
     initDb(db);
     const results = searchDocs(db, "original");
@@ -125,14 +125,14 @@ Body of ${slug}.`;
     // Write a normal doc
     writeDoc("Resources", "normal-doc");
 
-    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.js");
+    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.ts");
 
     const count = await rebuildDb(knowledgeDir);
     expect(count).toBe(2);
 
     const dbPath = resolve(knowledgeDir, "notes.db");
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(dbPath);
     initDb(db);
 

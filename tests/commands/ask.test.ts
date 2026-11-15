@@ -10,17 +10,17 @@ import { fileURLToPath } from "node:url";
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.js";
+import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.ts";
 
-import type { ResearchDeps } from "../../extensions/research-engine/research-deps.js";
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchDeps } from "../../extensions/research-engine/research-deps.ts";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
-vi.mock("../../extensions/research-engine/orchestrator.js", async () => {
+vi.mock("../../extensions/research-engine/orchestrator.ts", async () => {
   const { DEFAULT_STAGE_MESSAGES } =
-    await import("../../extensions/research-engine/research-deps.js");
+    await import("../../extensions/research-engine/research-deps.ts");
   return { runResearch: vi.fn(), DEFAULT_STAGE_MESSAGES };
 });
-vi.mock("../../extensions/research-engine/deps.js", () => ({
+vi.mock("../../extensions/research-engine/deps.ts", () => ({
   buildResearchDeps: vi.fn(() => ({})),
 }));
 
@@ -96,14 +96,14 @@ function makeCtx(overrides: Record<string, unknown> = {}): Record<string, unknow
 }
 
 async function importHandler(): Promise<{
-  createHandler: typeof import("../../extensions/commands/ask.js").createHandler;
+  createHandler: typeof import("../../extensions/commands/ask.ts").createHandler;
   runResearch: ReturnType<typeof vi.fn>;
   buildResearchDeps: ReturnType<typeof vi.fn>;
 }> {
   vi.resetModules();
-  const ask = await import("../../extensions/commands/ask.js");
-  const orch = await import("../../extensions/research-engine/orchestrator.js");
-  const deps = await import("../../extensions/research-engine/deps.js");
+  const ask = await import("../../extensions/commands/ask.ts");
+  const orch = await import("../../extensions/research-engine/orchestrator.ts");
+  const deps = await import("../../extensions/research-engine/deps.ts");
   vi.clearAllMocks();
   return {
     createHandler: ask.createHandler,

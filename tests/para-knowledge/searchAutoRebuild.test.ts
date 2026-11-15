@@ -81,7 +81,7 @@ Body of ${slug}.`;
     writeDoc("Projects", "other-bar");
 
     const { registerSearchDocsTool } =
-      await import("../../extensions/para-knowledge/tools/searchDocs.js");
+      await import("../../extensions/para-knowledge/tools/searchDocs.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -144,7 +144,7 @@ Body of ${slug}.`;
 
     vi.resetModules();
     const { registerSearchDocsTool } =
-      await import("../../extensions/para-knowledge/tools/searchDocs.js");
+      await import("../../extensions/para-knowledge/tools/searchDocs.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -195,7 +195,7 @@ Body of ${slug}.`;
     vi.resetModules();
 
     const { registerSearchDocsTool } =
-      await import("../../extensions/para-knowledge/tools/searchDocs.js");
+      await import("../../extensions/para-knowledge/tools/searchDocs.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

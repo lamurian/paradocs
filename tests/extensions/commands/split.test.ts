@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { createSplitHandler, splitDescription } from "../../../extensions/commands/split.js";
+import { createSplitHandler, splitDescription } from "../../../extensions/commands/split.ts";
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
@@ -21,7 +21,7 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 // Mock the atomicity module
-vi.mock("../../../common/atomicity.js", () => ({
+vi.mock("../../../common/atomicity.ts", () => ({
   validateAtomicity: vi.fn(),
 }));
 
@@ -82,7 +82,7 @@ tags: ["test"]
 
 This is a test document.`);
 
-      const { validateAtomicity } = await import("../../../common/atomicity.js");
+      const { validateAtomicity } = await import("../../../common/atomicity.ts");
       vi.mocked(validateAtomicity).mockResolvedValue({
         valid: true,
         message: "Single coherent topic.",
@@ -103,7 +103,7 @@ tags: ["test"]
 
 This is a single topic document.`);
 
-      const { validateAtomicity } = await import("../../../common/atomicity.js");
+      const { validateAtomicity } = await import("../../../common/atomicity.ts");
       vi.mocked(validateAtomicity).mockResolvedValue({
         valid: true,
         message: "Single coherent topic.",

@@ -8,8 +8,8 @@
 
 import { describe, it, expect } from "vitest";
 
-import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.js";
-import { transition } from "../../extensions/research-engine/transition.js";
+import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.ts";
+import { transition } from "../../extensions/research-engine/transition.ts";
 
 import type {
   Candidate,
@@ -18,8 +18,8 @@ import type {
   ResearchState,
   StructuralResult,
   SummaryItem,
-} from "../../extensions/research-engine/state.js";
-import type { ResearchEvent } from "../../extensions/research-engine/transition.js";
+} from "../../extensions/research-engine/state.ts";
+import type { ResearchEvent } from "../../extensions/research-engine/transition.ts";
 
 const T0 = Date.parse("2026-10-02T10:00:00Z");
 

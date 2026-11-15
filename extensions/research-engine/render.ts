@@ -8,7 +8,7 @@
  * @module extensions/research-engine/render
  */
 
-import type { ResearchState, WritebackLite } from "./state.js";
+import type { ResearchState, WritebackLite } from "./state.ts";
 
 /** Minimal state slice the renderers need. */
 export type RenderableState = Pick<

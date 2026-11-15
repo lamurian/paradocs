@@ -7,9 +7,9 @@
 
 import { Type } from "typebox";
 
-import { configureEnv } from "../../../common/env.js";
-import { ensureNotesDb } from "../../../common/notesDb.js";
-import { searchDocs, type SearchOptions } from "../db-sqlite.js";
+import { configureEnv } from "../../../common/env.ts";
+import { ensureNotesDb } from "../../../common/notesDb.ts";
+import { searchDocs, type SearchOptions } from "../db-sqlite.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

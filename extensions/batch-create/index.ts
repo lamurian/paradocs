@@ -17,13 +17,13 @@ import {
   createFilesOnDisk,
   indexDocumentsInDb,
   autoLinkBatch,
-} from "./batch-helpers.js";
-import { loadRefBibCitekeys, validateCitations } from "../../common/citation-validation.js";
-import { getKnowledgeConfig } from "../../common/env.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
+} from "./batch-helpers.ts";
+import { loadRefBibCitekeys, validateCitations } from "../../common/citation-validation.ts";
+import { getKnowledgeConfig } from "../../common/env.ts";
+import { ensureNotesDb } from "../../common/notesDb.ts";
 
-import type { BatchDoc, CitationViolation, CreatedFile, ValidationError } from "./batch-helpers.js";
-import type { SqliteDb } from "../para-knowledge/sqlite-types.js";
+import type { BatchDoc, CitationViolation, CreatedFile, ValidationError } from "./batch-helpers.ts";
+import type { SqliteDb } from "../para-knowledge/sqlite-types.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // ── Execute helpers (reduce cyclomatic complexity) ─────────────────────

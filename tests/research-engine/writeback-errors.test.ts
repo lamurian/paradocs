@@ -8,17 +8,17 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../../common/citation.js", () => ({ resolveCitation: vi.fn() }));
-vi.mock("../../common/citation-validation.js", () => ({
+vi.mock("../../common/citation.ts", () => ({ resolveCitation: vi.fn() }));
+vi.mock("../../common/citation-validation.ts", () => ({
   validateCitations: vi.fn(),
   loadRefBibCitekeys: vi.fn().mockReturnValue(new Set()),
 }));
-vi.mock("../../common/notesDb.js", () => ({ ensureNotesDb: vi.fn() }));
-vi.mock("../../extensions/para-knowledge/db-sqlite.js", () => ({
+vi.mock("../../common/notesDb.ts", () => ({ ensureNotesDb: vi.fn() }));
+vi.mock("../../extensions/para-knowledge/db-sqlite.ts", () => ({
   searchDocs: vi.fn(),
   indexFile: vi.fn(),
 }));
-vi.mock("../../extensions/batch-create/batch-helpers.js", () => ({
+vi.mock("../../extensions/batch-create/batch-helpers.ts", () => ({
   validateDocuments: vi.fn(),
   buildSkippedNote: vi.fn().mockReturnValue(""),
   createFilesOnDisk: vi.fn(),
@@ -38,8 +38,8 @@ vi.mock("node:fs", async (importOriginal) => {
 const KB_DIR = "/tmp/re-kb-errors-test";
 
 type WriteBackToKB =
-  (typeof import("../../extensions/research-engine/writeback.js"))["writeBackToKB"];
-type WritebackContext = import("../../extensions/research-engine/writeback.js").WritebackContext;
+  (typeof import("../../extensions/research-engine/writeback.ts"))["writeBackToKB"];
+type WritebackContext = import("../../extensions/research-engine/writeback.ts").WritebackContext;
 type PlanFn = NonNullable<WritebackContext["planFn"]>;
 type FillFn = NonNullable<WritebackContext["fillFn"]>;
 
@@ -56,14 +56,14 @@ interface Harness {
 async function importFresh(): Promise<Harness> {
   vi.resetModules();
   vi.clearAllMocks();
-  const citation = await import("../../common/citation.js");
-  const citationValidation = await import("../../common/citation-validation.js");
-  const notesDb = await import("../../common/notesDb.js");
-  const dbSqlite = await import("../../extensions/para-knowledge/db-sqlite.js");
-  const batchHelpers = await import("../../extensions/batch-create/batch-helpers.js");
+  const citation = await import("../../common/citation.ts");
+  const citationValidation = await import("../../common/citation-validation.ts");
+  const notesDb = await import("../../common/notesDb.ts");
+  const dbSqlite = await import("../../extensions/para-knowledge/db-sqlite.ts");
+  const batchHelpers = await import("../../extensions/batch-create/batch-helpers.ts");
   const fsPromises = await import("node:fs/promises");
   const fsSync = await import("node:fs");
-  const { writeBackToKB } = await import("../../extensions/research-engine/writeback.js");
+  const { writeBackToKB } = await import("../../extensions/research-engine/writeback.ts");
 
   vi.mocked(notesDb.ensureNotesDb).mockResolvedValue({} as never);
   vi.mocked(citation.resolveCitation).mockImplementation((params) =>

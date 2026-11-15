@@ -39,7 +39,7 @@ describe("gate state transitions", () => {
   }
 
   function importAndInit(): Promise<void> {
-    return import("../extensions/skill-gate.js").then((mod) => {
+    return import("../extensions/skill-gate.ts").then((mod) => {
       mod.default(mockPi as never);
     });
   }

@@ -10,13 +10,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { slugify, formatFrontmatter } from "./yaml.js";
-import { validateDocumentsAtomicity } from "../../common/atomicity.js";
-import { autoLink } from "../../common/autoLink.js";
-import { ensureNotesDb } from "../../common/notesDb.js";
-import { indexFile } from "../para-knowledge/db-sqlite.js";
+import { slugify, formatFrontmatter } from "./yaml.ts";
+import { validateDocumentsAtomicity } from "../../common/atomicity.ts";
+import { autoLink } from "../../common/autoLink.ts";
+import { ensureNotesDb } from "../../common/notesDb.ts";
+import { indexFile } from "../para-knowledge/db-sqlite.ts";
 
-import type { DocIndex } from "../para-knowledge/db-sqlite.js";
+import type { DocIndex } from "../para-knowledge/db-sqlite.ts";
 import type { CreateAgentSessionOptions } from "@earendil-works/pi-coding-agent";
 
 /** Model type used by pi SDK for LLM configuration. */

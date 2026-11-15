@@ -7,8 +7,8 @@
  * @module extensions/research-engine/research-deps
  */
 
-import type { ResearchStage, WritebackLite } from "./state.js";
-import type { ResearchSource, SearchSubagentValue } from "./types.js";
+import type { ResearchStage, WritebackLite } from "./state.ts";
+import type { ResearchSource, SearchSubagentValue } from "./types.ts";
 /** Input for one orchestrator-issued LLM call. */
 export interface LlmCallInput {
   system: string;

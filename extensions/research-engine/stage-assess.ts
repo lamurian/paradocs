@@ -9,14 +9,14 @@
  * @module extensions/research-engine/stage-assess
  */
 
-import { parseJudge, parseSynthesis, prompt } from "./effects.js";
-import { registrableDomain } from "./fetcher.js";
-import { combineJudgment, evaluateEscalation, evaluateGates } from "./guards.js";
+import { parseJudge, parseSynthesis, prompt } from "./effects.ts";
+import { registrableDomain } from "./fetcher.ts";
+import { combineJudgment, evaluateEscalation, evaluateGates } from "./guards.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { ResearchDeps } from "./research-deps.js";
-import type { DecisionRecord, JudgeResult, ResearchState, StructuralResult } from "./state.js";
-import type { ResearchSource } from "./types.js";
+import type { ResearchEvent } from "./events.ts";
+import type { ResearchDeps } from "./research-deps.ts";
+import type { DecisionRecord, JudgeResult, ResearchState, StructuralResult } from "./state.ts";
+import type { ResearchSource } from "./types.ts";
 
 /** p50 of fetch durations (0 when no records). */
 function fetchP50(state: ResearchState): number {

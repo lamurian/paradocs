@@ -13,7 +13,7 @@ import {
   buildSubagentArgs,
   getPiInvocation,
   resolveSubagentTimeoutMs,
-} from "../../common/subagent-args.js";
+} from "../../common/subagent-args.ts";
 
 const ORIGINAL_ARGV1 = process.argv[1];
 const ORIGINAL_EXEC = Object.getOwnPropertyDescriptor(process, "execPath");

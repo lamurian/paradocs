@@ -75,7 +75,7 @@ describe("tryObscura", () => {
       }),
     );
 
-    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.js");
+    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.ts");
     const promise = tryObscura("https://example.com");
 
     // Let WebSocket constructor run, then trigger error
@@ -104,7 +104,7 @@ describe("tryObscura", () => {
       }),
     );
 
-    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.js");
+    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.ts");
     const controller = new AbortController();
     controller.abort();
 
@@ -121,7 +121,7 @@ describe("tryObscura", () => {
       }),
     );
 
-    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.js");
+    const { tryObscura } = await import("../../extensions/link-summarizer/cdp.ts");
     const promise = tryObscura("https://example.com");
 
     await vi.waitFor(

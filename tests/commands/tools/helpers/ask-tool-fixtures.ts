@@ -14,9 +14,9 @@ import { vi } from "vitest";
 import {
   ASK_QUICK_PROFILE,
   ASK_DEEP_PROFILE,
-} from "../../../../extensions/research-engine/profiles.js";
+} from "../../../../extensions/research-engine/profiles.ts";
 
-import type { ResearchState } from "../../../../extensions/research-engine/state.js";
+import type { ResearchState } from "../../../../extensions/research-engine/state.ts";
 
 /** Tool-execution update shape captured from the ask tool's onUpdate. */
 export interface ToolUpdate {
@@ -145,9 +145,9 @@ export async function importTool(pi: { sendUserMessage: ReturnType<typeof vi.fn>
   buildResearchDeps: ReturnType<typeof vi.fn>;
 }> {
   vi.resetModules();
-  const { registerAskTool } = await import("../../../../extensions/commands/tools/ask.js");
-  const orch = await import("../../../../extensions/research-engine/orchestrator.js");
-  const deps = await import("../../../../extensions/research-engine/deps.js");
+  const { registerAskTool } = await import("../../../../extensions/commands/tools/ask.ts");
+  const orch = await import("../../../../extensions/research-engine/orchestrator.ts");
+  const deps = await import("../../../../extensions/research-engine/deps.ts");
   vi.clearAllMocks();
   const registerTool = vi.fn();
   registerAskTool({ registerTool, on: vi.fn(), ...pi } as never);

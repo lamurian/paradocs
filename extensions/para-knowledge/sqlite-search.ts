@@ -7,9 +7,9 @@
  * 3. Tag-only: When text matches nothing under tag filter, fall back to tag-only.
  */
 
-import { getFileTags } from "./sqlite-indexing.js";
+import { getFileTags } from "./sqlite-indexing.ts";
 
-import type { SqliteDb, SearchResult, SearchOptions } from "./sqlite-types.js";
+import type { SqliteDb, SearchResult, SearchOptions } from "./sqlite-types.ts";
 
 // ── Public search API ──
 

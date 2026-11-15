@@ -94,7 +94,7 @@ ${body ?? `Body of ${slug}. UNIQUE_TERM_${slug}.;`}`;
 
     vi.resetModules();
     const { registerUpdateDocTool } =
-      await import("../../extensions/para-knowledge/tools/updateDoc.js");
+      await import("../../extensions/para-knowledge/tools/updateDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -134,7 +134,7 @@ ${body ?? `Body of ${slug}. UNIQUE_TERM_${slug}.;`}`;
 
     // Verify all docs are searchable
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(resolve(knowledgeDir, "notes.db"));
     initDb(db);
 
@@ -158,7 +158,7 @@ ${body ?? `Body of ${slug}. UNIQUE_TERM_${slug}.;`}`;
 
     vi.resetModules();
     const { registerUpdateDocTool } =
-      await import("../../extensions/para-knowledge/tools/updateDoc.js");
+      await import("../../extensions/para-knowledge/tools/updateDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -196,7 +196,7 @@ ${body ?? `Body of ${slug}. UNIQUE_TERM_${slug}.;`}`;
 
     // Verify the updated doc is findable
     const { createDb, initDb, searchDocs } =
-      await import("../../extensions/para-knowledge/db-sqlite.js");
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
     const db = createDb(resolve(knowledgeDir, "notes.db"));
     initDb(db);
 

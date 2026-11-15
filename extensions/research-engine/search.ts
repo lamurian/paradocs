@@ -8,10 +8,10 @@
  * @module extensions/research-engine/search
  */
 
-import { canonicalizeUrl } from "./fetcher.js";
-import { searchWeb } from "../../common/webSearch.js";
+import { canonicalizeUrl } from "./fetcher.ts";
+import { searchWeb } from "../../common/webSearch.ts";
 
-import type { Candidate } from "./state.js";
+import type { Candidate } from "./state.ts";
 
 /** Result shape of the shared web search. */
 export interface SearchWebResult {

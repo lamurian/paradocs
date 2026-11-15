@@ -18,22 +18,22 @@ vi.resetModules();
 
 describe("expandTilde", () => {
   it("should expand ~ to homedir", async () => {
-    const { expandTilde } = await import("../common/env.js");
+    const { expandTilde } = await import("../common/env.ts");
     expect(expandTilde("~/foo/bar")).toBe(join(homedir(), "foo", "bar"));
   });
 
   it("should leave non-tilde paths unchanged", async () => {
-    const { expandTilde } = await import("../common/env.js");
+    const { expandTilde } = await import("../common/env.ts");
     expect(expandTilde("/foo/bar")).toBe("/foo/bar");
   });
 
   it("should handle just ~", async () => {
-    const { expandTilde } = await import("../common/env.js");
+    const { expandTilde } = await import("../common/env.ts");
     expect(expandTilde("~")).toBe(homedir());
   });
 
   it("should handle ~user as homedir (not supported, treat as literal)", async () => {
-    const { expandTilde } = await import("../common/env.js");
+    const { expandTilde } = await import("../common/env.ts");
     // ~user expansion is not supported; leave as-is
     expect(expandTilde("~user/foo")).toBe("~user/foo");
   });
@@ -74,7 +74,7 @@ describe("configureEnv", () => {
 
   it("should set default values when no .env files exist", async () => {
     vi.resetModules();
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     configureEnv(projectDir, {
       globalEnvPath,
       projectEnvPath,
@@ -87,7 +87,7 @@ describe("configureEnv", () => {
     vi.resetModules();
     writeFileSync(globalEnvPath, "SEARXNG_PORT=9999\n");
 
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     configureEnv(projectDir, { globalEnvPath, projectEnvPath });
 
     expect(process.env.SEARXNG_PORT).toBe("9999");
@@ -98,7 +98,7 @@ describe("configureEnv", () => {
     writeFileSync(globalEnvPath, "SEARXNG_PORT=9999\nMY_VAR=global\n");
     writeFileSync(projectEnvPath, "SEARXNG_PORT=7777\n");
 
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     configureEnv(projectDir, { globalEnvPath, projectEnvPath });
 
     expect(process.env.SEARXNG_PORT).toBe("7777");
@@ -110,7 +110,7 @@ describe("configureEnv", () => {
     vi.resetModules();
     writeFileSync(globalEnvPath, "FIRST=loaded\n");
 
-    const mod = await import("../common/env.js");
+    const mod = await import("../common/env.ts");
     mod.configureEnv(projectDir, { globalEnvPath, projectEnvPath });
     expect(process.env.FIRST).toBe("loaded");
 
@@ -126,7 +126,7 @@ describe("configureEnv", () => {
     vi.resetModules();
     writeFileSync(globalEnvPath, "SEARXNG_PORT=5555\n");
 
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     configureEnv(undefined, { globalEnvPath }); // no cwd, only global
 
     expect(process.env.SEARXNG_PORT).toBe("5555");
@@ -137,7 +137,7 @@ describe("configureEnv", () => {
     writeFileSync(globalEnvPath, "SEARXNG_PORT=5555\n");
     writeFileSync(projectEnvPath, "SEARXNG_PORT=3333\n");
 
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     configureEnv(undefined, { globalEnvPath }); // no cwd
 
     // Project env should NOT be loaded since no cwd
@@ -148,7 +148,7 @@ describe("configureEnv", () => {
     vi.resetModules();
     // Don't create any .env files
 
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     expect(() =>
       configureEnv(projectDir, {
         globalEnvPath: join(tmpDir, "nonexistent", ".env"),
@@ -161,7 +161,7 @@ describe("configureEnv", () => {
     vi.resetModules();
     // Don't create project .env
 
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     expect(() =>
       configureEnv(projectDir, {
         globalEnvPath,
@@ -174,7 +174,7 @@ describe("configureEnv", () => {
     vi.resetModules();
     // Don't create any actual .env files at default paths
 
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     // Without options, configureEnv resolves default paths using homedir() and cwd.
     // These paths won't exist, so the function should silently skip them.
     expect(() => configureEnv(projectDir)).not.toThrow();
@@ -182,7 +182,7 @@ describe("configureEnv", () => {
 
   it("should handle configureEnv without cwd and without options", async () => {
     vi.resetModules();
-    const { configureEnv } = await import("../common/env.js");
+    const { configureEnv } = await import("../common/env.ts");
     // No cwd, no options — only defaults applied
     expect(() => configureEnv()).not.toThrow();
     expect(process.env.SEARXNG_PORT).toBe("8888");
@@ -202,7 +202,7 @@ describe("getKnowledgeConfig", () => {
   it("should return KNOWLEDGE_DIR when set", async () => {
     vi.resetModules();
     process.env.KNOWLEDGE_DIR = "/custom/knowledge";
-    const { getKnowledgeConfig } = await import("../common/env.js");
+    const { getKnowledgeConfig } = await import("../common/env.ts");
     const config = getKnowledgeConfig("/fallback/cwd");
     expect(config.dir).toBe("/custom/knowledge");
   });
@@ -210,7 +210,7 @@ describe("getKnowledgeConfig", () => {
   it("should fall back to default when KNOWLEDGE_DIR is unset, ignoring cwd", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
-    const { getKnowledgeConfig } = await import("../common/env.js");
+    const { getKnowledgeConfig } = await import("../common/env.ts");
     const config = getKnowledgeConfig("/my/project");
     expect(config.dir).toBe(resolve(homedir(), "data/personal/Documents/Cognoscere"));
   });
@@ -218,7 +218,7 @@ describe("getKnowledgeConfig", () => {
   it("should fall back to default when KNOWLEDGE_DIR is unset", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
-    const { getKnowledgeConfig } = await import("../common/env.js");
+    const { getKnowledgeConfig } = await import("../common/env.ts");
     const config = getKnowledgeConfig();
     expect(config.dir).toBe(resolve(homedir(), "data/personal/Documents/Cognoscere"));
   });
@@ -226,7 +226,7 @@ describe("getKnowledgeConfig", () => {
   it("should preserve KNOWLEDGE_DB across all fallback modes", async () => {
     vi.resetModules();
     delete process.env.KNOWLEDGE_DIR;
-    const { getKnowledgeConfig } = await import("../common/env.js");
+    const { getKnowledgeConfig } = await import("../common/env.ts");
 
     // Without cwd
     let config = getKnowledgeConfig();
@@ -245,7 +245,7 @@ describe("getKnowledgeConfig", () => {
   it("should expand tilde in KNOWLEDGE_DIR", async () => {
     vi.resetModules();
     process.env.KNOWLEDGE_DIR = "~/my-knowledge";
-    const { getKnowledgeConfig } = await import("../common/env.js");
+    const { getKnowledgeConfig } = await import("../common/env.ts");
     const config = getKnowledgeConfig();
     expect(config.dir).toBe(resolve(homedir(), "my-knowledge"));
   });

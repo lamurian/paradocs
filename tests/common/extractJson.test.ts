@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { extractJson, stripToolCallLikeBlocks } from "../../common/extractJson.js";
+import { extractJson, stripToolCallLikeBlocks } from "../../common/extractJson.ts";
 
 describe("extractJson", () => {
   it("should parse clean JSON as-is", () => {

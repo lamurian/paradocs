@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 describe("analyzeFrontmatter", () => {
   it("should detect valid frontmatter and parse fields", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = `---
 title: Hello World
 description: A test document
@@ -21,7 +21,7 @@ Body text`;
   });
 
   it("should report missing frontmatter as invalid-yaml issue", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const result = analyzeFrontmatter("No frontmatter here");
     expect(result.hasFrontmatter).toBe(false);
     expect(result.issues).toHaveLength(1);
@@ -29,7 +29,7 @@ Body text`;
   });
 
   it("should detect unquoted boolean-like values that need quoting", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = `---
 title: true
 description: yes
@@ -43,7 +43,7 @@ description: yes
   });
 
   it("should detect nonstandard field aliases", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = `---
 title: Test
 source_url: https://example.com
@@ -56,7 +56,7 @@ source_url: https://example.com
   });
 
   it("should detect missing standard fields", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = "---\ntitle: Test\n---";
     const result = analyzeFrontmatter(content);
     const missing = result.issues.filter((i) => i.type === "missing-field");
@@ -67,7 +67,7 @@ source_url: https://example.com
   });
 
   it("should flag description as missing", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = "---\ntitle: Test\n---";
     const result = analyzeFrontmatter(content);
     const missing = result.issues.filter((i) => i.type === "missing-field");
@@ -77,7 +77,7 @@ source_url: https://example.com
   });
 
   it("should track key order", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = `---
 date: 2026-01-01
 title: My Doc
@@ -88,7 +88,7 @@ author: pi
   });
 
   it("should not flag quoted values as needing quoting", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = `---
 title: 'true'
 description: "yes"
@@ -103,7 +103,7 @@ description: "yes"
   });
 
   it("should handle numeric values", async () => {
-    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.js");
+    const { analyzeFrontmatter } = await import("../../extensions/yaml-enforcer/analyzer.ts");
     const content = `---
 title: 42
 ---

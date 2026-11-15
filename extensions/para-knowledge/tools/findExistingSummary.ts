@@ -9,10 +9,10 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { getKnowledgeConfig } from "../../../common/env.js";
-import { ensureNotesDb } from "../../../common/notesDb.js";
-import { searchDocs, type SqliteDb } from "../db-sqlite.js";
-import { textSimilarity } from "../similarity.js";
+import { getKnowledgeConfig } from "../../../common/env.ts";
+import { ensureNotesDb } from "../../../common/notesDb.ts";
+import { searchDocs, type SqliteDb } from "../db-sqlite.ts";
+import { textSimilarity } from "../similarity.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

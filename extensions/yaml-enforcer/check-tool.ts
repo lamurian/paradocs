@@ -7,8 +7,8 @@ import { resolve, relative } from "node:path";
 
 import { Type } from "typebox";
 
-import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.js";
-import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
+import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.ts";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

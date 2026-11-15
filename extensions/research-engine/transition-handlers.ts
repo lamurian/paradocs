@@ -5,12 +5,12 @@
  * @module extensions/research-engine/transition-handlers
  */
 
-import { registrableDomain } from "./fetcher.js";
-import { combineJudgment, evaluateKbCovered } from "./guards.js";
-import { stageEffects } from "./stage-effects.js";
+import { registrableDomain } from "./fetcher.ts";
+import { combineJudgment, evaluateKbCovered } from "./guards.ts";
+import { stageEffects } from "./stage-effects.ts";
 
-import type { ResearchEvent } from "./events.js";
-import type { Effect, ResearchStage, ResearchState, TransitionRecord } from "./state.js";
+import type { ResearchEvent } from "./events.ts";
+import type { Effect, ResearchStage, ResearchState, TransitionRecord } from "./state.ts";
 
 /** Result of a transition: next state + effects for the runner. */
 export interface Transition {

@@ -17,9 +17,9 @@ import { join } from "node:path";
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.js";
+import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.ts";
 
-import type { SqliteDb } from "../../extensions/para-knowledge/sqlite-types.js";
+import type { SqliteDb } from "../../extensions/para-knowledge/sqlite-types.ts";
 
 describe("validateCitations", () => {
   let tmpDir: string;
@@ -64,7 +64,7 @@ describe("validateCitations", () => {
   });
 
   it("should return valid when content has no citations", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const result = validateCitations("Just some plain text without any citekey references.", db);
     expect(result.valid).toBe(true);
@@ -72,7 +72,7 @@ describe("validateCitations", () => {
   });
 
   it("should return valid when all citekeys exist in DB", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "This references [@smith2024] and also @jones2023 in narrative form.";
     const result = validateCitations(content, db);
@@ -81,7 +81,7 @@ describe("validateCitations", () => {
   });
 
   it("should return valid for multiple existing citekeys", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Multiple: [@smith2024; @jones2023; @lee2022a] and @doe2021 too.";
     const result = validateCitations(content, db);
@@ -90,7 +90,7 @@ describe("validateCitations", () => {
   });
 
   it("should reject @? (unresolved placeholder) citekey", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "This has an unresolved citation @?.";
     const result = validateCitations(content, db);
@@ -99,7 +99,7 @@ describe("validateCitations", () => {
   });
 
   it("should reject non-existent citekeys with clear error listing missing keys", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Referencing @nonexistentKey in text.";
     const result = validateCitations(content, db);
@@ -108,7 +108,7 @@ describe("validateCitations", () => {
   });
 
   it("should list all missing citekeys in one call", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Missing @keyA and @keyB but valid @smith2024.";
     const result = validateCitations(content, db);
@@ -119,7 +119,7 @@ describe("validateCitations", () => {
   });
 
   it("should reject content with both @? and non-existent keys together", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Mixed: @? and @badkey.";
     const result = validateCitations(content, db);
@@ -129,7 +129,7 @@ describe("validateCitations", () => {
   });
 
   it("should NOT match citekeys inside fenced code blocks", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = [
       "Some text with @smith2024.",
@@ -146,7 +146,7 @@ describe("validateCitations", () => {
   });
 
   it("should NOT match citekeys inside inline code (backticks)", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Valid @smith2024 and `@nonexistent` inline code reference.";
     const result = validateCitations(content, db);
@@ -155,7 +155,7 @@ describe("validateCitations", () => {
   });
 
   it("should NOT match markdown link syntax like [text](@citekey)", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "See [this link](@nonexistent) for details with @smith2024.";
     const result = validateCitations(content, db);
@@ -165,7 +165,7 @@ describe("validateCitations", () => {
   });
 
   it("should NOT match email-like patterns (word-chars before @)", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Contact user@example.com and see @smith2024.";
     const result = validateCitations(content, db);
@@ -174,7 +174,7 @@ describe("validateCitations", () => {
   });
 
   it("should handle @citekey at end of sentence before period", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "This concept is well established @smith2024.";
     const result = validateCitations(content, db);
@@ -183,7 +183,7 @@ describe("validateCitations", () => {
   });
 
   it("should handle @citekey inside parentheses", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Some research (@jones2023) shows this.";
     const result = validateCitations(content, db);
@@ -192,7 +192,7 @@ describe("validateCitations", () => {
   });
 
   it("should handle @citekey after punctuation like commas", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Multiple sources: @smith2024, @jones2023, and @lee2022a.";
     const result = validateCitations(content, db);
@@ -201,7 +201,7 @@ describe("validateCitations", () => {
   });
 
   it("should return missing count >0 when violations found", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "Bad @missing1 and @missing2.";
     const result = validateCitations(content, db);
@@ -211,7 +211,7 @@ describe("validateCitations", () => {
   });
 
   it("should match @citekey-like patterns in paths as potential citekeys", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const content = "File at /path/to/@something and @smith2024.";
     const result = validateCitations(content, db);
@@ -223,7 +223,7 @@ describe("validateCitations", () => {
   });
 
   it("should return valid for empty content", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.js");
+    const { validateCitations } = await import("../../common/citation-validation.ts");
 
     const result = validateCitations("", db);
     expect(result.valid).toBe(true);

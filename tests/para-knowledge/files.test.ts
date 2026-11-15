@@ -29,27 +29,27 @@ function writeMarkdown(
 
 describe("slugify", () => {
   it("should convert title to lowercase kebab-case", async () => {
-    const { slugify } = await import("../../extensions/para-knowledge/files.js");
+    const { slugify } = await import("../../extensions/para-knowledge/files.ts");
     expect(slugify("Hello World")).toBe("hello-world");
   });
 
   it("should collapse multiple non-alphanumeric characters", async () => {
-    const { slugify } = await import("../../extensions/para-knowledge/files.js");
+    const { slugify } = await import("../../extensions/para-knowledge/files.ts");
     expect(slugify("Hello   World!!! Test")).toBe("hello-world-test");
   });
 
   it("should strip leading and trailing hyphens", async () => {
-    const { slugify } = await import("../../extensions/para-knowledge/files.js");
+    const { slugify } = await import("../../extensions/para-knowledge/files.ts");
     expect(slugify("  --Hello World--  ")).toBe("hello-world");
   });
 
   it("should handle empty string", async () => {
-    const { slugify } = await import("../../extensions/para-knowledge/files.js");
+    const { slugify } = await import("../../extensions/para-knowledge/files.ts");
     expect(slugify("")).toBe("");
   });
 
   it("should handle special characters", async () => {
-    const { slugify } = await import("../../extensions/para-knowledge/files.js");
+    const { slugify } = await import("../../extensions/para-knowledge/files.ts");
     expect(slugify("TypeScript & JavaScript: A Guide")).toBe("typescript-javascript-a-guide");
   });
 });
@@ -66,7 +66,7 @@ describe("scanParaDir", () => {
   });
 
   it("should return .md files in the given PARA directory", async () => {
-    const { scanParaDir } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(tmpDir, "Areas", "doc1.md", "title: Doc 1", "Body 1");
     writeMarkdown(tmpDir, "Areas", "doc2.md", "title: Doc 2", "Body 2");
 
@@ -77,7 +77,7 @@ describe("scanParaDir", () => {
   });
 
   it("should skip non-.md files", async () => {
-    const { scanParaDir } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(tmpDir, "Resources", "notes.md", "title: Notes", "Body");
     writeFileSync(join(tmpDir, "Resources", "image.png"), "fake-png", "utf-8");
     writeFileSync(join(tmpDir, "Resources", "data.json"), "{}", "utf-8");
@@ -88,7 +88,7 @@ describe("scanParaDir", () => {
   });
 
   it("should return mtimeMs for each file", async () => {
-    const { scanParaDir } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(tmpDir, "Areas", "doc.md", "title: Test", "Body");
 
     const entries = await scanParaDir("Areas", tmpDir);
@@ -97,7 +97,7 @@ describe("scanParaDir", () => {
   });
 
   it("should return absolute path for each file", async () => {
-    const { scanParaDir } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(tmpDir, "Projects", "doc.md", "title: Test", "Body");
 
     const entries = await scanParaDir("Projects", tmpDir);
@@ -106,7 +106,7 @@ describe("scanParaDir", () => {
   });
 
   it("should return empty array for non-existent directory", async () => {
-    const { scanParaDir } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir } = await import("../../extensions/para-knowledge/files.ts");
     const entries = await scanParaDir("Nonexistent", tmpDir);
     expect(entries).toEqual([]);
   });
@@ -124,7 +124,7 @@ describe("scanAllParaDirs", () => {
   });
 
   it("should scan all three PARA directories", async () => {
-    const { scanAllParaDirs } = await import("../../extensions/para-knowledge/files.js");
+    const { scanAllParaDirs } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(tmpDir, "Areas", "a.md", "title: A", "Body A");
     writeMarkdown(tmpDir, "Projects", "p.md", "title: P", "Body P");
     writeMarkdown(tmpDir, "Resources", "r.md", "title: R", "Body R");
@@ -136,7 +136,7 @@ describe("scanAllParaDirs", () => {
   });
 
   it("should return empty array when no PARA dirs have files", async () => {
-    const { scanAllParaDirs } = await import("../../extensions/para-knowledge/files.js");
+    const { scanAllParaDirs } = await import("../../extensions/para-knowledge/files.ts");
     const entries = await scanAllParaDirs(tmpDir);
     expect(entries).toEqual([]);
   });
@@ -154,7 +154,7 @@ describe("parseFile", () => {
   });
 
   it("should parse title and body from a markdown file", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(
       tmpDir,
       "Projects",
@@ -171,7 +171,7 @@ describe("parseFile", () => {
   });
 
   it("should parse tags from frontmatter", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(
       tmpDir,
       "Areas",
@@ -186,7 +186,7 @@ describe("parseFile", () => {
   });
 
   it("should extract description from frontmatter", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(
       tmpDir,
       "Resources",
@@ -201,7 +201,7 @@ describe("parseFile", () => {
   });
 
   it("should extract source_url from frontmatter", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(
       tmpDir,
       "Projects",
@@ -216,7 +216,7 @@ describe("parseFile", () => {
   });
 
   it("should fall back to filename for title when no frontmatter title", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(tmpDir, "Areas", "my-fallback-doc.md", "", "Body only.");
 
     const entries = await scanParaDir("Areas", tmpDir);
@@ -225,7 +225,7 @@ describe("parseFile", () => {
   });
 
   it("should handle file with no frontmatter at all", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeFileSync(join(tmpDir, "Areas", "plain.md"), "Just body text\nNo frontmatter.", "utf-8");
 
     const entries = await scanParaDir("Areas", tmpDir);
@@ -236,7 +236,7 @@ describe("parseFile", () => {
   });
 
   it("should handle editor and created fields", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(
       tmpDir,
       "Resources",
@@ -253,7 +253,7 @@ describe("parseFile", () => {
   });
 
   it("should handle empty body gracefully", async () => {
-    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.js");
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
     writeMarkdown(tmpDir, "Projects", "empty.md", "title: Empty Doc", "");
 
     const entries = await scanParaDir("Projects", tmpDir);

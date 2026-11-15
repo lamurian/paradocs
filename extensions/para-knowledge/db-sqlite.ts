@@ -10,12 +10,12 @@
  * Import from this file for all SQLite database operations:
  *
  * ```ts
- * import { createDb, initDb, indexFile, searchDocs } from "./db-sqlite.js";
+ * import { createDb, initDb, indexFile, searchDocs } from "./db-sqlite.ts";
  * ```
  */
 
-export type { SqliteDb, SqliteStatement } from "./sqlite-types.js";
-export type { DocIndex, SearchResult, SearchOptions } from "./sqlite-types.js";
-export { createDb, initDb } from "./sqlite-init.js";
-export { indexFile, removeFile, recomputeStats } from "./sqlite-indexing.js";
-export { searchDocs } from "./sqlite-search.js";
+export type { SqliteDb, SqliteStatement } from "./sqlite-types.ts";
+export type { DocIndex, SearchResult, SearchOptions } from "./sqlite-types.ts";
+export { createDb, initDb } from "./sqlite-init.ts";
+export { indexFile, removeFile, recomputeStats } from "./sqlite-indexing.ts";
+export { searchDocs } from "./sqlite-search.ts";

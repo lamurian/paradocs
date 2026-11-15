@@ -25,7 +25,7 @@ describe("searchWeb", () => {
       exec: vi.fn().mockResolvedValue({ stdout: mockStdout, code: 0 }),
     } as any;
 
-    const { searchWeb } = await import("../../extensions/expand-bullets/search.js");
+    const { searchWeb } = await import("../../extensions/expand-bullets/search.ts");
     const results = await searchWeb(mockPi, "quantum computing");
 
     expect(results).toHaveLength(2);
@@ -40,7 +40,7 @@ describe("searchWeb", () => {
       exec: vi.fn().mockResolvedValue({ stdout: "", code: 1 }),
     } as any;
 
-    const { searchWeb } = await import("../../extensions/expand-bullets/search.js");
+    const { searchWeb } = await import("../../extensions/expand-bullets/search.ts");
     const results = await searchWeb(mockPi, "test query");
 
     expect(results).toEqual([]);
@@ -51,7 +51,7 @@ describe("searchWeb", () => {
       exec: vi.fn().mockRejectedValue(new Error("Python not found")),
     } as any;
 
-    const { searchWeb } = await import("../../extensions/expand-bullets/search.js");
+    const { searchWeb } = await import("../../extensions/expand-bullets/search.ts");
     const results = await searchWeb(mockPi, "test query");
 
     expect(results).toEqual([]);
@@ -63,7 +63,7 @@ describe("searchWeb", () => {
       exec: vi.fn().mockResolvedValue({ stdout: mockStdout, code: 0 }),
     } as any;
 
-    const { searchWeb } = await import("../../extensions/expand-bullets/search.js");
+    const { searchWeb } = await import("../../extensions/expand-bullets/search.ts");
     const results = await searchWeb(mockPi, "test query");
 
     expect(results).toEqual([]);
@@ -75,7 +75,7 @@ describe("searchWeb", () => {
       exec: vi.fn().mockResolvedValue({ stdout: mockStdout, code: 0 }),
     } as any;
 
-    const { searchWeb } = await import("../../extensions/expand-bullets/search.js");
+    const { searchWeb } = await import("../../extensions/expand-bullets/search.ts");
     const results = await searchWeb(mockPi, "test query");
 
     expect(results).toEqual([]);
@@ -89,7 +89,7 @@ describe("searchWeb", () => {
       exec: vi.fn().mockResolvedValue({ stdout: mockStdout, code: 0 }),
     } as any;
 
-    const { searchWeb } = await import("../../extensions/expand-bullets/search.js");
+    const { searchWeb } = await import("../../extensions/expand-bullets/search.ts");
     await searchWeb(mockPi, "machine learning basics");
 
     expect(mockPi.exec).toHaveBeenCalledWith(
@@ -105,7 +105,7 @@ describe("searchWeb", () => {
       exec: vi.fn().mockResolvedValue({ stdout: mockStdout, code: 0 }),
     } as any;
 
-    const { searchWeb } = await import("../../extensions/expand-bullets/search.js");
+    const { searchWeb } = await import("../../extensions/expand-bullets/search.ts");
     const results = await searchWeb(mockPi, "test");
 
     expect(results).toHaveLength(1);

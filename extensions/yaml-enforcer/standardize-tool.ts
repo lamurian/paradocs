@@ -7,9 +7,9 @@ import { relative } from "node:path";
 
 import { Type } from "typebox";
 
-import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.js";
-import { findParaMdFiles } from "./scanner.js";
-import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
+import { analyzeFrontmatter, repairFileFrontmatter } from "./analyzer.ts";
+import { findParaMdFiles } from "./scanner.ts";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

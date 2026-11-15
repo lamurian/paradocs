@@ -11,11 +11,11 @@ import { resolve, relative } from "node:path";
 
 import { Type } from "typebox";
 
-import { analyzeFrontmatter, repairFileFrontmatter, type FrontmatterIssue } from "./analyzer.js";
-import { registerCheckTool } from "./check-tool.js";
-import { findParaMdFiles } from "./scanner.js";
-import { registerStandardizeTool } from "./standardize-tool.js";
-import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
+import { analyzeFrontmatter, repairFileFrontmatter, type FrontmatterIssue } from "./analyzer.ts";
+import { registerCheckTool } from "./check-tool.ts";
+import { findParaMdFiles } from "./scanner.ts";
+import { registerStandardizeTool } from "./standardize-tool.ts";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

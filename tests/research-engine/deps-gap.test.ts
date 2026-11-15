@@ -8,20 +8,20 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../../common/subagent.js", () => ({
+vi.mock("../../common/subagent.ts", () => ({
   runSubagent: vi.fn(),
   buildSubagentArgs: vi.fn(() => ["--lean-args"]),
   resolveSubagentTimeoutMs: vi.fn(() => 500),
 }));
-vi.mock("../../extensions/research-engine/writeback.js", () => ({
+vi.mock("../../extensions/research-engine/writeback.ts", () => ({
   writeBackToKB: vi.fn(),
   parseGrouping: vi.fn(),
 }));
-vi.mock("../../common/notesDb.js", () => ({ ensureNotesDb: vi.fn() }));
-vi.mock("../../extensions/para-knowledge/db-sqlite.js", () => ({ searchDocs: vi.fn() }));
+vi.mock("../../common/notesDb.ts", () => ({ ensureNotesDb: vi.fn() }));
+vi.mock("../../extensions/para-knowledge/db-sqlite.ts", () => ({ searchDocs: vi.fn() }));
 
 type BuildResearchDeps =
-  typeof import("../../extensions/research-engine/deps.js").buildResearchDeps;
+  typeof import("../../extensions/research-engine/deps.ts").buildResearchDeps;
 
 interface DepsHarness {
   buildResearchDeps: BuildResearchDeps;
@@ -34,10 +34,10 @@ interface DepsHarness {
 async function importFresh(): Promise<DepsHarness> {
   vi.resetModules();
   vi.clearAllMocks();
-  const subagent = await import("../../common/subagent.js");
-  const notesDb = await import("../../common/notesDb.js");
-  const dbSqlite = await import("../../extensions/para-knowledge/db-sqlite.js");
-  const { buildResearchDeps } = await import("../../extensions/research-engine/deps.js");
+  const subagent = await import("../../common/subagent.ts");
+  const notesDb = await import("../../common/notesDb.ts");
+  const dbSqlite = await import("../../extensions/para-knowledge/db-sqlite.ts");
+  const { buildResearchDeps } = await import("../../extensions/research-engine/deps.ts");
 
   vi.mocked(subagent.resolveSubagentTimeoutMs).mockReturnValue(500);
   vi.mocked(notesDb.ensureNotesDb).mockResolvedValue({} as never);

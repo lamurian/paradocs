@@ -51,7 +51,7 @@ describe("searchNativeHttp", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
     const results = await searchNativeHttp("test query", 3);
 
     expect(results).toHaveLength(3);
@@ -69,7 +69,7 @@ describe("searchNativeHttp", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
     await searchNativeHttp("climate change", 2);
 
     const callUrl = mockFetch.mock.calls[0][0] as string;
@@ -98,7 +98,7 @@ describe("searchNativeHttp", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
     const results = await searchNativeHttp("test", 3);
 
     expect(results).toHaveLength(1);
@@ -121,7 +121,7 @@ describe("searchNativeHttp", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
     const results = await searchNativeHttp("test", 3);
 
     expect(results).toHaveLength(10);
@@ -131,7 +131,7 @@ describe("searchNativeHttp", () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
     const results = await searchNativeHttp("test", 3);
 
     expect(results).toEqual([]);
@@ -141,7 +141,7 @@ describe("searchNativeHttp", () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error("Network error"));
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
     const results = await searchNativeHttp("test", 3);
 
     expect(results).toEqual([]);
@@ -154,7 +154,7 @@ describe("searchNativeHttp", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
     const results = await searchNativeHttp("test", 3);
 
     expect(results).toEqual([]);
@@ -167,7 +167,7 @@ describe("searchNativeHttp", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchNativeHttp } = await import("../../extensions/web-search/native.js");
+    const { searchNativeHttp } = await import("../../extensions/web-search/native.ts");
 
     const r1 = await searchNativeHttp("test", 1);
     expect(r1[0].tier).toBe(1);

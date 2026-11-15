@@ -10,8 +10,8 @@
 
 import { Type } from "typebox";
 
-import { addFailedUrl, extractBatch, hasPending } from "./tavily-extract.js";
-import { fetchUrlAsText } from "../../common/fetchUrl.js";
+import { addFailedUrl, extractBatch, hasPending } from "./tavily-extract.ts";
+import { fetchUrlAsText } from "../../common/fetchUrl.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

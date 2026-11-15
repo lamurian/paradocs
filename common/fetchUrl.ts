@@ -12,9 +12,9 @@
  * @module common/fetchUrl
  */
 
-import { tryObscura } from "../extensions/link-summarizer/cdp.js";
-import { fetchViaHttp } from "../extensions/link-summarizer/http.js";
-import { tryExtractPdf, isPdfUrl } from "../extensions/link-summarizer/pdf.js";
+import { tryObscura } from "../extensions/link-summarizer/cdp.ts";
+import { fetchViaHttp } from "../extensions/link-summarizer/http.ts";
+import { tryExtractPdf, isPdfUrl } from "../extensions/link-summarizer/pdf.ts";
 
 // ── Constants ───────────────────────────────────────────────────────
 

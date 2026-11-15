@@ -10,9 +10,9 @@
  * @module extensions/commands/split
  */
 import { readFile, writeFile } from "node:fs/promises";
-import { formatFrontmatter, parseFrontmatter } from "./split-frontmatter.js";
+import { formatFrontmatter, parseFrontmatter } from "./split-frontmatter.ts";
 import { resolve, basename, extname } from "node:path";
-import { validateAtomicity } from "../../common/atomicity.js";
+import { validateAtomicity } from "../../common/atomicity.ts";
 import type {
   CreateAgentSessionOptions,
   ExtensionAPI,

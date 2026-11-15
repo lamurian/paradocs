@@ -8,14 +8,14 @@
 
 import { describe, it, expect } from "vitest";
 
-import { fakeSpawn, TWO_EVENTS } from "./helpers/fake-subagent.js";
+import { fakeSpawn, TWO_EVENTS } from "./helpers/fake-subagent.ts";
 import {
   buildSubagentArgs,
   extractFinalAssistantText,
   getPiInvocation,
   resolveSubagentTimeoutMs,
   runSubagent,
-} from "../../common/subagent.js";
+} from "../../common/subagent.ts";
 
 // ── buildSubagentArgs ─────────────────────────────────────────────────
 

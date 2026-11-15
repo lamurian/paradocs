@@ -7,17 +7,17 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../../extensions/research-engine/orchestrator.js", () => ({
+vi.mock("../../extensions/research-engine/orchestrator.ts", () => ({
   runResearch: vi.fn(),
   DEFAULT_STAGE_MESSAGES: {},
 }));
-vi.mock("../../extensions/research-engine/deps.js", () => ({
+vi.mock("../../extensions/research-engine/deps.ts", () => ({
   buildResearchDeps: vi.fn(() => ({})),
 }));
 
-import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.js";
+import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.ts";
 
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
 function fixtureState(): ResearchState {
   return {
@@ -102,8 +102,8 @@ async function importTool(): Promise<{
   runResearch: ReturnType<typeof vi.fn>;
 }> {
   vi.resetModules();
-  const mod = await import("../../extensions/research-engine/index.js");
-  const orch = await import("../../extensions/research-engine/orchestrator.js");
+  const mod = await import("../../extensions/research-engine/index.ts");
+  const orch = await import("../../extensions/research-engine/orchestrator.ts");
   vi.clearAllMocks();
   const registerTool = vi.fn();
   mod.default({ registerTool, on: vi.fn() } as never);

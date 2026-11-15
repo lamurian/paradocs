@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.js";
+import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.ts";
 
 // ── Constants ─────────────────────────────────────────────────────────
 

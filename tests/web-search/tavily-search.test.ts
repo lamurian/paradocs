@@ -51,7 +51,7 @@ describe("searchTavily", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     const results = await searchTavily("quantum computing", 3);
 
     expect(results).toHaveLength(2);
@@ -69,7 +69,7 @@ describe("searchTavily", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     await searchTavily("test query", 3);
 
     expect(mockFetch).toHaveBeenCalledWith("https://api.tavily.com/search", {
@@ -96,7 +96,7 @@ describe("searchTavily", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     await searchTavily("machine learning", 1);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -112,7 +112,7 @@ describe("searchTavily", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     await searchTavily("policy report", 2);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -127,7 +127,7 @@ describe("searchTavily", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     await searchTavily("general topic", 3);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -138,7 +138,7 @@ describe("searchTavily", () => {
   it("should return empty array when no API key is configured", async () => {
     delete process.env.TAVILY_KEY;
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     const results = await searchTavily("test", 3);
 
     expect(results).toEqual([]);
@@ -148,7 +148,7 @@ describe("searchTavily", () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 401 });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     const results = await searchTavily("test", 3);
 
     expect(results).toEqual([]);
@@ -158,7 +158,7 @@ describe("searchTavily", () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error("Network error"));
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     const results = await searchTavily("test", 3);
 
     expect(results).toEqual([]);
@@ -171,7 +171,7 @@ describe("searchTavily", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     const results = await searchTavily("test", 3);
 
     expect(results).toEqual([]);
@@ -185,7 +185,7 @@ describe("searchTavily", () => {
     vi.stubGlobal("fetch", mockFetch);
 
     const controller = new AbortController();
-    const { searchTavily } = await import("../../extensions/web-search/tavily.js");
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
     await searchTavily("test", 3, controller.signal);
 
     expect(mockFetch.mock.calls[0][1].signal).toBe(controller.signal);

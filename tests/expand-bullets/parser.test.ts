@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 describe("parseFrontmatter (expand-bullets)", () => {
   it("should extract tags, title, and body from frontmatter", async () => {
-    const { parseFrontmatter } = await import("../../extensions/expand-bullets/parser.js");
+    const { parseFrontmatter } = await import("../../extensions/expand-bullets/parser.ts");
     const content = `---
 title: My Document
 tags:
@@ -18,7 +18,7 @@ This is the body.`;
   });
 
   it("should return full content as body when no frontmatter", async () => {
-    const { parseFrontmatter } = await import("../../extensions/expand-bullets/parser.js");
+    const { parseFrontmatter } = await import("../../extensions/expand-bullets/parser.ts");
     const result = parseFrontmatter("Just body content");
     expect(result.tags).toEqual([]);
     expect(result.title).toBeUndefined();
@@ -26,7 +26,7 @@ This is the body.`;
   });
 
   it("should handle frontmatter without tags", async () => {
-    const { parseFrontmatter } = await import("../../extensions/expand-bullets/parser.js");
+    const { parseFrontmatter } = await import("../../extensions/expand-bullets/parser.ts");
     const content = `---
 title: No Tags
 ---
@@ -41,7 +41,7 @@ Body here`;
 
 describe("extractBullets", () => {
   it("should extract bullet points with heading context", async () => {
-    const { extractBullets } = await import("../../extensions/expand-bullets/parser.js");
+    const { extractBullets } = await import("../../extensions/expand-bullets/parser.ts");
     const body = `## Section 1
 - bullet one
 - bullet two
@@ -65,12 +65,12 @@ describe("extractBullets", () => {
   });
 
   it("should return empty array for body with no bullets", async () => {
-    const { extractBullets } = await import("../../extensions/expand-bullets/parser.js");
+    const { extractBullets } = await import("../../extensions/expand-bullets/parser.ts");
     expect(extractBullets("Just plain text")).toEqual([]);
   });
 
   it("should filter bullets starting with [, http, or @", async () => {
-    const { extractBullets } = await import("../../extensions/expand-bullets/parser.js");
+    const { extractBullets } = await import("../../extensions/expand-bullets/parser.ts");
     const body = `## Section
 - [reference]
 - http://example.com
@@ -82,7 +82,7 @@ describe("extractBullets", () => {
   });
 
   it("should filter bullets longer than 200 characters", async () => {
-    const { extractBullets } = await import("../../extensions/expand-bullets/parser.js");
+    const { extractBullets } = await import("../../extensions/expand-bullets/parser.ts");
     const longText = "a".repeat(201);
     const body = `## Section\n- ${longText}\n- short bullet`;
     const result = extractBullets(body);
@@ -91,7 +91,7 @@ describe("extractBullets", () => {
   });
 
   it("should use empty context for bullets before any heading", async () => {
-    const { extractBullets } = await import("../../extensions/expand-bullets/parser.js");
+    const { extractBullets } = await import("../../extensions/expand-bullets/parser.ts");
     const body = "- leading bullet\n## Heading\n- headed bullet";
     const result = extractBullets(body);
     expect(result).toHaveLength(2);
@@ -100,7 +100,7 @@ describe("extractBullets", () => {
   });
 
   it("should handle indented bullet lines", async () => {
-    const { extractBullets } = await import("../../extensions/expand-bullets/parser.js");
+    const { extractBullets } = await import("../../extensions/expand-bullets/parser.ts");
     const body = "## Stuff\n  - indented bullet\n\t- tabbed bullet";
     const result = extractBullets(body);
     expect(result).toHaveLength(2);
@@ -111,7 +111,7 @@ describe("extractBullets", () => {
 
 describe("buildSearchQuery", () => {
   it("should build query with context", async () => {
-    const { buildSearchQuery } = await import("../../extensions/expand-bullets/parser.js");
+    const { buildSearchQuery } = await import("../../extensions/expand-bullets/parser.ts");
     const result = buildSearchQuery({
       text: "machine learning",
       context: "AI",
@@ -120,13 +120,13 @@ describe("buildSearchQuery", () => {
   });
 
   it("should build query without context", async () => {
-    const { buildSearchQuery } = await import("../../extensions/expand-bullets/parser.js");
+    const { buildSearchQuery } = await import("../../extensions/expand-bullets/parser.ts");
     const result = buildSearchQuery({ text: "hello world", context: "" });
     expect(result).toBe("(site:edu OR site:ac.* OR site:gov) hello world");
   });
 
   it("should handle context with spaces", async () => {
-    const { buildSearchQuery } = await import("../../extensions/expand-bullets/parser.js");
+    const { buildSearchQuery } = await import("../../extensions/expand-bullets/parser.ts");
     const result = buildSearchQuery({
       text: "term",
       context: "multi word context",

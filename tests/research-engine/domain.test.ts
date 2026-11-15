@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { registrableDomain } from "../../extensions/research-engine/fetcher.js";
+import { registrableDomain } from "../../extensions/research-engine/fetcher.ts";
 
 describe("registrableDomain — lightweight eTLD+1", () => {
   it("should map arxiv abs URLs to arxiv.org", () => {

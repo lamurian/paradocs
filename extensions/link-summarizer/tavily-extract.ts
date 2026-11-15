@@ -10,7 +10,7 @@
 
 import { tavily } from "@tavily/core";
 
-import { getApiKeys } from "../../common/env.js";
+import { getApiKeys } from "../../common/env.ts";
 
 /**
  * Module-level accumulator for URLs where both Obscura and HTTP

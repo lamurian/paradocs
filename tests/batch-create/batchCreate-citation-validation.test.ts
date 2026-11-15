@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.js";
+import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.ts";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -91,7 +91,7 @@ describe("batch_create_para_docs citation validation", () => {
     }>
   > {
     vi.resetModules();
-    const mod = await import("../../extensions/batch-create/index.js");
+    const mod = await import("../../extensions/batch-create/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

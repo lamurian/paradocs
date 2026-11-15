@@ -65,7 +65,7 @@ describe("yaml-enforcer validate_frontmatter", () => {
     // Write a doc in projectDir (should be ignored)
     writeDoc(projectDir, "Resources", "ignore-me");
 
-    const mod = await import("../../extensions/yaml-enforcer/index.js");
+    const mod = await import("../../extensions/yaml-enforcer/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -142,7 +142,7 @@ tags: [test]
 Body content.`;
     writeFileSync(join(knowledgeDirPath, "check-target.md"), docContent, "utf-8");
 
-    const mod = await import("../../extensions/yaml-enforcer/index.js");
+    const mod = await import("../../extensions/yaml-enforcer/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -213,7 +213,7 @@ describe("yaml-enforcer standardize_frontmatter", () => {
     // Write a doc with legacy field in projectDir (should be ignored)
     writeDoc(projectDir, "Resources", "project-legacy", '\nsource_url: "https://project.com"');
 
-    const mod = await import("../../extensions/yaml-enforcer/index.js");
+    const mod = await import("../../extensions/yaml-enforcer/index.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

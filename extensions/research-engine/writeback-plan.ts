@@ -9,10 +9,10 @@
  * @module extensions/research-engine/writeback-plan
  */
 
-import { extractJson, stripToolCallLikeBlocks } from "../../common/extractJson.js";
+import { extractJson, stripToolCallLikeBlocks } from "../../common/extractJson.ts";
 
-import type { ResearchSource } from "./types.js";
-import type { GroupedOutdated } from "./writeback-helpers.js";
+import type { ResearchSource } from "./types.ts";
+import type { GroupedOutdated } from "./writeback-helpers.ts";
 
 /** Input for one injected or default write-back subagent call (plan/fill). */
 export interface WritebackCallInput {

@@ -23,8 +23,8 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 
-import { parseAtomicityResult, parseAtomicityResultsArray } from "./atomicity-parse.js";
-import { ATOMICITY_SYSTEM_PROMPT } from "./atomicity-prompts.js";
+import { parseAtomicityResult, parseAtomicityResultsArray } from "./atomicity-parse.ts";
+import { ATOMICITY_SYSTEM_PROMPT } from "./atomicity-prompts.ts";
 
 /** Model type used by pi SDK for LLM configuration. */
 type Model = NonNullable<CreateAgentSessionOptions["model"]>;

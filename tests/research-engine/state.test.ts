@@ -17,11 +17,11 @@ import {
   saveCheckpoint,
   loadCheckpoint,
   RESEARCH_STATE_SUBDIR,
-} from "../../extensions/research-engine/checkpoint.js";
-import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.js";
-import { buildDigest } from "../../extensions/research-engine/state.js";
+} from "../../extensions/research-engine/checkpoint.ts";
+import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.ts";
+import { buildDigest } from "../../extensions/research-engine/state.ts";
 
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
 const dirs: string[] = [];
 afterAll(() => {

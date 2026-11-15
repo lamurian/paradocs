@@ -13,10 +13,10 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { parseFrontmatter, extractBullets, buildSearchQuery, type BulletInfo } from "./parser.js";
-import { searchWeb } from "./search.js";
-import { synthesizeExpansion, type Expansion } from "./synthesis.js";
-import { configureEnv, getKnowledgeConfig } from "../../common/env.js";
+import { parseFrontmatter, extractBullets, buildSearchQuery, type BulletInfo } from "./parser.ts";
+import { searchWeb } from "./search.ts";
+import { synthesizeExpansion, type Expansion } from "./synthesis.ts";
+import { configureEnv, getKnowledgeConfig } from "../../common/env.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

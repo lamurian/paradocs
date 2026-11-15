@@ -13,17 +13,17 @@
 
 import { Type } from "typebox";
 
-import { configureEnv, getKnowledgeConfig } from "../../../common/env.js";
-import { checkpointPathFor } from "../../research-engine/checkpoint.js";
-import { buildResearchDeps } from "../../research-engine/deps.js";
-import { canonicalizeUrl } from "../../research-engine/fetcher.js";
-import { runResearch } from "../../research-engine/orchestrator.js";
-import { ASK_DEEP_PROFILE, ASK_QUICK_PROFILE } from "../../research-engine/profiles.js";
-import { renderAnswerBody } from "../../research-engine/render.js";
-import { buildDigest } from "../../research-engine/state.js";
+import { configureEnv, getKnowledgeConfig } from "../../../common/env.ts";
+import { checkpointPathFor } from "../../research-engine/checkpoint.ts";
+import { buildResearchDeps } from "../../research-engine/deps.ts";
+import { canonicalizeUrl } from "../../research-engine/fetcher.ts";
+import { runResearch } from "../../research-engine/orchestrator.ts";
+import { ASK_DEEP_PROFILE, ASK_QUICK_PROFILE } from "../../research-engine/profiles.ts";
+import { renderAnswerBody } from "../../research-engine/render.ts";
+import { buildDigest } from "../../research-engine/state.ts";
 
-import type { ResearchAuth } from "../../research-engine/deps.js";
-import type { GateProfile, ResearchState } from "../../research-engine/state.js";
+import type { ResearchAuth } from "../../research-engine/deps.ts";
+import type { GateProfile, ResearchState } from "../../research-engine/state.ts";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /**

@@ -11,7 +11,7 @@ import {
   refineResult,
   FACET_TEMPLATE,
   FACET_QUESTIONS,
-} from "../../extensions/research-engine/reformulate.js";
+} from "../../extensions/research-engine/reformulate.ts";
 
 const TOPIC = "AI agent guardrails";
 

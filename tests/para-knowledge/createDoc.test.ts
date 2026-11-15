@@ -69,7 +69,7 @@ describe("create_para_doc path resolution", () => {
   it("should create the document file inside KNOWLEDGE_DIR, not ctx.cwd", async () => {
     vi.resetModules();
     const { registerCreateDocTool } =
-      await import("../../extensions/para-knowledge/tools/createDoc.js");
+      await import("../../extensions/para-knowledge/tools/createDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -130,7 +130,7 @@ describe("create_para_doc path resolution", () => {
 
     vi.resetModules();
     const { registerCreateDocTool } =
-      await import("../../extensions/para-knowledge/tools/createDoc.js");
+      await import("../../extensions/para-knowledge/tools/createDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -183,7 +183,7 @@ describe("create_para_doc path resolution", () => {
     const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
 
     const { registerCreateDocTool } =
-      await import("../../extensions/para-knowledge/tools/createDoc.js");
+      await import("../../extensions/para-knowledge/tools/createDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -235,7 +235,7 @@ describe("create_para_doc path resolution", () => {
     const defaultDir = join(fakeHome, "data", "personal", "Documents", "Cognoscere");
 
     const { registerCreateDocTool } =
-      await import("../../extensions/para-knowledge/tools/createDoc.js");
+      await import("../../extensions/para-knowledge/tools/createDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

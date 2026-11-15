@@ -20,7 +20,7 @@ vi.mock("node:fs", () => ({
 }));
 
 // Mock env module so getKnowledgeConfig returns a predictable value
-vi.mock("../../common/env.js", () => ({
+vi.mock("../../common/env.ts", () => ({
   getKnowledgeConfig: vi.fn().mockReturnValue({
     dir: "/fake/knowledge-base",
     db: "notes.db",
@@ -41,7 +41,7 @@ describe("commitKnowledgeBase", () => {
       .mockReturnValueOnce("") // git commit (no output)
       .mockReturnValueOnce("abc123\n"); // git rev-parse HEAD
 
-    const { commitKnowledgeBase } = await import("../../common/gitCommit.js");
+    const { commitKnowledgeBase } = await import("../../common/gitCommit.ts");
     const result = await commitKnowledgeBase("docs: add synthesis", "/test/cwd");
 
     expect(mockExistsSync).toHaveBeenCalledWith("/fake/knowledge-base/.git");
@@ -55,7 +55,7 @@ describe("commitKnowledgeBase", () => {
   it("should skip gracefully when KB dir is not a git repo", async () => {
     mockExistsSync.mockReturnValue(false);
 
-    const { commitKnowledgeBase } = await import("../../common/gitCommit.js");
+    const { commitKnowledgeBase } = await import("../../common/gitCommit.ts");
     const result = await commitKnowledgeBase("docs: test", "/test/cwd");
 
     expect(mockExecSync).not.toHaveBeenCalled();
@@ -71,7 +71,7 @@ describe("commitKnowledgeBase", () => {
         throw new Error("nothing to commit");
       });
 
-    const { commitKnowledgeBase } = await import("../../common/gitCommit.js");
+    const { commitKnowledgeBase } = await import("../../common/gitCommit.ts");
     const result = await commitKnowledgeBase("docs: test", "/test/cwd");
 
     expect(result).toEqual({ ok: false });
@@ -83,7 +83,7 @@ describe("commitKnowledgeBase", () => {
       throw new Error("command not found: git");
     });
 
-    const { commitKnowledgeBase } = await import("../../common/gitCommit.js");
+    const { commitKnowledgeBase } = await import("../../common/gitCommit.ts");
     const result = await commitKnowledgeBase("docs: test", "/test/cwd");
 
     expect(result).toEqual({ ok: false });
@@ -96,7 +96,7 @@ describe("commitKnowledgeBase", () => {
     const longMsg = "docs: add synthesis of " + "very long ".repeat(20) + "topic";
     expect(longMsg.length).toBeGreaterThan(72);
 
-    const { commitKnowledgeBase } = await import("../../common/gitCommit.js");
+    const { commitKnowledgeBase } = await import("../../common/gitCommit.ts");
     await commitKnowledgeBase(longMsg, "/test/cwd");
 
     const commitCall = mockExecSync.mock.calls[1];

@@ -6,4 +6,4 @@
  * create_para_doc and batch_create_para_docs tool implementations.
  */
 
-export { findRelated, appendLinks } from "../../common/autoLink.js";
+export { findRelated, appendLinks } from "../../common/autoLink.ts";

@@ -6,7 +6,7 @@
  * See AGENTS.md in this directory for full parameter reference.
  */
 
-import { getSearxngConfig } from "../../common/env.js";
+import { getSearxngConfig } from "../../common/env.ts";
 
 export interface SearchResult {
   title: string;

@@ -7,13 +7,13 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.js";
-import { stageFetch } from "../../extensions/research-engine/stage-sources.js";
+import { ASK_QUICK_PROFILE } from "../../extensions/research-engine/profiles.ts";
+import { stageFetch } from "../../extensions/research-engine/stage-sources.ts";
 
-import type { ResearchDeps } from "../../extensions/research-engine/research-deps.js";
-import type { Candidate, ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchDeps } from "../../extensions/research-engine/research-deps.ts";
+import type { Candidate, ResearchState } from "../../extensions/research-engine/state.ts";
 
-vi.mock("../../common/subagent.js", () => ({
+vi.mock("../../common/subagent.ts", () => ({
   buildSubagentArgs: vi.fn(),
   getPiInvocation: vi.fn(),
   resolveSubagentTimeoutMs: vi.fn(() => 60_000),

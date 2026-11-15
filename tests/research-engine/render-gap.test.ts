@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { renderAnswerBody, renderWritebackLines } from "../../extensions/research-engine/render.js";
+import { renderAnswerBody, renderWritebackLines } from "../../extensions/research-engine/render.ts";
 
 const SUMMARY = { url: "https://r.example/1", title: "R", summary: "Rendered summary" };
 

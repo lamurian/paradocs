@@ -69,7 +69,7 @@ describe("validateDocumentsAtomicity — batch variant", () => {
     const mock = makeSessionMock(response);
     vi.mocked(createAgentSession).mockResolvedValue(mock);
 
-    const { validateDocumentsAtomicity } = await import("../../common/atomicity.js");
+    const { validateDocumentsAtomicity } = await import("../../common/atomicity.ts");
     const docs = [
       { title: "Doc 1", content: "Content 1", tags: ["t1"] },
       { title: "Doc 2", content: "Content 2", tags: ["t2"] },
@@ -90,7 +90,7 @@ describe("validateDocumentsAtomicity — batch variant", () => {
     const { createAgentSession } = await import("@earendil-works/pi-coding-agent");
     vi.mocked(createAgentSession).mockRejectedValue(new Error("Rate limited"));
 
-    const { validateDocumentsAtomicity } = await import("../../common/atomicity.js");
+    const { validateDocumentsAtomicity } = await import("../../common/atomicity.ts");
     const docs = [
       { title: "Doc 1", content: "Content 1", tags: ["t1"] },
       { title: "Doc 2", content: "Content 2", tags: ["t2"] },
@@ -111,7 +111,7 @@ describe("validateDocumentsAtomicity — batch variant", () => {
     const mock = makeSessionMock(JSON.stringify({ valid: true, message: "Single response." }));
     vi.mocked(createAgentSession).mockResolvedValue(mock);
 
-    const { validateDocumentsAtomicity } = await import("../../common/atomicity.js");
+    const { validateDocumentsAtomicity } = await import("../../common/atomicity.ts");
     const docs = [{ title: "Doc 1", content: "Content 1", tags: ["t1"] }];
 
     const results = await validateDocumentsAtomicity(docs, { id: "test" } as never);
@@ -122,7 +122,7 @@ describe("validateDocumentsAtomicity — batch variant", () => {
   });
 
   it("should handle empty docs array", async () => {
-    const { validateDocumentsAtomicity } = await import("../../common/atomicity.js");
+    const { validateDocumentsAtomicity } = await import("../../common/atomicity.ts");
     const results = await validateDocumentsAtomicity([], { id: "test" } as never);
     expect(results).toHaveLength(0);
   });

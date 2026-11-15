@@ -2,40 +2,40 @@ import { describe, it, expect } from "vitest";
 
 describe("yamlQuote", () => {
   it("should return plain values as-is", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     expect(yamlQuote("hello")).toBe("hello");
   });
 
   it("should quote values with colons", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     expect(yamlQuote("key: value")).toBe("'key: value'");
   });
 
   it("should quote values with hash-space", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     expect(yamlQuote("value # comment")).toBe("'value # comment'");
   });
 
   it("should quote values starting with YAML special chars", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     expect(yamlQuote("[brackets]")).toBe("'[brackets]'");
     expect(yamlQuote("{braces}")).toBe("'{braces}'");
   });
 
   it("should wrap in single quotes for values starting with double quote", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     const result = yamlQuote('"hello"');
     expect(result).toBe("'" + '"hello"' + "'");
   });
 
   it("should wrap in double quotes for values starting with single quote", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     const result = yamlQuote("'hello'");
     expect(result).toBe('"' + "'hello'" + '"');
   });
 
   it("should escape internal double quotes when using double-quote wrapping", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     // Value starts with single quote (needs quoting) and contains both ' and "
     const result = yamlQuote("'\"");
     // Should be wrapped in double quotes
@@ -44,12 +44,12 @@ describe("yamlQuote", () => {
     // The inner content should have the single quote and escaped double quote
     const inner = result.slice(1, -1);
     expect(inner.includes("'")).toBe(true);
-    expect(inner.includes('\\')).toBe(true);
+    expect(inner.includes("\\")).toBe(true);
     expect(inner.includes('"')).toBe(true);
   });
 
   it("should quote boolean-like values", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     expect(yamlQuote("true")).toBe("'true'");
     expect(yamlQuote("false")).toBe("'false'");
     expect(yamlQuote("yes")).toBe("'yes'");
@@ -57,20 +57,20 @@ describe("yamlQuote", () => {
   });
 
   it("should quote numeric strings", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     expect(yamlQuote("42")).toBe("'42'");
     expect(yamlQuote("3.14")).toBe("'3.14'");
   });
 
   it("should quote empty string", async () => {
-    const { yamlQuote } = await import("../common/yaml.js");
+    const { yamlQuote } = await import("../common/yaml.ts");
     expect(yamlQuote("")).toBe("''");
   });
 });
 
 describe("formatFrontmatter", () => {
   it("should format complete frontmatter with tags list", async () => {
-    const { formatFrontmatter } = await import("../common/yaml.js");
+    const { formatFrontmatter } = await import("../common/yaml.ts");
     const result = formatFrontmatter({
       title: "Test Doc",
       description: "A test document",
@@ -87,13 +87,13 @@ describe("formatFrontmatter", () => {
   });
 
   it("should handle tags as empty array", async () => {
-    const { formatFrontmatter } = await import("../common/yaml.js");
+    const { formatFrontmatter } = await import("../common/yaml.ts");
     const result = formatFrontmatter({ title: "No Tags", tags: [] });
     expect(result).not.toContain("tags");
   });
 
   it("should handle missing optional fields", async () => {
-    const { formatFrontmatter } = await import("../common/yaml.js");
+    const { formatFrontmatter } = await import("../common/yaml.ts");
     const result = formatFrontmatter({ title: "Minimal" });
     expect(result).toContain("title: Minimal");
     expect(result).not.toContain("description");
@@ -101,7 +101,7 @@ describe("formatFrontmatter", () => {
   });
 
   it("should auto-quote values that need quoting", async () => {
-    const { formatFrontmatter } = await import("../common/yaml.js");
+    const { formatFrontmatter } = await import("../common/yaml.ts");
     const result = formatFrontmatter({
       title: "Doc: Part 2",
       description: "true",
@@ -111,7 +111,7 @@ describe("formatFrontmatter", () => {
   });
 
   it("should support source_url as legacy alias", async () => {
-    const { formatFrontmatter } = await import("../common/yaml.js");
+    const { formatFrontmatter } = await import("../common/yaml.ts");
     const result = formatFrontmatter({
       title: "Legacy",
       source_url: "https://old.example.com",
@@ -120,7 +120,7 @@ describe("formatFrontmatter", () => {
   });
 
   it("should prefer source over source_url", async () => {
-    const { formatFrontmatter } = await import("../common/yaml.js");
+    const { formatFrontmatter } = await import("../common/yaml.ts");
     const result = formatFrontmatter({
       title: "Both",
       source: "https://new.example.com",
@@ -131,7 +131,7 @@ describe("formatFrontmatter", () => {
   });
 
   it("should emit fields in the standardised order", async () => {
-    const { formatFrontmatter } = await import("../common/yaml.js");
+    const { formatFrontmatter } = await import("../common/yaml.ts");
     const result = formatFrontmatter({
       source: "https://example.com",
       tags: ["a"],

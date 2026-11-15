@@ -76,7 +76,7 @@ describe("update_para_doc path resolution", () => {
     writeDoc("Resources", "existing-doc", "Existing Doc", "Original body.");
 
     const { registerUpdateDocTool } =
-      await import("../../extensions/para-knowledge/tools/updateDoc.js");
+      await import("../../extensions/para-knowledge/tools/updateDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -134,7 +134,7 @@ describe("update_para_doc path resolution", () => {
 
     vi.resetModules();
     const { registerUpdateDocTool } =
-      await import("../../extensions/para-knowledge/tools/updateDoc.js");
+      await import("../../extensions/para-knowledge/tools/updateDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {
@@ -196,7 +196,7 @@ describe("update_para_doc path resolution", () => {
     );
 
     const { registerUpdateDocTool } =
-      await import("../../extensions/para-knowledge/tools/updateDoc.js");
+      await import("../../extensions/para-knowledge/tools/updateDoc.ts");
 
     const mockPi = {
       registerTool: (tool: Record<string, unknown>) => {

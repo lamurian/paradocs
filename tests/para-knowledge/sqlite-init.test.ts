@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 
-import type { SqliteDb } from "../../extensions/para-knowledge/sqlite-types.js";
+import type { SqliteDb } from "../../extensions/para-knowledge/sqlite-types.ts";
 
 describe("createDb", () => {
   let db: SqliteDb | null = null;
@@ -11,7 +11,7 @@ describe("createDb", () => {
   });
 
   it("should create an in-memory database", async () => {
-    const { createDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     expect(db).toBeDefined();
     expect(typeof db.exec).toBe("function");
@@ -20,7 +20,7 @@ describe("createDb", () => {
   });
 
   it("should support basic SQL operations", async () => {
-    const { createDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     db.exec("CREATE TABLE t (x INTEGER)");
     db.prepare("INSERT INTO t VALUES (?)").run(42);
@@ -29,7 +29,7 @@ describe("createDb", () => {
   });
 
   it("should support run/get/all convenience methods", async () => {
-    const { createDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     db.exec("CREATE TABLE t (x INTEGER, y TEXT)");
     db.run("INSERT INTO t VALUES (?, ?)", 1, "hello");
@@ -56,7 +56,7 @@ describe("initDb", () => {
   });
 
   it("should create all tables and indexes", async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     initDb(db);
 
@@ -90,7 +90,7 @@ describe("initDb", () => {
   });
 
   it("should be idempotent (safe to call twice)", async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     initDb(db);
     expect(() => initDb(db)).not.toThrow();
@@ -103,13 +103,13 @@ describe("initDb", () => {
   });
 
   it("should accept a database created with createDb", async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     expect(() => initDb(db)).not.toThrow();
   });
 
   it("should set cache_size pragma", async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.js");
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
     initDb(db);
     const row = db.get<{ cache_size: number }>("PRAGMA cache_size");

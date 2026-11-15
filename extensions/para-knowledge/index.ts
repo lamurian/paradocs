@@ -38,12 +38,12 @@
  *   list_para_tags     — list all unique tags across all indexed documents
  */
 
-import { registerCreateDocTool } from "./tools/createDoc.js";
-import { registerFindExistingSummaryTool } from "./tools/findExistingSummary.js";
-import { registerListTagsTool } from "./tools/listTags.js";
-import { registerResolveCitationTool } from "./tools/resolveCitation.js";
-import { registerSearchDocsTool } from "./tools/searchDocs.js";
-import { registerUpdateDocTool } from "./tools/updateDoc.js";
+import { registerCreateDocTool } from "./tools/createDoc.ts";
+import { registerFindExistingSummaryTool } from "./tools/findExistingSummary.ts";
+import { registerListTagsTool } from "./tools/listTags.ts";
+import { registerResolveCitationTool } from "./tools/resolveCitation.ts";
+import { registerSearchDocsTool } from "./tools/searchDocs.ts";
+import { registerUpdateDocTool } from "./tools/updateDoc.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

@@ -5,7 +5,7 @@
  * using a synchronous require-based fallback detection.
  */
 
-import type { SqliteDb } from "./sqlite-types.js";
+import type { SqliteDb } from "./sqlite-types.ts";
 
 type DbConstructor = new (path: string, options?: Record<string, unknown>) => SqliteDb;
 

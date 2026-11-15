@@ -9,10 +9,10 @@
 
 import { describe, it, expect } from "vitest";
 
-import { HANDLERS } from "../../extensions/research-engine/transition-handlers.js";
+import { HANDLERS } from "../../extensions/research-engine/transition-handlers.ts";
 
-import type { ResearchEvent } from "../../extensions/research-engine/events.js";
-import type { ResearchState } from "../../extensions/research-engine/state.js";
+import type { ResearchEvent } from "../../extensions/research-engine/events.ts";
+import type { ResearchState } from "../../extensions/research-engine/state.ts";
 
 /** Minimal valid research state for handler entry. */
 function prevState(overrides: Partial<ResearchState> = {}): ResearchState {

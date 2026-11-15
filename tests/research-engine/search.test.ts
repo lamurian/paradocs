@@ -6,9 +6,9 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { runSearch } from "../../extensions/research-engine/search.js";
+import { runSearch } from "../../extensions/research-engine/search.ts";
 
-import type { SearchDeps, SearchWebResult } from "../../extensions/research-engine/search.js";
+import type { SearchDeps, SearchWebResult } from "../../extensions/research-engine/search.ts";
 
 function backend(map: Record<string, SearchWebResult | Error>): SearchDeps {
   return {

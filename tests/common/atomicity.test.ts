@@ -69,7 +69,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     );
     vi.mocked(createAgentSession).mockResolvedValue(mock);
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     const result = await validateAtomicity(
       "## Summary\n\nA 2018 cross-sectional study found 21.8% prevalence.",
       "Prevalence of Metabolic Syndrome",
@@ -92,7 +92,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     );
     vi.mocked(createAgentSession).mockResolvedValue(mock);
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     await validateAtomicity("Content", "Title", { id: "test" } as never);
 
     const options = vi.mocked(createAgentSession).mock.calls[0][0];
@@ -124,7 +124,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     const mock = makeSessionMock(response);
     vi.mocked(createAgentSession).mockResolvedValue(mock);
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     const result = await validateAtomicity(
       "## Quantum Computing\nDetails.\n\n## French Cuisine\nDetails.",
       "Mixed Topics",
@@ -147,7 +147,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     );
     vi.mocked(createAgentSession).mockResolvedValue(mock);
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     const result = await validateAtomicity("## A\n\n## B\n\n## C", "Topic", {
       id: "test",
     } as never);
@@ -161,7 +161,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     const { createAgentSession } = await import("@earendil-works/pi-coding-agent");
     vi.mocked(createAgentSession).mockRejectedValue(new Error("Infrastructure unavailable"));
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     const result = await validateAtomicity("Some content.", "Title", { id: "test" } as never);
 
     expect(createAgentSession).toHaveBeenCalledTimes(2);
@@ -174,7 +174,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     const { createAgentSession } = await import("@earendil-works/pi-coding-agent");
     vi.mocked(createAgentSession).mockRejectedValue(new Error("auth missing"));
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     const result = await validateAtomicity("Some content.", "Title", { id: "test" } as never);
 
     expect(result.valid).toBe(true);
@@ -187,7 +187,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     const mock = makeSessionMock("I think this content is atomic and valid.");
     vi.mocked(createAgentSession).mockResolvedValue(mock);
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     const result = await validateAtomicity("Some content.", "Title", { id: "test" } as never);
 
     expect(result.valid).toBe(true);
@@ -202,7 +202,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
     const abortController = new AbortController();
     abortController.abort();
 
-    const { validateAtomicity } = await import("../../common/atomicity.js");
+    const { validateAtomicity } = await import("../../common/atomicity.ts");
     const result = await validateAtomicity("Content.", "Title", { id: "test" } as never, {
       signal: abortController.signal,
     });
@@ -216,7 +216,7 @@ describe("validateAtomicity — sub-agent Q&A check", () => {
 
 describe("Type exports", () => {
   it("should export AtomicityResult and BatchDoc interfaces", async () => {
-    const mod = await import("../../common/atomicity.js");
+    const mod = await import("../../common/atomicity.ts");
     expect(mod.validateAtomicity).toBeDefined();
     expect(mod.validateDocumentsAtomicity).toBeDefined();
     expect(typeof mod.validateAtomicity).toBe("function");

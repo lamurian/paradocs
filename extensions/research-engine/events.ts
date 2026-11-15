@@ -15,7 +15,7 @@ import type {
   ResearchStage,
   StructuralResult,
   SummaryItem,
-} from "./state.js";
+} from "./state.ts";
 
 /** Discriminated union of all FSM events. */
 export type ResearchEvent =

@@ -14,21 +14,21 @@ import {
   checkpointPathFor,
   loadCheckpoint,
   saveCheckpoint,
-} from "../../extensions/research-engine/checkpoint.js";
-import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.js";
+} from "../../extensions/research-engine/checkpoint.ts";
+import { ASK_DEEP_PROFILE } from "../../extensions/research-engine/profiles.ts";
 import {
   transition,
   stageEffects,
   TERMINAL_STAGES,
-} from "../../extensions/research-engine/transition.js";
+} from "../../extensions/research-engine/transition.ts";
 
 import type {
   Candidate,
   FetchRecord,
   ResearchState,
   StructuralResult,
-} from "../../extensions/research-engine/state.js";
-import type { ResearchEvent } from "../../extensions/research-engine/transition.js";
+} from "../../extensions/research-engine/state.ts";
+import type { ResearchEvent } from "../../extensions/research-engine/transition.ts";
 
 const T0 = Date.parse("2026-10-02T10:00:00Z");
 const tmpDirs: string[] = [];

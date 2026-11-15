@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 describe("synthesizeExpansion", () => {
   it("should synthesise expansion using first result snippet", async () => {
-    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.js");
+    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.ts");
     const bullet = { text: "machine learning", context: "AI" };
     const results = [
       {
@@ -17,7 +17,7 @@ describe("synthesizeExpansion", () => {
   });
 
   it("should generate fallback text when no results are provided", async () => {
-    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.js");
+    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.ts");
     const bullet = { text: "quantum computing", context: "Physics" };
     const result = synthesizeExpansion(bullet, []);
     expect(result).toContain("**quantum computing**");
@@ -26,14 +26,14 @@ describe("synthesizeExpansion", () => {
   });
 
   it("should use 'the broader topic' fallback when context is empty", async () => {
-    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.js");
+    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.ts");
     const bullet = { text: "something", context: "" };
     const result = synthesizeExpansion(bullet, []);
     expect(result).toContain("the broader topic");
   });
 
   it("should include extra snippets from additional results (up to 3 total)", async () => {
-    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.js");
+    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.ts");
     const bullet = { text: "term", context: "Context" };
     const results = [
       {
@@ -60,7 +60,7 @@ describe("synthesizeExpansion", () => {
   });
 
   it("should handle results with empty snippets gracefully", async () => {
-    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.js");
+    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.ts");
     const bullet = { text: "test", context: "Testing" };
     const results = [{ title: "A", url: "https://a.com", snippet: "" }];
     const result = synthesizeExpansion(bullet, results);
@@ -69,7 +69,7 @@ describe("synthesizeExpansion", () => {
   });
 
   it("should normalise whitespace in snippets", async () => {
-    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.js");
+    const { synthesizeExpansion } = await import("../../extensions/expand-bullets/synthesis.ts");
     const bullet = { text: "test", context: "" };
     const results = [
       {

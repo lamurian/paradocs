@@ -11,13 +11,13 @@ import { resolve } from "node:path";
 
 import { Type } from "typebox";
 
-import { validateAtomicity } from "../../../common/atomicity.js";
-import { loadRefBibCitekeys, validateCitations } from "../../../common/citation-validation.js";
-import { createDocument } from "../../../common/createDocument.js";
-import { getKnowledgeConfig } from "../../../common/env.js";
-import { ensureNotesDb } from "../../../common/notesDb.js";
+import { validateAtomicity } from "../../../common/atomicity.ts";
+import { loadRefBibCitekeys, validateCitations } from "../../../common/citation-validation.ts";
+import { createDocument } from "../../../common/createDocument.ts";
+import { getKnowledgeConfig } from "../../../common/env.ts";
+import { ensureNotesDb } from "../../../common/notesDb.ts";
 
-import type { AtomicityResult } from "../../../common/atomicity.js";
+import type { AtomicityResult } from "../../../common/atomicity.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /**
