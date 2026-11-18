@@ -87,7 +87,7 @@ function getDirectories() {
       { encoding: "utf-8" },
     );
     const staged = output.trim().split("\n").filter(Boolean);
-    return staged.filter((f) => f.endsWith(".ts"));
+    return staged.filter((f) => f.endsWith(".ts") && !f.startsWith(".pi/"));
   }
 
   return dirs;
