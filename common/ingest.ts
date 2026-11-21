@@ -13,37 +13,28 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
-import { commitCitations } from "./citation-commit.ts";
-import { commitKnowledgeBase } from "./gitCommit.ts";
+import {
+  commitIngestCitations,
+  commitIngestRun,
+  linkIngestedNote,
+  readIngestMaxLinks,
+} from "./ingest-finalize.ts";
 import { indexNoteFile } from "./ingest-notes.ts";
 import { sha256File } from "./outbox.ts";
 
+import type { IngestReport } from "./ingest-finalize.ts";
 import type { OutboxManifest, OutboxManifestNote } from "./outbox.ts";
 import type { StagedCitation } from "./stage-validate.ts";
 import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.ts";
 
-/** A batch or note that could not be ingested. */
-export interface IngestSkip {
-  path: string;
-  reason: string;
-}
-
-/** Summary of one ingest run. */
-export interface IngestReport {
-  batches: string[];
-  created: string[];
-  updated: string[];
-  skipped: IngestSkip[];
-  conflicts: string[];
-  citationsAdded: string[];
-  commit: string | null;
-}
+export type { IngestReport, IngestSkip } from "./ingest-finalize.ts";
 
 /** Inputs shared by the per-batch helpers. */
 interface IngestContext {
   knowledgeDir: string;
   db: SqliteDb;
   now: Date;
+  maxLinks: number;
   report: IngestReport;
 }
 
@@ -143,6 +134,14 @@ async function applyNote(
       return;
     }
     await writeAndIndex(ctx, draftPath, targetPath);
+    await linkIngestedNote(
+      targetPath,
+      note.title,
+      note.tags ?? [],
+      ctx.knowledgeDir,
+      ctx.db,
+      ctx.maxLinks,
+    );
     ctx.report.created.push(targetPath);
     return;
   }
@@ -153,11 +152,20 @@ async function applyNote(
       return;
     }
     if (note.baseHash === null || sha256File(targetAbs) !== note.baseHash) {
-      await parkConflict(paths, batchId, draftPath);
+      const parked = await parkConflict(paths, batchId, draftPath);
       ctx.report.conflicts.push(targetPath);
+      ctx.report.conflictPaths?.push(parked);
       return;
     }
     await writeAndIndex(ctx, draftPath, targetPath);
+    await linkIngestedNote(
+      targetPath,
+      note.title,
+      note.tags ?? [],
+      ctx.knowledgeDir,
+      ctx.db,
+      ctx.maxLinks,
+    );
     ctx.report.updated.push(targetPath);
     return;
   }
@@ -185,31 +193,17 @@ async function processBatch(
   }
 
   const batchId = manifest.batchId || batchName;
+  const citations = await readCitations(batchDir);
+  const citationsAdded = await commitIngestCitations(ctx.db, ctx.knowledgeDir, citations);
+  ctx.report.citationsAdded.push(...citationsAdded);
+
   for (const note of manifest.notes) {
     await applyNote(ctx, paths, batchId, batchDir, note);
-  }
-
-  const citations = await readCitations(batchDir);
-  if (citations.length > 0) {
-    const result = await commitCitations(ctx.db, ctx.knowledgeDir, citations);
-    ctx.report.citationsAdded.push(...result.added);
   }
 
   await mkdir(paths.ingested, { recursive: true });
   await rename(batchDir, join(paths.ingested, batchName));
   ctx.report.batches.push(batchId);
-}
-
-/** Commit the knowledge base once per run when it changed. */
-async function commitRun(cwd: string, ctx: IngestContext): Promise<string | null> {
-  const { report } = ctx;
-  const changed =
-    report.created.length > 0 || report.updated.length > 0 || report.citationsAdded.length > 0;
-  if (!changed) return null;
-
-  const message = `ingest: ${report.batches.length} batch(es), ${report.created.length} created, ${report.updated.length} updated`;
-  const result = await commitKnowledgeBase(message, cwd);
-  return result.hash ?? null;
 }
 
 /**
@@ -240,6 +234,7 @@ export async function ingestOutbox(
     updated: [],
     skipped: [],
     conflicts: [],
+    conflictPaths: [],
     citationsAdded: [],
     commit: null,
   };
@@ -250,6 +245,7 @@ export async function ingestOutbox(
     knowledgeDir: opts.knowledgeDir,
     db: opts.db,
     now: opts.now,
+    maxLinks: readIngestMaxLinks(opts.knowledgeDir),
     report,
   };
 
@@ -263,6 +259,6 @@ export async function ingestOutbox(
     await processBatch(ctx, paths, batchName);
   }
 
-  report.commit = await commitRun(cwd, ctx);
+  report.commit = await commitIngestRun(cwd, report);
   return report;
 }

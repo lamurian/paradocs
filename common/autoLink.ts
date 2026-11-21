@@ -144,6 +144,7 @@ export async function appendLinks(filePath: string, links: string[], db: SqliteD
  * @param tags - Document tags.
  * @param knowledgeDir - Absolute path to the knowledge base root directory.
  * @param db - Open SQLite database handle.
+ * @param maxLinks - Maximum number of related links to append (default 5).
  * @returns Number of links appended (0 if none found or error).
  */
 export async function autoLink(
@@ -152,8 +153,9 @@ export async function autoLink(
   tags: string[],
   knowledgeDir: string,
   db: SqliteDb,
+  maxLinks: number = MAX_LINKS,
 ): Promise<number> {
-  const related = findRelated(db, relPath, title, tags, MAX_LINKS);
+  const related = findRelated(db, relPath, title, tags, maxLinks);
   if (related.length === 0) return 0;
 
   const filePath = resolve(knowledgeDir, relPath);
