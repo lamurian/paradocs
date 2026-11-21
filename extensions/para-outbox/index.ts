@@ -8,6 +8,7 @@
  * @module extensions/para-outbox
  */
 
+import { registerIngestTool } from "./ingest-tool.ts";
 import { registerStageTool } from "./stage-tool.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -19,4 +20,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
  */
 export default function (pi: ExtensionAPI): void {
   registerStageTool(pi);
+
+  // Minimal test doubles only provide registerTool; the real pi API also
+  // exposes commands and the shared event bus needed by the ingest path.
+  const hasCommands = typeof pi.registerCommand === "function";
+  const hasEvents = typeof pi.events?.on === "function";
+  if (hasCommands || hasEvents) {
+    registerIngestTool(pi);
+  }
 }
