@@ -29,9 +29,13 @@
  *   resolve_citation   — resolve a DOI/URL citation (preview only)
  */
 
+import { reindexChanged } from "./reindex.ts";
 import { registerListTagsTool } from "./tools/listTags.ts";
 import { registerResolveCitationTool } from "./tools/resolveCitation.ts";
 import { registerSearchDocsTool } from "./tools/searchDocs.ts";
+import { getKnowledgeConfig } from "../../common/env.ts";
+import { ensureNotesDb } from "../../common/notesDb.ts";
+import { isReadOnlyProcess } from "../../common/runtime.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -45,4 +49,17 @@ export default function (pi: ExtensionAPI): void {
   registerSearchDocsTool(pi);
   registerListTagsTool(pi);
   registerResolveCitationTool(pi);
+
+  pi.on("session_start", async (_event, ctx) => {
+    if (isReadOnlyProcess()) return;
+
+    try {
+      const db = await ensureNotesDb(ctx.cwd);
+      const knowledgeDir = getKnowledgeConfig(ctx.cwd).dir;
+      await reindexChanged(db, knowledgeDir);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[para-knowledge] session_start reindex failed: ${msg}`);
+    }
+  });
 }

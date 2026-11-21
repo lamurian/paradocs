@@ -10,10 +10,26 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 import type { SqliteDb, DocIndex } from "../../extensions/para-knowledge/sqlite-types.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const mocks = vi.hoisted(() => ({
+  ensureNotesDb: vi.fn(),
+  reindexChanged: vi.fn(),
+}));
+
+vi.mock("../../common/notesDb.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../common/notesDb.ts")>();
+  return { ...actual, ensureNotesDb: mocks.ensureNotesDb };
+});
+
+vi.mock("../../extensions/para-knowledge/reindex.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../extensions/para-knowledge/reindex.ts")>();
+  return { ...actual, reindexChanged: mocks.reindexChanged };
+});
 
 describe("para-knowledge extension registration", () => {
   it("registers exactly search_para_docs, list_para_tags and resolve_citation", async () => {
@@ -24,11 +40,100 @@ describe("para-knowledge extension registration", () => {
       registerTool: (tool: { name: string }) => {
         registered.push(tool.name);
       },
+      on: () => {
+        // session_start handler is exercised in the suite below
+      },
     } as unknown as ExtensionAPI;
 
     paraKnowledge(fakePi);
 
     expect(registered).toEqual(["search_para_docs", "list_para_tags", "resolve_citation"]);
+  });
+});
+
+describe("para-knowledge session_start handler", () => {
+  const envKeys = [
+    "PARADOCS_READONLY",
+    "PI_UNIT_FILE",
+    "PI_CONTRACT_GUARD_FILE",
+    "KNOWLEDGE_DIR",
+  ] as const;
+  const originalEnv: Record<string, string | undefined> = {};
+  let handlers: Record<string, (event: unknown, ctx: unknown) => unknown> = {};
+
+  /** Register the extension and capture its event handlers. */
+  async function registerHandlers(): Promise<void> {
+    handlers = {};
+    const fakePi = {
+      registerTool: vi.fn(),
+      on: (name: string, handler: (event: unknown, ctx: unknown) => unknown) => {
+        handlers[name] = handler;
+      },
+    } as unknown as ExtensionAPI;
+    const { default: paraKnowledge } = await import("../../extensions/para-knowledge/index.ts");
+    paraKnowledge(fakePi);
+  }
+
+  beforeEach(() => {
+    for (const key of envKeys) {
+      originalEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    mocks.ensureNotesDb.mockReset();
+    mocks.reindexChanged.mockReset();
+  });
+
+  afterEach(() => {
+    for (const key of envKeys) {
+      const value = originalEnv[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    vi.restoreAllMocks();
+  });
+
+  it("reindexes after ensuring notes.db when the process is writable", async () => {
+    process.env.KNOWLEDGE_DIR = "/tmp/para-knowledge";
+    const db = { fake: "db" };
+    mocks.ensureNotesDb.mockResolvedValue(db);
+    mocks.reindexChanged.mockResolvedValue({ indexed: 1, removed: 0, unchanged: 2 });
+    await registerHandlers();
+
+    await handlers.session_start({}, { cwd: "/tmp/project" });
+
+    expect(mocks.ensureNotesDb).toHaveBeenCalledWith("/tmp/project");
+    expect(mocks.reindexChanged).toHaveBeenCalledWith(db, "/tmp/para-knowledge");
+  });
+
+  it("does nothing when PARADOCS_READONLY is set", async () => {
+    process.env.PARADOCS_READONLY = "1";
+    await registerHandlers();
+
+    await handlers.session_start({}, { cwd: "/tmp/project" });
+
+    expect(mocks.ensureNotesDb).not.toHaveBeenCalled();
+    expect(mocks.reindexChanged).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when running as a pi-workflow unit", async () => {
+    process.env.PI_UNIT_FILE = "/tmp/unit.json";
+    await registerHandlers();
+
+    await handlers.session_start({}, { cwd: "/tmp/project" });
+
+    expect(mocks.ensureNotesDb).not.toHaveBeenCalled();
+    expect(mocks.reindexChanged).not.toHaveBeenCalled();
+  });
+
+  it("warns instead of throwing when reindexing fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mocks.ensureNotesDb.mockRejectedValue(new Error("db unavailable"));
+    await registerHandlers();
+
+    await expect(handlers.session_start({}, { cwd: "/tmp/project" })).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      "[para-knowledge] session_start reindex failed: db unavailable",
+    );
   });
 });
 

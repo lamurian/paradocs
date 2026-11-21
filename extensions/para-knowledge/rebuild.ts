@@ -14,6 +14,7 @@ import { resolve } from "node:path";
 
 import { createDb, initDb, indexFile } from "./db-sqlite.ts";
 import { scanAllParaDirs, parseFile } from "./files.ts";
+import { getKnowledgeConfig } from "../../common/env.ts";
 
 import type { DocIndex } from "./db-sqlite.ts";
 
@@ -28,7 +29,7 @@ import type { DocIndex } from "./db-sqlite.ts";
  */
 export async function rebuildDb(knowledgeDir: string): Promise<number> {
   const entries = await scanAllParaDirs(knowledgeDir);
-  const dbPath = resolve(knowledgeDir, "notes.db");
+  const dbPath = resolve(knowledgeDir, getKnowledgeConfig().db);
   mkdirSync(knowledgeDir, { recursive: true });
   const db = createDb(dbPath);
   initDb(db);
@@ -37,7 +38,7 @@ export async function rebuildDb(knowledgeDir: string): Promise<number> {
   try {
     for (const entry of entries) {
       const parsed = await parseFile(entry);
-      const now = new Date().toISOString();
+      const fileMtime = new Date(entry.mtimeMs).toISOString();
       const doc: DocIndex = {
         path: entry.path,
         title: parsed.title,
@@ -45,9 +46,9 @@ export async function rebuildDb(knowledgeDir: string): Promise<number> {
         tags: parsed.tags,
         author: parsed.author || "pi",
         editor: parsed.editor || "",
-        created: parsed.created ?? now,
-        modified: now,
-        file_mtime: now,
+        created: parsed.created ?? fileMtime,
+        modified: fileMtime,
+        file_mtime: fileMtime,
         source_url: parsed.source_url,
         description: parsed.description,
         reviewed: parsed.reviewed,

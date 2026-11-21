@@ -2,7 +2,15 @@
  * Tests for rebuildDb — scans PARA directories, indexes all .md files.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+  existsSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -35,6 +43,7 @@ Body of ${slug}.`;
   });
 
   afterEach(() => {
+    delete process.env.KNOWLEDGE_DB;
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -114,6 +123,32 @@ Body of ${slug}.`;
     expect(results).toHaveLength(1);
     const results2 = searchDocs(db, "new");
     expect(results2).toHaveLength(1);
+    db.close();
+  });
+
+  it("stores the real file mtime and uses the configured DB name", async () => {
+    const rel = writeDoc("Resources", "mtime-doc");
+    const abs = join(knowledgeDir, rel);
+    const mtime = new Date("2031-05-06T07:08:09.000Z");
+    utimesSync(abs, mtime, mtime);
+
+    process.env.KNOWLEDGE_DB = "custom-notes.db";
+
+    const { rebuildDb } = await import("../../extensions/para-knowledge/rebuild.ts");
+    const count = await rebuildDb(knowledgeDir);
+    expect(count).toBe(1);
+
+    const dbPath = resolve(knowledgeDir, "custom-notes.db");
+    expect(existsSync(dbPath)).toBe(true);
+    expect(existsSync(resolve(knowledgeDir, "notes.db"))).toBe(false);
+
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/db-sqlite.ts");
+    const db = createDb(dbPath);
+    initDb(db);
+    const row = db
+      .prepare("SELECT file_mtime FROM files WHERE path = ?")
+      .get<{ file_mtime: string }>(rel);
+    expect(row?.file_mtime).toBe(statSync(abs).mtime.toISOString());
     db.close();
   });
 
