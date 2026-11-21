@@ -2,50 +2,31 @@
  * Link Summarizer Extension — tool wrapper around common/fetchUrl.ts.
  *
  * Thin adapter: the fetch_url tool delegates to fetchUrlAsText and
- * formats the result with human-readable metadata. The batch_extract_failed
- * tool (Tavily batch for URLs that failed primary extraction) stays inline.
+ * formats the result with human-readable metadata.
  *
  * @module extensions/link-summarizer/index
  */
 
 import { Type } from "typebox";
 
-import { addFailedUrl, extractBatch, hasPending } from "./tavily-extract.ts";
 import { fetchUrlAsText } from "../../common/fetchUrl.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-/** Constants for the batch_extract_failed tool formatting. */
-const MAX_CONTENT_CHARS = 80_000;
-
-function truncate(text: string): { body: string; truncated: boolean } {
-  if (text.length <= MAX_CONTENT_CHARS) return { body: text, truncated: false };
-  return {
-    body:
-      text.slice(0, MAX_CONTENT_CHARS) +
-      `\n\n[... content truncated to ${MAX_CONTENT_CHARS.toLocaleString()} characters ...]`,
-    truncated: true,
-  };
-}
-
-function formatToolContent(
-  title: string,
-  url: string,
-  body: string,
-  engine: string,
-  length: number,
-  truncated: boolean,
-): string {
-  return (
-    `📄 **${title}**\n🔗 ${url}\n` +
-    `${engine} · ${length.toLocaleString()} chars` +
-    (truncated ? ` (truncated to ${MAX_CONTENT_CHARS.toLocaleString()})` : "") +
-    `\n\n━━━ Content ━━━\n\n${body}`
-  );
-}
+/** Human-readable labels for the extraction engines. */
+const ENGINE_LABELS: Record<string, string> = {
+  "obscura-cdp": "Obscura headless browser",
+  "http-fallback": "HTTP fallback (Obscura not available)",
+  pdftotext: "PDF extracted via pdftotext",
+  "tavily-extract": "Tavily extract",
+};
 
 /**
  * Format the shared fetchUrlAsText result into a tool response.
+ *
+ * @param result - Successful extraction or an error object.
+ * @param url    - The URL that was fetched.
+ * @returns Tool content, details, and an isError flag on failure.
  */
 function formatToolResponse(
   result: { title: string; content: string; engine: string } | { error: string },
@@ -56,27 +37,19 @@ function formatToolResponse(
   isError?: boolean;
 } {
   if ("error" in result) {
-    addFailedUrl(url);
     return {
       content: [
         {
           type: "text" as const,
-          text: `Obscura not available and HTTP fallback failed.\n\n🔗 ${url}\n⚠️ ${result.error}\n\nURL queued for Tavily batch extraction. Call \`batch_extract_failed\` to process all queued URLs.`,
+          text: `Obscura not available and HTTP fallback failed.\n\n🔗 ${url}\n⚠️ ${result.error}`,
         },
       ],
-      details: { url, error: result.error, queuedForTavily: true },
+      details: { url, error: result.error },
       isError: true,
     };
   }
 
-  const engineLabel =
-    result.engine === "obscura-cdp"
-      ? "Obscura headless browser"
-      : result.engine === "http-fallback"
-        ? "HTTP fallback (Obscura not available)"
-        : result.engine === "pdftotext"
-          ? "PDF extracted via pdftotext"
-          : result.engine;
+  const engineLabel = ENGINE_LABELS[result.engine] ?? result.engine;
 
   return {
     content: [
@@ -94,104 +67,8 @@ function formatToolResponse(
   };
 }
 
+/** Register the fetch_url tool with pi. */
 export default function (pi: ExtensionAPI) {
-  pi.registerTool({
-    name: "batch_extract_failed",
-    label: "Batch Extract Failed URLs",
-    description:
-      "Process all URLs that failed Obscura and HTTP extraction via Tavily extract API. " +
-      "Accumulated from previous fetch_url calls. Tavily handles JavaScript rendering, " +
-      "making it suitable for SPAs and JS-heavy pages.",
-    promptSnippet:
-      "Batch-extract URLs that failed Obscura+HTTP extraction. Uses Tavily extract API.",
-    parameters: Type.Object({
-      format: Type.Optional(
-        Type.Enum(
-          { markdown: "markdown", text: "text" },
-          { description: "Output format (default: markdown)" },
-        ),
-      ),
-      extractDepth: Type.Optional(
-        Type.Enum(
-          { basic: "basic", advanced: "advanced" },
-          { description: "Extraction depth (default: advanced)" },
-        ),
-      ),
-    }),
-
-    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-      const { format, extractDepth } = params;
-
-      if (!hasPending()) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "No URLs are pending batch extraction. All previous fetch_url calls succeeded or no URLs were fetched yet.",
-            },
-          ],
-          details: { total: 0 },
-        };
-      }
-
-      let results;
-      try {
-        results = await extractBatch({
-          format: format as "markdown" | "text" | undefined,
-          extractDepth: extractDepth as "basic" | "advanced" | undefined,
-        });
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text" as const, text: `Tavily batch extraction failed: ${msg}` }],
-          details: { error: msg },
-          isError: true,
-        };
-      }
-
-      const succeeded = results.filter((r) => r.success);
-      const failed = results.filter((r) => !r.success);
-
-      const lines: string[] = [];
-      lines.push(
-        `**Tavily batch extract** — ${results.length} URL${results.length === 1 ? "" : "s"}`,
-      );
-      if (succeeded.length) {
-        lines.push(`**Succeeded:** ${succeeded.length}`);
-        for (const r of succeeded) {
-          const title = r.title ?? "(no title)";
-          const { body, truncated } = truncate(r.markdown);
-          lines.push("");
-          lines.push(
-            formatToolContent(title, r.url, body, "Tavily extract", r.markdown.length, truncated),
-          );
-        }
-      }
-      if (failed.length) {
-        lines.push(`**Failed:** ${failed.length}`);
-        for (const r of failed) {
-          lines.push(`\n🔗 ${r.url}\n⚠️ ${r.error ?? "Unknown error"}`);
-        }
-      }
-
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-        details: {
-          total: results.length,
-          succeeded: succeeded.length,
-          failed: failed.length,
-          results: results.map((r) => ({
-            url: r.url,
-            title: r.title,
-            success: r.success,
-            error: r.error,
-            extractedLength: r.success ? r.markdown.length : undefined,
-          })),
-        },
-      };
-    },
-  });
-
   pi.registerTool({
     name: "fetch_url",
     label: "Fetch URL",

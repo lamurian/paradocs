@@ -2,103 +2,67 @@
  * Tavily extract API for link-summarizer.
  * Last-resort fallback when both Obscura (CDP) and HTTP extraction fail.
  *
- * Accumulates URLs that failed all prior extraction methods and
- * batch-processes them via Tavily's extract API in a single request.
- * Tavily handles JavaScript rendering, making it suitable for SPAs
- * and JS-heavy pages that Obscura could not reach.
+ * Tavily handles JavaScript rendering, making it suitable for SPAs and
+ * JS-heavy pages that Obscura could not reach.
+ *
+ * @module extensions/link-summarizer/tavily-extract
  */
 
 import { tavily } from "@tavily/core";
 
 import { getApiKeys } from "../../common/env.ts";
 
-/**
- * Module-level accumulator for URLs where both Obscura and HTTP
- * extraction failed. Same URL is never added twice (Set).
- */
-const pendingUrls: Set<string> = new Set();
-
-/** Add a URL to the pending extraction queue. */
-export function addFailedUrl(url: string): void {
-  pendingUrls.add(url);
-}
-
-/** Get all currently pending URLs. */
-export function getPendingUrls(): string[] {
-  return [...pendingUrls];
-}
-
-/** Clear the pending queue. No-op if already empty. */
-export function clearPending(): void {
-  pendingUrls.clear();
-}
-
-/** Check whether any URLs are pending batch extraction. */
-export function hasPending(): boolean {
-  return pendingUrls.size > 0;
-}
-
-/** Result for a single extracted URL. */
-export interface BatchExtractResult {
-  url: string;
-  title: string | null;
-  markdown: string;
-  success: boolean;
-  error?: string;
+/** Extracted content returned by a successful Tavily extract. */
+export interface TavilyExtractContent {
+  title: string;
+  content: string;
 }
 
 /**
- * Extract content from all accumulated URLs via Tavily's extract API.
+ * Extract a single URL via Tavily's extract API.
  *
- * Processes all pending URLs in a single network request, then clears
- * the queue. Each URL returns either a successful result (markdown
- * content) or a failure record with an error message.
+ * The API key is read from TAVILY_KEY. On success returns the extracted
+ * title and raw markdown content; on failure returns an error string.
  *
- * @param options - optional overrides (format, extractDepth)
- * @returns array of per-URL results
+ * @param url    - The URL to extract.
+ * @param signal - Optional AbortSignal for cancellation.
+ * @returns Extracted content, or `{ error }` when extraction fails.
  */
-export async function extractBatch(options?: {
-  format?: "markdown" | "text";
-  extractDepth?: "basic" | "advanced";
-}): Promise<BatchExtractResult[]> {
+export async function extractWithTavily(
+  url: string,
+  signal?: AbortSignal,
+): Promise<TavilyExtractContent | { error: string }> {
+  if (signal?.aborted) {
+    return { error: "Cancelled by caller" };
+  }
+
   const apiKey = getApiKeys().tavily;
   if (!apiKey) {
-    throw new Error("TAVILY_KEY environment variable not set");
+    return { error: "TAVILY_KEY environment variable not set" };
   }
 
-  const urls = getPendingUrls();
-  if (urls.length === 0) return [];
-
-  const client = tavily({ apiKey });
-
-  const response = await client.extract(urls, {
-    format: options?.format ?? "markdown",
-    extractDepth: options?.extractDepth ?? "advanced",
-  });
-
-  // Clear queue — caller can re-queue individual URLs if needed
-  clearPending();
-
-  const results: BatchExtractResult[] = [];
-
-  for (const r of response.results) {
-    results.push({
-      url: r.url,
-      title: r.title,
-      markdown: r.rawContent,
-      success: true,
+  try {
+    const client = tavily({ apiKey });
+    const response = await client.extract([url], {
+      format: "markdown",
+      extractDepth: "advanced",
     });
-  }
 
-  for (const f of response.failedResults) {
-    results.push({
-      url: f.url,
-      title: null,
-      markdown: "",
-      success: false,
-      error: f.error,
-    });
-  }
+    const result = response.results[0];
+    if (result) {
+      return {
+        title: result.title ?? "(no title)",
+        content: result.rawContent,
+      };
+    }
 
-  return results;
+    const failed = response.failedResults[0];
+    if (failed) {
+      return { error: failed.error };
+    }
+
+    return { error: "Tavily extract returned no results" };
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
 }

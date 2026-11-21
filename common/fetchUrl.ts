@@ -4,17 +4,17 @@
  * 1. PDF detection → pdftotext
  * 2. Obscura CDP → headless browser markdown
  * 3. HTTP fallback → HTML stripping
- * 4. If all fail → return { error }
- *
- * Tavily batch extraction (for failed URLs) stays in the
- * link-summarizer tool — this module only covers the primary chain.
+ * 4. Tavily extract fallback (when TAVILY_KEY is set)
+ * 5. If all fail → return { error }
  *
  * @module common/fetchUrl
  */
 
+import { getApiKeys } from "./env.ts";
 import { tryObscura } from "../extensions/link-summarizer/cdp.ts";
 import { fetchViaHttp } from "../extensions/link-summarizer/http.ts";
 import { tryExtractPdf, isPdfUrl } from "../extensions/link-summarizer/pdf.ts";
+import { extractWithTavily } from "../extensions/link-summarizer/tavily-extract.ts";
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -173,5 +173,20 @@ export async function fetchUrlAsText(
   }
 
   // HTML pipeline (Obscura → HTTP → PDF fallback)
-  return await handleHtml(url, signal);
+  const result = await handleHtml(url, signal);
+  if (!("error" in result)) return result;
+
+  // Last resort: Tavily extract when an API key is configured
+  if (getApiKeys().tavily) {
+    const tavilyResult = await extractWithTavily(url, signal);
+    if (!("error" in tavilyResult)) {
+      return {
+        title: tavilyResult.title,
+        content: tavilyResult.content,
+        engine: "tavily-extract",
+      };
+    }
+  }
+
+  return result;
 }

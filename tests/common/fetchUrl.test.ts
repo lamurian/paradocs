@@ -9,6 +9,35 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+const tavilyExtractMock = vi.hoisted(() => vi.fn());
+const mockApiKeys = vi.hoisted(() => ({ tavily: "" }));
+
+vi.mock("@tavily/core", () => ({
+  tavily: () => ({ extract: tavilyExtractMock }),
+}));
+
+vi.mock("../../common/env.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../common/env.ts")>();
+  return {
+    ...actual,
+    getApiKeys: () => ({ tavily: mockApiKeys.tavily, github: "" }),
+  };
+});
+
+beforeEach(() => {
+  // isolate=false shares the module registry, so force a fresh graph that
+  // uses the @tavily/core mock below.
+  vi.resetModules();
+  // Keep Tavily unavailable by default so the primary pipeline is exercised.
+  mockApiKeys.tavily = "";
+  tavilyExtractMock.mockReset();
+});
+
+afterEach(() => {
+  mockApiKeys.tavily = "";
+  vi.resetModules();
+});
+
 describe("fetchUrlWithTimeout", () => {
   let originalFetch: typeof globalThis.fetch;
   let originalWs: typeof globalThis.WebSocket;
@@ -174,5 +203,70 @@ describe("fetchUrlAsText shared module", () => {
     const result = await fetchUrlAsText("https://example.com/failing");
 
     expect(result).toHaveProperty("error");
+  });
+});
+
+describe("fetchUrlAsText Tavily extract fallback", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    tavilyExtractMock.mockReset();
+    // All primary engines fail: no WebSocket (Obscura) and fetch rejects.
+    vi.stubGlobal(
+      "WebSocket",
+      vi.fn(function () {
+        throw new Error("WebSocket not available");
+      }),
+    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("should return Tavily-extracted content when TAVILY_KEY is set", async () => {
+    mockApiKeys.tavily = "test-key";
+    tavilyExtractMock.mockResolvedValue({
+      results: [{ url: "https://example.com/spa", title: "SPA Page", rawContent: "# SPA" }],
+      failedResults: [],
+    });
+
+    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const result = await fetchUrlAsText("https://example.com/spa");
+
+    expect(result).toEqual({
+      title: "SPA Page",
+      content: "# SPA",
+      engine: "tavily-extract",
+    });
+  });
+
+  it("should return the original error when Tavily extraction fails", async () => {
+    mockApiKeys.tavily = "test-key";
+    tavilyExtractMock.mockResolvedValue({
+      results: [],
+      failedResults: [{ url: "https://example.com/spa", error: "Tavily failed" }],
+    });
+
+    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const result = await fetchUrlAsText("https://example.com/spa");
+
+    expect(result).toHaveProperty("error");
+    if ("error" in result) {
+      expect(result.error).not.toBe("Tavily failed");
+      expect(result.error).toBeTruthy();
+    }
+  });
+
+  it("should return the original error when TAVILY_KEY is unset", async () => {
+    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const result = await fetchUrlAsText("https://example.com/spa");
+
+    expect(result).toHaveProperty("error");
+    expect(tavilyExtractMock).not.toHaveBeenCalled();
   });
 });
