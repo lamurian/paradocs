@@ -7,6 +7,8 @@
  * - `docs_fts` — FTS5 full-text search index
  */
 
+import { extractCitekeys } from "../../common/citekeys.ts";
+
 import type { SqliteDb, DocIndex } from "./sqlite-types.ts";
 
 // ── Insert or update a document ──
@@ -25,9 +27,22 @@ export function indexFile(db: SqliteDb, doc: DocIndex): void {
 
   // Files table (upsert)
   db.prepare(
-    `INSERT OR REPLACE INTO files (path, title, author, editor, created, modified, file_mtime, source_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(doc.path, doc.title, doc.author, doc.editor, created, modified, fileMtime, doc.source_url);
+    `INSERT OR REPLACE INTO files
+       (path, title, author, editor, created, modified, file_mtime, source_url, description, reviewed, review_interval)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    doc.path,
+    doc.title,
+    doc.author,
+    doc.editor,
+    created,
+    modified,
+    fileMtime,
+    doc.source_url,
+    doc.description ?? null,
+    doc.reviewed ?? null,
+    doc.reviewInterval ?? null,
+  );
 
   // Tags (delete all, insert fresh)
   db.prepare("DELETE FROM tags WHERE file_path = ?").run(doc.path);
@@ -44,6 +59,16 @@ export function indexFile(db: SqliteDb, doc: DocIndex): void {
     doc.body,
     tagsCsv,
   );
+
+  // Note citations (replace all rows for this path)
+  db.prepare("DELETE FROM note_citations WHERE file_path = ?").run(doc.path);
+  const citekeys = doc.citekeys ?? extractCitekeys(doc.body);
+  for (const citekey of citekeys) {
+    db.prepare("INSERT OR IGNORE INTO note_citations (file_path, citekey) VALUES (?, ?)").run(
+      doc.path,
+      citekey,
+    );
+  }
 }
 
 // ── Remove a document ──
@@ -54,6 +79,7 @@ export function indexFile(db: SqliteDb, doc: DocIndex): void {
 export function removeFile(db: SqliteDb, path: string): void {
   db.prepare("DELETE FROM files WHERE path = ?").run(path);
   db.prepare("DELETE FROM tags WHERE file_path = ?").run(path);
+  db.prepare("DELETE FROM note_citations WHERE file_path = ?").run(path);
   deleteFtsEntry(db, path);
 }
 

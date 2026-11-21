@@ -36,7 +36,6 @@ describe("indexFile", () => {
     const doc = makeDoc();
     indexFile(db, doc);
 
-    // Verify files table
     const fileRow = db
       .prepare("SELECT path, title, author FROM files WHERE path = ?")
       .get<{ path: string; title: string; author: string }>(doc.path);
@@ -44,13 +43,11 @@ describe("indexFile", () => {
     expect(fileRow?.title).toBe(doc.title);
     expect(fileRow?.author).toBe(doc.author);
 
-    // Verify tags table
     const tagRows = db
       .prepare("SELECT tag FROM tags WHERE file_path = ? ORDER BY tag")
       .all<{ tag: string }>(doc.path);
     expect(tagRows.map((r) => r.tag)).toEqual(["tag1", "tag2"]);
 
-    // Verify FTS5
     const ftsRows = db
       .prepare("SELECT path, title, body FROM docs_fts WHERE path = ?")
       .all<{ path: string; title: string; body: string }>(doc.path);
@@ -70,19 +67,16 @@ describe("indexFile", () => {
     });
     indexFile(db, updated);
 
-    // Verify updated file metadata
     const fileRow = db
       .prepare("SELECT title FROM files WHERE path = ?")
       .get<{ title: string }>(updated.path);
     expect(fileRow?.title).toBe("Updated Title");
 
-    // Verify tags were replaced (tag2 removed, tag3 added)
     const tagRows = db
       .prepare("SELECT tag FROM tags WHERE file_path = ? ORDER BY tag")
       .all<{ tag: string }>(updated.path);
     expect(tagRows.map((r) => r.tag)).toEqual(["tag1", "tag3"]);
 
-    // Verify FTS5 updated
     const ftsRow = db
       .prepare("SELECT body FROM docs_fts WHERE path = ?")
       .get<{ body: string }>(updated.path);
@@ -123,6 +117,63 @@ describe("indexFile", () => {
       .prepare("SELECT tag FROM tags WHERE file_path = ? ORDER BY tag")
       .all<{ tag: string }>(doc.path);
     expect(tagRows.map((r) => r.tag)).toEqual(["c#", "c++", "tag:with:colons"]);
+  });
+
+  it("should store description, reviewed and review_interval in files", async () => {
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
+    const doc = makeDoc({
+      description: "A short summary",
+      reviewed: "2026-05-01",
+      reviewInterval: 30,
+    });
+    indexFile(db, doc);
+
+    const row = db
+      .prepare("SELECT description, reviewed, review_interval FROM files WHERE path = ?")
+      .get<{
+        description: string | null;
+        reviewed: string | null;
+        review_interval: number | null;
+      }>(doc.path);
+    expect(row?.description).toBe("A short summary");
+    expect(row?.reviewed).toBe("2026-05-01");
+    expect(row?.review_interval).toBe(30);
+  });
+
+  it("should index citekeys from the body and ignore emails", async () => {
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
+    const doc = makeDoc({
+      body: "See @smith2020 and @jones2021. Contact a@b.com for details.",
+    });
+    indexFile(db, doc);
+
+    const rows = db
+      .prepare("SELECT citekey FROM note_citations WHERE file_path = ? ORDER BY citekey")
+      .all<{ citekey: string }>(doc.path);
+    expect(rows.map((r) => r.citekey)).toEqual(["jones2021", "smith2020"]);
+  });
+
+  it("should replace a note's note_citations rows on reindex", async () => {
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
+    const doc = makeDoc({ body: "@oldkey" });
+    indexFile(db, doc);
+    indexFile(db, makeDoc({ body: "@newkey" }));
+
+    const rows = db
+      .prepare("SELECT citekey FROM note_citations WHERE file_path = ? ORDER BY citekey")
+      .all<{ citekey: string }>(doc.path);
+    expect(rows.map((r) => r.citekey)).toEqual(["newkey"]);
+  });
+
+  it("should use explicit citekeys when provided", async () => {
+    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
+    const doc = makeDoc({ body: "@bodykey", citekeys: ["explicit1", "explicit2"] });
+    indexFile(db, doc);
+
+    const rows = db
+      .prepare("SELECT citekey FROM note_citations WHERE file_path = ? ORDER BY citekey")
+      .all<{ citekey: string }>(doc.path);
+    expect(rows.map((r) => r.citekey)).toEqual(["explicit1", "explicit2"]);
   });
 });
 
@@ -182,7 +233,7 @@ describe("removeFile", () => {
   it("should remove a document from all tables", async () => {
     const { indexFile, removeFile, getFileTags } =
       await import("../../extensions/para-knowledge/sqlite-indexing.ts");
-    const doc = makeDoc();
+    const doc = makeDoc({ body: "See @doomed2020" });
     indexFile(db, doc);
     removeFile(db, doc.path);
 
@@ -201,6 +252,12 @@ describe("removeFile", () => {
       .prepare("SELECT COUNT(*) AS cnt FROM docs_fts WHERE path = ?")
       .get<{ cnt: number }>(doc.path);
     expect(ftsRow?.cnt).toBe(0);
+
+    // Verify note_citations are gone
+    const citationRow = db
+      .prepare("SELECT COUNT(*) AS cnt FROM note_citations WHERE file_path = ?")
+      .get<{ cnt: number }>(doc.path);
+    expect(citationRow?.cnt).toBe(0);
   });
 
   it("should not throw when removing a non-existent file", async () => {

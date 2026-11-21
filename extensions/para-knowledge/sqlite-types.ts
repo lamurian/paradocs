@@ -31,6 +31,14 @@ export interface DocIndex {
   modified: string | null;
   file_mtime: string | null;
   source_url: string | null;
+  /** Brief summary, stored in the files.description column. */
+  description?: string | null;
+  /** ISO date of the last manual review. */
+  reviewed?: string | null;
+  /** Days until the next review is due. */
+  reviewInterval?: number | null;
+  /** Citekeys to index; when undefined, derived from body via extractCitekeys. */
+  citekeys?: string[];
 }
 
 /** A search result returned by FTS5 BM25 search. */

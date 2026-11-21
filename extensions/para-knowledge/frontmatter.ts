@@ -2,7 +2,8 @@
  * YAML frontmatter parsing and formatting for PARA markdown files.
  *
  * Standardised frontmatter fields (in order):
- *   title, description, author, editor, date, tags, source
+ *   title, description, author, editor, date, tags, source, reviewed,
+ *   review_interval
  *
  * Values with YAML-special characters (colons, hashes, brackets, etc.)
  * are automatically quoted to produce valid YAML.
@@ -143,6 +144,17 @@ export function parseFrontmatter(content: string): Frontmatter {
   if (typeof result.description === "string") {
     fm.description = result.description;
   }
+  if (typeof result.reviewed === "string") {
+    fm.reviewed = result.reviewed;
+  }
+  if (result.review_interval !== undefined) {
+    const parsed = Number(result.review_interval);
+    if (Number.isFinite(parsed)) {
+      fm.review_interval = parsed;
+    } else {
+      delete fm.review_interval;
+    }
+  }
 
   return fm;
 }
@@ -198,6 +210,8 @@ function emitLegacyFields(
     if (typeof v === "string" && v) {
       if ((k === "source_url" || k === "url") && sourceVal) continue;
       out += `${k}: ${yamlQuote(v)}\n`;
+    } else if (typeof v === "number" && Number.isFinite(v)) {
+      out += `${k}: ${v}\n`;
     }
   }
   return out;

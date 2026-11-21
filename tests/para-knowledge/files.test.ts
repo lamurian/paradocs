@@ -261,4 +261,30 @@ describe("parseFile", () => {
     expect(parsed.title).toBe("Empty Doc");
     expect(parsed.body).toBe("");
   });
+
+  it("should expose reviewed and review_interval from frontmatter", async () => {
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
+    writeMarkdown(
+      tmpDir,
+      "Resources",
+      "reviewed.md",
+      "title: Reviewed\nreviewed: 2026-05-01\nreview_interval: 30",
+      "Reviewed body.",
+    );
+
+    const entries = await scanParaDir("Resources", tmpDir);
+    const parsed = await parseFile(entries[0]);
+    expect(parsed.reviewed).toBe("2026-05-01");
+    expect(parsed.review_interval).toBe(30);
+  });
+
+  it("should default reviewed and review_interval to null", async () => {
+    const { scanParaDir, parseFile } = await import("../../extensions/para-knowledge/files.ts");
+    writeMarkdown(tmpDir, "Areas", "noreview.md", "title: No Review", "Body.");
+
+    const entries = await scanParaDir("Areas", tmpDir);
+    const parsed = await parseFile(entries[0]);
+    expect(parsed.reviewed).toBeNull();
+    expect(parsed.review_interval).toBeNull();
+  });
 });

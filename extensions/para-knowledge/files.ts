@@ -59,6 +59,8 @@ export async function parseFile(entry: FileEntry): Promise<ParsedFile> {
     created: fm.date ?? fm.created ?? null,
     description: fm.description ?? null,
     source_url: fm.source_url ?? null,
+    reviewed: fm.reviewed ?? null,
+    review_interval: fm.review_interval ?? null,
   };
 }
 

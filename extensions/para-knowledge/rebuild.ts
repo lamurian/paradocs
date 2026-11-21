@@ -49,6 +49,9 @@ export async function rebuildDb(knowledgeDir: string): Promise<number> {
         modified: now,
         file_mtime: now,
         source_url: parsed.source_url,
+        description: parsed.description,
+        reviewed: parsed.reviewed,
+        reviewInterval: parsed.review_interval,
       };
       indexFile(db, doc);
       count++;

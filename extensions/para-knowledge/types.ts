@@ -26,6 +26,10 @@ export interface Frontmatter {
   modified?: string;
   /** Original source URL the document summarises (optional). */
   source_url?: string;
+  /** ISO date of the last manual review (optional). */
+  reviewed?: string;
+  /** Days until the next review is due (optional). */
+  review_interval?: number;
 }
 
 /** A markdown file discovered on the filesystem. */
@@ -50,6 +54,10 @@ export interface ParsedFile {
   description: string | null;
   /** Original source URL the document summarises (optional). */
   source_url: string | null;
+  /** ISO date of the last manual review (optional). */
+  reviewed: string | null;
+  /** Days until the next review is due (optional). */
+  review_interval: number | null;
 }
 
 /** A search result returned by BM25 or tag-only search. */
