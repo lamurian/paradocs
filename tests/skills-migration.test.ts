@@ -34,18 +34,4 @@ describe("tool descriptions contain conventions", () => {
     const content = readFileSync("extensions/web-search/index.ts", "utf-8");
     expect(content).toMatch(/tier|category|fallback/i);
   });
-
-  it("create_para_doc description should include citation format", () => {
-    const content = readFileSync("extensions/para-knowledge/tools/createDoc.ts", "utf-8");
-    expect(content).toContain("@citekey");
-    expect(content).toContain("PARA classification");
-    expect(content).toContain("Atomic principle");
-  });
-
-  it("batch_create_para_docs description should include conventions", () => {
-    const content = readFileSync("extensions/batch-create/index.ts", "utf-8");
-    expect(content).toContain("@citekey");
-    expect(content).toContain("PARA classification");
-    expect(content).toContain("Atomic principle");
-  });
 });

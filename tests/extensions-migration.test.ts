@@ -16,16 +16,11 @@ const EXTENSIONS: Record<string, string[]> = {
     "sqlite-search.ts",
     "sqlite-types.ts",
     "tools/searchDocs.ts",
-    "tools/createDoc.ts",
-    "tools/updateDoc.ts",
     "tools/listTags.ts",
-    "tools/findExistingSummary.ts",
     "tools/resolveCitation.ts",
   ],
   "web-search": ["index.ts", "AGENTS.md", "native.ts", "searxng.ts", "tavily.ts"],
   "link-summarizer": ["index.ts", "cdp.ts", "http.ts", "pdf.ts", "tavily-extract.ts"],
-  "batch-create": ["index.ts", "search.ts", "yaml.ts"],
-  "expand-bullets": ["index.ts", "parser.ts", "search.ts", "synthesis.ts"],
   "yaml-enforcer": [
     "index.ts",
     "analyzer.ts",
@@ -46,12 +41,6 @@ describe("extension file existence", () => {
       }
     });
   }
-});
-
-describe("skill-gate.ts", () => {
-  it("should exist as a single file in extensions/", () => {
-    expect(existsSync("extensions/skill-gate.ts")).toBe(true);
-  });
 });
 
 const EXT_TS_FILES = getAllExtensionTsFiles();

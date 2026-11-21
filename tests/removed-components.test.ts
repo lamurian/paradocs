@@ -14,6 +14,16 @@ const REMOVED_COMPONENTS = [
   "common/subagent.ts",
   "common/subagent-args.ts",
   "common/extractJson.ts",
+  "common/atomicity.ts",
+  "common/atomicity-parse.ts",
+  "common/atomicity-prompts.ts",
+  "common/createDocument.ts",
+  "extensions/batch-create",
+  "extensions/expand-bullets",
+  "extensions/skill-gate.ts",
+  "extensions/para-knowledge/tools/createDoc.ts",
+  "extensions/para-knowledge/tools/updateDoc.ts",
+  "extensions/para-knowledge/tools/findExistingSummary.ts",
 ];
 
 const SEARCH_PATTERNS = ["roadmap-scratchpad", "set-temperature", "scope-gate"];
