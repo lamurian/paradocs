@@ -6,9 +6,20 @@
  * @module tests/common/url.test
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
+import { fetchUrlAsText, fetchUrlWithTimeout } from "../../common/fetchUrl.ts";
 import { canonicalizeUrl, registrableDomain } from "../../common/url.ts";
+import { tryObscura } from "../../extensions/link-summarizer/cdp.ts";
+import { fetchViaHttp } from "../../extensions/link-summarizer/http.ts";
+import { tryExtractPdf } from "../../extensions/link-summarizer/pdf.ts";
+
+vi.mock("../../extensions/link-summarizer/cdp.ts", () => ({ tryObscura: vi.fn() }));
+vi.mock("../../extensions/link-summarizer/http.ts", () => ({ fetchViaHttp: vi.fn() }));
+vi.mock("../../extensions/link-summarizer/pdf.ts", () => ({
+  tryExtractPdf: vi.fn(),
+  isPdfUrl: vi.fn((url: string) => url.endsWith(".pdf")),
+}));
 
 describe("canonicalizeUrl", () => {
   it("should strip utm params, trailing slashes, and arXiv v-suffixes to one key", () => {
@@ -29,6 +40,12 @@ describe("canonicalizeUrl", () => {
 
   it("should return trimmed input for unparseable URLs", () => {
     expect(canonicalizeUrl("  htp:/bad  ")).toBe("htp:/bad");
+  });
+
+  it("should drop a bare root trailing slash", () => {
+    expect(canonicalizeUrl("https://x.com/")).toBe("https://x.com");
+    expect(canonicalizeUrl("https://x.com/?utm_source=a")).toBe("https://x.com");
+    expect(canonicalizeUrl("https://x.com/a/?utm_source=a&id=5")).toBe("https://x.com/a/?id=5");
   });
 });
 
@@ -67,5 +84,103 @@ describe("registrableDomain — lightweight eTLD+1", () => {
     ];
     const distinct = new Set(urls.map(registrableDomain));
     expect(distinct.size).toBe(3);
+  });
+});
+
+describe("shared fetchUrl extraction branches", () => {
+  const obscura = vi.mocked(tryObscura);
+  const http = vi.mocked(fetchViaHttp);
+  const pdf = vi.mocked(tryExtractPdf);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should extract a URL-detected PDF and truncate oversized text", async () => {
+    pdf.mockResolvedValue({ title: "Paper", text: "x".repeat(80_001) });
+
+    const result = await fetchUrlAsText("https://example.com/paper.pdf");
+
+    expect("content" in result).toBe(true);
+    if ("content" in result) {
+      expect(result.engine).toBe("pdftotext");
+      expect(result.content).toContain("content truncated");
+    }
+  });
+
+  it("should fall back to Obscura markdown when PDF extraction misses", async () => {
+    pdf.mockResolvedValue(null);
+    obscura.mockResolvedValue({ title: "Rendered", markdown: "# Heading\n\nBody" });
+
+    const result = await fetchUrlAsText("https://example.com/paper.pdf");
+
+    expect("content" in result).toBe(true);
+    if ("content" in result) {
+      expect(result.engine).toBe("obscura-cdp");
+      expect(result.title).toBe("Rendered");
+    }
+  });
+
+  it("should retry PDF extraction when HTTP reports a PDF content type", async () => {
+    obscura.mockResolvedValue(null);
+    http.mockResolvedValue({ error: "PDF_CONTENT_TYPE" });
+    pdf.mockResolvedValue({ title: "Inline PDF", text: "pdf text" });
+
+    const result = await fetchUrlAsText("https://example.com/download");
+
+    expect("content" in result).toBe(true);
+    if ("content" in result) expect(result.engine).toBe("pdftotext");
+  });
+
+  it("should surface the HTTP error when a PDF fallback also fails", async () => {
+    obscura.mockResolvedValue(null);
+    http.mockResolvedValue({ error: "PDF_CONTENT_TYPE" });
+    pdf.mockResolvedValue(null);
+
+    const result = await fetchUrlAsText("https://example.com/download");
+
+    expect(result).toEqual({ error: "PDF_CONTENT_TYPE" });
+  });
+
+  it("should surface a plain HTTP error", async () => {
+    obscura.mockResolvedValue(null);
+    http.mockResolvedValue({ error: "Network down" });
+
+    const result = await fetchUrlAsText("https://example.com/page");
+
+    expect(result).toEqual({ error: "Network down" });
+  });
+
+  it("should use the no-title fallback for the HTTP engine", async () => {
+    obscura.mockResolvedValue(null);
+    http.mockResolvedValue({ title: "", text: "plain body" });
+
+    const result = await fetchUrlAsText("https://example.com/page");
+
+    expect("content" in result).toBe(true);
+    if ("content" in result) {
+      expect(result.engine).toBe("http-fallback");
+      expect(result.title).toBe("(no title)");
+    }
+  });
+
+  it("should cancel immediately when the caller signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await fetchUrlWithTimeout("https://example.com/slow", 5000, controller.signal);
+
+    expect(result).toEqual({ error: "Cancelled by caller" });
+  });
+
+  it("should cancel when the caller aborts mid-flight", async () => {
+    obscura.mockResolvedValue(null);
+    http.mockReturnValue(new Promise(() => {}));
+    const controller = new AbortController();
+
+    const pending = fetchUrlWithTimeout("https://example.com/slow", 5000, controller.signal);
+    controller.abort();
+
+    expect(await pending).toEqual({ error: "Cancelled by caller" });
   });
 });
