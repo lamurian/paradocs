@@ -10,6 +10,7 @@
 import { Type } from "typebox";
 
 import { configureEnv } from "../../common/env.ts";
+import { classifyTrust } from "../../common/trust.ts";
 import { searchWeb, formatResults } from "../../common/webSearch.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -66,6 +67,7 @@ export default function (pi: ExtensionAPI): void {
             snippet: r.snippet,
             source_label: r.source_label,
             tier: r.tier,
+            trust: classifyTrust(r.url),
           })),
         },
       };

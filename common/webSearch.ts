@@ -8,6 +8,7 @@
  * @module common/webSearch
  */
 
+import { classifyTrust } from "./trust.ts";
 import { searchNativeHttp } from "../extensions/web-search/native.ts";
 import { searchSearxng } from "../extensions/web-search/searxng.ts";
 import { searchTavily } from "../extensions/web-search/tavily.ts";
@@ -108,6 +109,7 @@ export function formatResults(results: SearchResult[], query: string, tierLabel:
   const lines = results.map((r, i) => {
     let line = `${i + 1}. [${r.title}](${r.url})`;
     if (r.source_label !== "Web") line += ` — *${r.source_label}*`;
+    line += ` [trust: ${classifyTrust(r.url)}]`;
     if (r.snippet) line += `\n   ${r.snippet.slice(0, 250)}`;
     return line;
   });

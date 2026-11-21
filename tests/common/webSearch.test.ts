@@ -180,4 +180,48 @@ describe("searchWeb shared module", () => {
     expect(result.tier).toBeDefined();
     expect(typeof result.tierLabel).toBe("string");
   });
+
+  it("should append the trust class to each formatted result line", async () => {
+    const { formatResults } = await import("../../common/webSearch.ts");
+
+    const text = formatResults(
+      [
+        {
+          title: "Paper",
+          url: "https://www.nature.com/articles/1",
+          snippet: "Peer reviewed.",
+          source_label: "Web",
+          tier: 1,
+        },
+        {
+          title: "Preprint",
+          url: "https://arxiv.org/abs/1234.5678",
+          snippet: "Preprint.",
+          source_label: "arXiv",
+          tier: 1,
+        },
+        {
+          title: "Docs",
+          url: "https://docs.example.com/guide",
+          snippet: "Docs.",
+          source_label: "Web",
+          tier: 1,
+        },
+        {
+          title: "Blog",
+          url: "https://example.com/blog/post",
+          snippet: "Blog.",
+          source_label: "Web",
+          tier: 1,
+        },
+      ],
+      "trust query",
+      "Phase 1 — SearXNG Tier 1",
+    );
+
+    expect(text).toContain("[trust: peer-reviewed]");
+    expect(text).toContain("[trust: preprint]");
+    expect(text).toContain("[trust: official-docs]");
+    expect(text).toContain("[trust: blog-forum]");
+  });
 });

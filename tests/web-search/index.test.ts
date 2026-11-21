@@ -31,7 +31,14 @@ interface ToolExecuteResult {
     category: string | null;
     tierLabel: string;
     count: number;
-    results: unknown[];
+    results: Array<{
+      title: string;
+      url: string;
+      snippet: string;
+      source_label: string;
+      tier: number;
+      trust: string;
+    }>;
   };
 }
 
@@ -138,5 +145,29 @@ describe("web_search extension", () => {
     expect(result.content[0].text).toContain("Search results");
     expect(result.details.count).toBe(4);
     expect(result.details.tier).toBe(1);
+  });
+
+  it("should list the trust class of every result in text and details", async () => {
+    const extension = (await import("../../extensions/web-search/index.ts")).default;
+    extension(mockPi as unknown as ExtensionAPI);
+    const tool = registeredTool();
+
+    const result = await tool.execute(
+      "call-3",
+      { query: "quantum computing", tier: 1 },
+      undefined,
+      undefined,
+      { cwd: "/test/project" },
+    );
+
+    const trustByUrl = Object.fromEntries(result.details.results.map((r) => [r.url, r.trust]));
+    expect(trustByUrl["https://example.edu/research"]).toBe("gov-edu");
+    expect(trustByUrl["https://arxiv.org/abs/1234.5678"]).toBe("preprint");
+    expect(trustByUrl["https://example.gov/report"]).toBe("gov-edu");
+    expect(trustByUrl["https://example.org/article"]).toBe("unknown");
+
+    expect(result.content[0].text).toContain("[trust: gov-edu]");
+    expect(result.content[0].text).toContain("[trust: preprint]");
+    expect(result.content[0].text).toContain("[trust: unknown]");
   });
 });
