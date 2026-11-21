@@ -10,6 +10,7 @@
 
 import { Type } from "typebox";
 
+import { registerGatherEvidenceTool } from "./gather-tool.ts";
 import { registerVerifySourceTool } from "./verify-tools.ts";
 import { loadEvidencePack } from "../../common/evidence-cache.ts";
 
@@ -87,6 +88,7 @@ export function formatEvidencePack(pack: EvidencePack, includeContent: boolean):
  * @param pi - The pi extension API.
  */
 export default function (pi: ExtensionAPI): void {
+  registerGatherEvidenceTool(pi);
   registerVerifySourceTool(pi);
 
   pi.registerTool({
