@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import type { SqliteDb, DocIndex } from "../../extensions/para-knowledge/sqlite-types.ts";
+import { indexFile } from "../../extensions/para-knowledge/sqlite-indexing.ts";
+import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.ts";
+import { searchDocs } from "../../extensions/para-knowledge/sqlite-search.ts";
+
+import type {
+  SqliteDb,
+  DocIndex,
+  SearchOptions,
+} from "../../extensions/para-knowledge/sqlite-types.ts";
 
 function makeDoc(overrides: Partial<DocIndex> = {}): DocIndex {
   return {
@@ -21,14 +29,14 @@ function makeDoc(overrides: Partial<DocIndex> = {}): DocIndex {
 describe("searchDocs", () => {
   let db: SqliteDb;
 
-  beforeEach(async () => {
-    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
-    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
+  /** Run searchDocs against the in-memory index for the current test. */
+  const run = (query: string, options: SearchOptions = {}, maxResults?: number) =>
+    searchDocs(db, query, options, maxResults);
 
+  beforeEach(() => {
     db = createDb(":memory:");
     initDb(db);
 
-    // Index several documents
     const docs: DocIndex[] = [
       makeDoc({
         path: "Projects/programming.md",
@@ -56,9 +64,7 @@ describe("searchDocs", () => {
       }),
     ];
 
-    for (const doc of docs) {
-      indexFile(db, doc);
-    }
+    for (const doc of docs) indexFile(db, doc);
   });
 
   afterEach(() => {
@@ -67,64 +73,47 @@ describe("searchDocs", () => {
 
   // ── Text-only search ──
 
-  it("should find documents matching a text query", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "programming");
+  it("should find documents matching a text query", () => {
+    const results = run("programming");
     expect(results.length).toBeGreaterThanOrEqual(2);
     const paths = results.map((r) => r.path);
     expect(paths).toContain("Projects/programming.md");
     expect(paths).toContain("Projects/typescript.md");
   });
 
-  it("should return BM25-ranked results", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "typescript");
+  it("should return BM25-ranked results", () => {
+    const results = run("typescript");
     expect(results.length).toBeGreaterThanOrEqual(2);
-    // The document titled "TypeScript Basics" should rank higher than
-    // "Programming Guide" for the query "typescript"
-    const top = results[0];
-    expect(top.path).toBe("Projects/typescript.md");
+    expect(results[0].path).toBe("Projects/typescript.md");
   });
 
-  it("should return empty array for query matching nothing", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "xyznonexistent");
-    expect(results).toEqual([]);
+  it("should return empty array for query matching nothing", () => {
+    expect(run("xyznonexistent")).toEqual([]);
   });
 
-  it("should limit results to maxResults", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "programming", {}, 1);
+  it("should limit results to maxResults", () => {
+    const results = run("programming", {}, 1);
     expect(results.length).toBeLessThanOrEqual(1);
   });
 
   // ── Tag-filtered search ──
 
-  it("should filter text results by tags", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "programming", { tags: ["javascript"] });
+  it("should filter text results by tags", () => {
+    const results = run("programming", { tags: ["javascript"] });
     expect(results.length).toBeGreaterThanOrEqual(1);
-    for (const r of results) {
-      expect(r.tags).toContain("javascript");
-    }
+    for (const r of results) expect(r.tags).toContain("javascript");
   });
 
-  it("should return empty when text + tag filter matches nothing", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "programming", { tags: ["cooking"] });
-    // "programming" text doesn't appear in cooking docs → falls through
-    // to tag-only fallback, which returns cooking docs
+  it("should return empty when text + tag filter matches nothing", () => {
+    const results = run("programming", { tags: ["cooking"] });
     expect(results.length).toBeGreaterThanOrEqual(1);
-    for (const r of results) {
-      expect(r.matchedByTag).toBe(true);
-    }
+    for (const r of results) expect(r.matchedByTag).toBe(true);
   });
 
   // ── Tag-only search ──
 
-  it("should return tag-only results when query is empty", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "", { tags: ["cooking"] });
+  it("should return tag-only results when query is empty", () => {
+    const results = run("", { tags: ["cooking"] });
     expect(results.length).toBeGreaterThanOrEqual(1);
     for (const r of results) {
       expect(r.matchedByTag).toBe(true);
@@ -132,106 +121,72 @@ describe("searchDocs", () => {
     }
   });
 
-  it("should filter by multiple tags", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "", { tags: ["programming", "cooking"] });
-    expect(results.length).toBeGreaterThanOrEqual(2);
+  it("should filter by multiple tags", () => {
+    expect(run("", { tags: ["programming", "cooking"] }).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("should return tag-only results with empty body", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "", { tags: ["travel"] });
+  it("should return tag-only results with empty body", () => {
+    const results = run("", { tags: ["travel"] });
     expect(results.length).toBeGreaterThanOrEqual(1);
-    for (const r of results) {
-      expect(r.body).toBe("");
-    }
+    for (const r of results) expect(r.body).toBe("");
   });
 
   // ── Empty query ──
 
-  it("should return empty array for empty query with no tags", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "", {});
-    expect(results).toEqual([]);
+  it("should return empty array for empty query with no tags", () => {
+    expect(run("", {})).toEqual([]);
   });
 
   // ── FTS5 edge cases ──
 
-  it("should handle query with special characters without error", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    // Characters like . * are stripped by buildFts5Query; should not throw
-    expect(() => searchDocs(db, "*special.chars(test)")).not.toThrow();
+  it("should handle query with special characters without error", () => {
+    expect(() => run("*special.chars(test)")).not.toThrow();
   });
 
-  it("should handle question mark in query without error", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    // Question mark is not a valid FTS5 operator; should be stripped
-    expect(() => searchDocs(db, "what is urticaria?")).not.toThrow();
-    expect(() => searchDocs(db, "how? why?")).not.toThrow();
+  it("should handle question mark in query without error", () => {
+    expect(() => run("what is urticaria?")).not.toThrow();
+    expect(() => run("how? why?")).not.toThrow();
   });
 
-  it("should handle exclamation mark in query without error", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    expect(() => searchDocs(db, "hello world!")).not.toThrow();
-    expect(() => searchDocs(db, "amazing! incredible!")).not.toThrow();
+  it("should handle exclamation mark in query without error", () => {
+    expect(() => run("hello world!")).not.toThrow();
+    expect(() => run("amazing! incredible!")).not.toThrow();
   });
 
-  it("should handle query with mixed-case text (case-insensitive)", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "Programming");
-    expect(results.length).toBeGreaterThanOrEqual(2);
+  it("should handle query with mixed-case text (case-insensitive)", () => {
+    expect(run("Programming").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("should handle query resulting in only stop words as empty", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    // "a an the" are all stop words (after stripping single chars, 'a' is already
-    // filtered as single-char before stop word check)
-    const results = searchDocs(db, "a an the");
-    expect(results).toEqual([]);
+  it("should handle query resulting in only stop words as empty", () => {
+    expect(run("a an the")).toEqual([]);
   });
 
-  it("should handle hyphenated query without error", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    // Hyphen is replaced with space; should not throw even if no match
-    expect(() => searchDocs(db, "type-script")).not.toThrow();
+  it("should handle hyphenated query without error", () => {
+    expect(() => run("type-script")).not.toThrow();
   });
 
-  it("should match hyphenated-then-spaced terms that exist in the index", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    // "Italian-cuisine" → buildFts5Query strips hyphen → "Italian cuisine"
-    // → terms ["italian", "cuisine"] → "italian" matches tag "italian"
-    const results = searchDocs(db, "Italian-cuisine");
-    expect(results.length).toBeGreaterThanOrEqual(1);
+  it("should match hyphenated-then-spaced terms that exist in the index", () => {
+    expect(run("Italian-cuisine").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("should handle query with only stop words", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    // "the and or" are all stop words → should return empty
-    const results = searchDocs(db, "the and or");
-    expect(results).toEqual([]);
+  it("should handle query with only stop words", () => {
+    expect(run("the and or")).toEqual([]);
   });
 
-  it("should handle query with only single-character terms", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "a b c");
-    expect(results).toEqual([]);
+  it("should handle query with only single-character terms", () => {
+    expect(run("a b c")).toEqual([]);
   });
 
-  it("should handle very long query string", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const longQuery = "programming ".repeat(100).trim();
-    expect(() => searchDocs(db, longQuery)).not.toThrow();
+  it("should handle very long query string", () => {
+    expect(() => run("programming ".repeat(100).trim())).not.toThrow();
   });
 
-  it("should handle tag filter with no matching docs", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "", { tags: ["nonexistent-tag"] });
-    expect(results).toEqual([]);
+  it("should handle tag filter with no matching docs", () => {
+    expect(run("", { tags: ["nonexistent-tag"] })).toEqual([]);
   });
 
-  it("should include matchedByTag and tagMatches in results", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "", { tags: ["italian"] });
+  it("should include matchedByTag and tagMatches in results", () => {
+    const results = run("", { tags: ["italian"] });
     expect(results.length).toBeGreaterThanOrEqual(1);
     const r = results[0];
     expect(r.matchedByTag).toBe(true);
@@ -241,42 +196,74 @@ describe("searchDocs", () => {
     expect(typeof r.score).toBe("number");
   });
 
-  it("should return results with source_url null when not set", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "cooking");
+  it("should return results with source_url null when not set", () => {
+    const results = run("cooking");
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results[0].source_url).toBeNull();
   });
 
   // ── Freshness metadata ──
 
-  it("should return created date in text search results", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "typescript");
+  it("should return created date in text search results", () => {
+    const results = run("typescript");
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results[0].created).toBe("2026-01-01T00:00:00.000Z");
   });
 
-  it("should return modified date in text search results", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "typescript");
+  it("should return modified date in text search results", () => {
+    const results = run("typescript");
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results[0].modified).toBe("2026-01-02T00:00:00.000Z");
   });
 
-  it("should return created and modified in tag-only search results", async () => {
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
-    const results = searchDocs(db, "", { tags: ["travel"] });
+  it("should return created and modified in tag-only search results", () => {
+    const results = run("", { tags: ["travel"] });
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results[0].created).toBe("2026-01-01T00:00:00.000Z");
     expect(results[0].modified).toBe("2026-01-02T00:00:00.000Z");
   });
 
-  it("should handle null created field", async () => {
-    const { indexFile } = await import("../../extensions/para-knowledge/sqlite-indexing.ts");
-    const { searchDocs } = await import("../../extensions/para-knowledge/sqlite-search.ts");
+  // ── Description and review boost ──
 
-    // Index a doc with no created/modified
+  it("should fill description from the files table", () => {
+    indexFile(
+      db,
+      makeDoc({
+        path: "Projects/described.md",
+        title: "Described Doc",
+        body: "A document with a searchable descriptionterm.",
+        tags: ["test"],
+        description: "Short summary of the described doc.",
+      }),
+    );
+
+    const results = run("descriptionterm");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].description).toBe("Short summary of the described doc.");
+  });
+
+  it("should rank a reviewed note above an unreviewed note with an equal BM25 score", () => {
+    const shared = {
+      title: "Boost Term Note",
+      body: "The boostterm appears exactly once in this body.",
+      tags: ["boost"],
+      author: "pi",
+      editor: "",
+      created: "2026-01-01T00:00:00.000Z",
+      modified: "2026-01-02T00:00:00.000Z",
+      file_mtime: "2026-01-02T00:00:00.000Z",
+      source_url: null,
+    };
+
+    indexFile(db, makeDoc({ ...shared, path: "Projects/unreviewed.md", reviewed: null }));
+    indexFile(db, makeDoc({ ...shared, path: "Projects/reviewed.md", reviewed: "2026-01-01" }));
+
+    const results = run("boostterm", {}, 2);
+    expect(results.length).toBe(2);
+    expect(results[0].path).toBe("Projects/reviewed.md");
+  });
+
+  it("should handle null created field", () => {
     indexFile(
       db,
       makeDoc({
@@ -284,14 +271,12 @@ describe("searchDocs", () => {
         title: "Null Dates",
         body: "Document with null dates for freshness test.",
         tags: ["test"],
-        // created and modified fall back to now in indexFile
         source_url: null,
       }),
     );
 
-    const results = searchDocs(db, "Null Dates");
+    const results = run("Null Dates");
     expect(results.length).toBeGreaterThanOrEqual(1);
-    // created should be a non-null string (indexFile sets it to now when null)
     expect(results[0].created).toBeTruthy();
   });
 });

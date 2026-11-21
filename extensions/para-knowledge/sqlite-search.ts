@@ -61,6 +61,7 @@ function searchByText(
     let sql = `
       SELECT d.path, d.title, d.body,
              f.author, f.editor, f.created, f.modified, f.file_mtime, f.source_url,
+             f.description, f.reviewed,
              d.rank AS bm25_score
       FROM docs_fts d
       JOIN files f ON f.path = d.path
@@ -105,6 +106,8 @@ function rowToResult(
         filterTags.some((ft) => t.toLowerCase() === ft.toLowerCase()),
       )
     : [];
+  const bm25 = (row.bm25_score as number) ?? 0;
+  const reviewed = typeof row.reviewed === "string" && row.reviewed.length > 0;
 
   return {
     path,
@@ -116,9 +119,10 @@ function rowToResult(
     created: (row.created as string) ?? null,
     modified: (row.modified as string) ?? null,
     source_url: (row.source_url as string | null) ?? null,
-    description: null,
+    description: (row.description as string | null) ?? null,
     tags: getFileTags(db, path),
-    score: (row.bm25_score as number) ?? 0,
+    // BM25 scores are negative; ×1.25 pushes reviewed notes ahead.
+    score: reviewed ? bm25 * 1.25 : bm25,
     matchedByTag: false,
     tagMatches: matchedTags,
   };
@@ -140,7 +144,7 @@ function searchByTagsOnly(db: SqliteDb, tags: string[], maxResults: number): Sea
   const ph = tags.map(() => "?").join(", ");
   const rows = db
     .prepare(
-      `SELECT DISTINCT f.path, f.title, f.author, f.editor, f.created, f.modified, f.file_mtime, f.source_url
+      `SELECT DISTINCT f.path, f.title, f.author, f.editor, f.created, f.modified, f.file_mtime, f.source_url, f.description
      FROM files f
      JOIN tags t ON f.path = t.file_path
      WHERE t.tag IN (${ph})
@@ -164,7 +168,7 @@ function searchByTagsOnly(db: SqliteDb, tags: string[], maxResults: number): Sea
       created: (row.created as string) ?? null,
       modified: (row.modified as string) ?? null,
       source_url: (row.source_url as string | null) ?? null,
-      description: null,
+      description: (row.description as string | null) ?? null,
       tags: getFileTags(db, path),
       score: 1.0,
       matchedByTag: true,

@@ -3,7 +3,7 @@
  * KNOWLEDGE_DIR loaded via configureEnv rather than ctx.cwd.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -111,5 +111,44 @@ describe("list_para_tags env integration", () => {
     expect(details.count).toBe(2);
     expect(details.tags).toContain("alpha");
     expect(details.tags).toContain("beta");
+  });
+
+  it("should return missing-db guidance and not create notes.db", async () => {
+    const dbPath = resolve(knowledgeDir, "notes.db");
+    mkdirSync(knowledgeDir, { recursive: true });
+    expect(existsSync(dbPath)).toBe(false);
+
+    vi.resetModules();
+    const { registerListTagsTool } =
+      await import("../../extensions/para-knowledge/tools/listTags.ts");
+
+    const mockPi = {
+      registerTool: (tool: Record<string, unknown>) => {
+        registeredTool = tool;
+      },
+      on: () => {},
+    } as unknown as ExtensionAPI;
+
+    registerListTagsTool(mockPi);
+    const tool = registeredTool!;
+    const execute = tool.execute as (
+      toolCallId: string,
+      params: Record<string, unknown>,
+      signal: AbortSignal | undefined,
+      onUpdate: unknown,
+      ctx: ExtensionContext,
+    ) => Promise<{
+      content: Array<{ type: string; text: string }>;
+      details: Record<string, unknown>;
+    }>;
+
+    const result = await execute("call-missing", {}, undefined, undefined, {
+      cwd: projectDir,
+    } as ExtensionContext);
+
+    expect(result.content[0]?.text).toBe(
+      `notes.db not found at ${dbPath}. It is built by the main session (session_start reindex) or /para-ingest.`,
+    );
+    expect(existsSync(dbPath)).toBe(false);
   });
 });

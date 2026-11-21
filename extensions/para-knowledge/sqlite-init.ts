@@ -12,13 +12,21 @@ type DbConstructor = new (path: string, options?: Record<string, unknown>) => Sq
 // ── Runtime detection — try bun:sqlite first, fall back to node:sqlite ──
 
 let Database: DbConstructor;
+let isBunRuntime = false;
 
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
   Database = require("bun:sqlite").Database;
+  isBunRuntime = true;
 } catch {
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
   Database = require("node:sqlite").DatabaseSync;
+}
+
+/** Options accepted by {@link createDb}. */
+export interface CreateDbOptions {
+  /** Open the database in read-only mode; it will never be created. */
+  readOnly?: boolean;
 }
 
 // ── Factory ──
@@ -26,9 +34,16 @@ try {
 /**
  * Open a SQLite database.
  * @param path  File path or `:memory:` for in-memory database.
+ * @param options  Optional connection options (read-only mode).
+ * @returns A wrapped synchronous SQLite handle.
  */
-export function createDb(path: string): SqliteDb {
-  const db = new Database(path);
+export function createDb(path: string, options?: CreateDbOptions): SqliteDb {
+  const constructorOptions = options?.readOnly
+    ? isBunRuntime
+      ? { readonly: true }
+      : { readOnly: true }
+    : undefined;
+  const db = constructorOptions ? new Database(path, constructorOptions) : new Database(path);
 
   const rawDb = db;
   rawDb.run = function run(sql: string, ...params: unknown[]): void {

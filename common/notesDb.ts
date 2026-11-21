@@ -12,8 +12,8 @@ import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { configureEnv, getKnowledgeConfig } from "./env.ts";
-import { createDb, initDb } from "../extensions/para-knowledge/db-sqlite.ts";
 import { rebuildDb } from "../extensions/para-knowledge/rebuild.ts";
+import { createDb, initDb } from "../extensions/para-knowledge/sqlite-init.ts";
 
 import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.ts";
 
@@ -21,6 +21,10 @@ import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.ts";
 
 /** Cached database handle reused across all callers for the process lifetime. */
 let cachedDb: SqliteDb | null = null;
+
+/** Read-only handle cache and the db path it was opened from. */
+let cachedReadOnlyDb: SqliteDb | null = null;
+let cachedReadOnlyPath: string | null = null;
 
 // ── Public API ─────────────────────────────────────────────────────
 
@@ -67,4 +71,62 @@ export async function ensureNotesDb(
   initDb(db);
   cachedDb = db;
   return db;
+}
+
+/**
+ * Resolve the configured notes.db path.
+ *
+ * @param cwd - Working directory for env resolution.
+ * @returns Absolute path to notes.db.
+ */
+export function getNotesDbPath(cwd?: string): string {
+  configureEnv(cwd);
+  const { dir, db: dbName } = getKnowledgeConfig(cwd);
+  return resolve(dir, dbName);
+}
+
+/**
+ * Open the existing notes.db in read-only mode.
+ *
+ * Never creates the file, never runs `initDb` and never rebuilds the index.
+ * The handle is cached per resolved db path for the process lifetime.
+ *
+ * @param cwd - Working directory for env resolution.
+ * @returns A read-only SQLite handle, or null when notes.db is missing.
+ */
+export function openNotesDbReadOnly(cwd?: string): SqliteDb | null {
+  configureEnv(cwd);
+
+  const { dir, db: dbName } = getKnowledgeConfig(cwd);
+  const dbPath = resolve(dir, dbName);
+
+  if (cachedReadOnlyDb && cachedReadOnlyPath === dbPath) {
+    if (existsSync(dbPath)) return cachedReadOnlyDb;
+    // The file vanished after caching — drop the stale handle.
+    cachedReadOnlyDb.close();
+    cachedReadOnlyDb = null;
+    cachedReadOnlyPath = null;
+    return null;
+  }
+
+  if (!existsSync(dbPath)) return null;
+
+  if (cachedReadOnlyDb) {
+    cachedReadOnlyDb.close();
+    cachedReadOnlyDb = null;
+  }
+
+  cachedReadOnlyDb = createDb(dbPath, { readOnly: true });
+  cachedReadOnlyPath = dbPath;
+  return cachedReadOnlyDb;
+}
+
+/**
+ * Build the guidance message shown when notes.db does not exist.
+ *
+ * @param cwd - Working directory for env resolution.
+ * @returns Human-readable explanation naming the missing db path.
+ */
+export function missingNotesDbMessage(cwd?: string): string {
+  return `notes.db not found at ${getNotesDbPath(cwd)}. It is built by the main session (session_start reindex) or /para-ingest.`;
 }

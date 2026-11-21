@@ -3,14 +3,14 @@
  * PARA documents (Areas/Projects/Resources). Useful for choosing existing
  * tags when creating a new document, rather than inventing new ones.
  *
- * Returns an array of tag strings. If the database doesn't exist yet,
- * returns an empty array (no tags indexed).
+ * Returns an array of tag strings. The database is opened read-only; if it
+ * doesn't exist yet, returns guidance instead of creating it.
  */
 
 import { Type } from "typebox";
 
 import { configureEnv } from "../../../common/env.ts";
-import { ensureNotesDb } from "../../../common/notesDb.ts";
+import { missingNotesDbMessage, openNotesDbReadOnly } from "../../../common/notesDb.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -28,7 +28,7 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
     promptSnippet: "List all existing unique tags in the PARA knowledge base",
     parameters: Type.Object({}),
 
-    async execute(_toolCallId, _params, _signal, onUpdate, ctx) {
+    execute(_toolCallId, _params, _signal, onUpdate, ctx) {
       // Ensure .env is loaded (from ~/.pi/agent/.env and <cwd>/.pi/.env)
       configureEnv(ctx.cwd);
 
@@ -38,7 +38,14 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
       });
 
       try {
-        const db = await ensureNotesDb(ctx.cwd);
+        const db = openNotesDbReadOnly(ctx.cwd);
+        if (!db) {
+          return Promise.resolve({
+            content: [{ type: "text" as const, text: missingNotesDbMessage(ctx.cwd) }],
+            details: { tags: [], count: 0, missing: true },
+          });
+        }
+
         const rows = db
           .prepare("SELECT DISTINCT tag FROM tags ORDER BY tag")
           .all<{ tag: string }>();
@@ -46,7 +53,7 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
         const tags = rows.map((r) => r.tag);
 
         if (tags.length === 0) {
-          return {
+          return Promise.resolve({
             content: [
               {
                 type: "text" as const,
@@ -54,10 +61,10 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
               },
             ],
             details: { tags: [], count: 0 },
-          };
+          });
         }
 
-        return {
+        return Promise.resolve({
           content: [
             {
               type: "text" as const,
@@ -65,11 +72,11 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
             },
           ],
           details: { tags, count: tags.length },
-        };
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[list_para_tags] SQLite error:", msg);
-        return {
+        return Promise.resolve({
           content: [
             {
               type: "text" as const,
@@ -77,7 +84,7 @@ export function registerListTagsTool(pi: ExtensionAPI): void {
             },
           ],
           details: { tags: [], count: 0, error: msg },
-        };
+        });
       }
     },
   });
