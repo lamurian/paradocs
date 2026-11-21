@@ -1,20 +1,57 @@
-import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmdirSync } from "node:fs";
 import { join } from "node:path";
+
+import { beforeAll, describe, it, expect } from "vitest";
+
+import type { Dirent } from "node:fs";
 
 const REMOVED_COMPONENTS = [
   "extensions/set-temperature.ts",
   "extensions/scope-gate.ts",
   "extensions/roadmap-scratchpad",
+  "extensions/research-engine",
+  "extensions/commands",
+  "common/subagent.ts",
+  "common/subagent-args.ts",
+  "common/extractJson.ts",
 ];
 
-const SEARCH_PATTERNS = [
-  "roadmap-scratchpad",
-  "set-temperature",
-  "scope-gate",
-];
+const SEARCH_PATTERNS = ["roadmap-scratchpad", "set-temperature", "scope-gate"];
 
 const CHECK_DIRS = ["extensions", "common", "skills"];
+
+/**
+ * Remove empty directory trees left behind by deleted files.
+ *
+ * Only empty directories are removed; a directory containing any file is
+ * left untouched, so the existence assertions below still catch regressions.
+ *
+ * @param dir - Directory path to prune.
+ * @returns True when the directory was empty (and removed).
+ */
+function pruneEmptyDirs(dir: string): boolean {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  let empty = true;
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (!pruneEmptyDirs(join(dir, entry.name))) empty = false;
+    } else {
+      empty = false;
+    }
+  }
+  if (!empty) return false;
+  try {
+    rmdirSync(dir);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Recursively collect all non-binary files in a directory (including .md). */
 function getAllFiles(dir: string): string[] {
@@ -40,6 +77,10 @@ function getAllFiles(dir: string): string[] {
 }
 
 describe("removed components do not exist", () => {
+  beforeAll(() => {
+    for (const path of REMOVED_COMPONENTS) pruneEmptyDirs(path);
+  });
+
   for (const path of REMOVED_COMPONENTS) {
     it(`${path} should not exist`, () => {
       expect(existsSync(path)).toBe(false);

@@ -12,8 +12,6 @@ const REMOVED_SKILLS = [
   "research",
 ] as const;
 
-const COMMAND_FILES = ["ask.ts", "research.ts", "summarize.ts", "index.ts"] as const;
-
 describe("skills removed", () => {
   for (const skill of REMOVED_SKILLS) {
     const skillDir = `skills/${skill}`;
@@ -27,14 +25,6 @@ describe("skills removed", () => {
       it(`${skillFile} should no longer exist`, () => {
         expect(existsSync(skillFile)).toBe(false);
       });
-    });
-  }
-});
-
-describe("commands exist", () => {
-  for (const file of COMMAND_FILES) {
-    it(`extensions/commands/${file} should exist`, () => {
-      expect(existsSync(`extensions/commands/${file}`)).toBe(true);
     });
   }
 });
