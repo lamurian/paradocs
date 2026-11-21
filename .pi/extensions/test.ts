@@ -16,7 +16,9 @@
 // run never satisfies the done criteria.
 
 /** Detected test suites (label + argv + routing scope/cwd), frozen at generation time. */
-const SUITES = [{ label: "javascript (npm run test)", argv: ["npm", "run", "test"] }];
+const SUITES = [
+  { "label": "javascript (npm run test)", "argv": ["npm","run","test"] }
+];
 
 /** Per-suite wall clock budget: PI_TEST_TIMEOUT_MS, 300000ms default. */
 function suiteTimeoutMs() {
@@ -181,14 +183,12 @@ function routeSuites(suites, paths) {
   }
   return suites.map((suite, idx) => {
     const scope = effectiveScope(suite);
-    if (scope === "full")
-      return { suite: suite, skipped: false, argv: stripPlaceholders(suite.argv) };
+    if (scope === "full") return { suite: suite, skipped: false, argv: stripPlaceholders(suite.argv) };
     const list = routed.get(idx) || [];
     if (list.length === 0) return { suite: suite, skipped: true, argv: [] };
     const cwd = normCwd(suite.cwd);
     const rel = list.map((p) => (cwd === "." ? p : relPath(cwd, p)));
-    if (scope === "files")
-      return { suite: suite, skipped: false, argv: filesArgv(suite.argv, rel) };
+    if (scope === "files") return { suite: suite, skipped: false, argv: filesArgv(suite.argv, rel) };
     const dirs = [];
     for (const r of rel) {
       const d = r.lastIndexOf("/") < 0 ? "." : r.slice(0, r.lastIndexOf("/"));
@@ -244,16 +244,13 @@ export default function testToolExtension(pi) {
         for (const entry of scope) {
           if (!validScopeEntry(entry)) {
             return {
-              content: [
-                {
-                  type: "text",
-                  text:
-                    "invalid scope entry: " +
-                    JSON.stringify(entry) +
-                    " — scope entries must be repo-relative paths matching " +
-                    "[a-zA-Z0-9._/-], with no leading '-' and no '..'. Nothing was run.",
-                },
-              ],
+              content: [{
+                type: "text",
+                text:
+                  "invalid scope entry: " + JSON.stringify(entry) +
+                  " — scope entries must be repo-relative paths matching " +
+                  "[a-zA-Z0-9._/-], with no leading '-' and no '..'. Nothing was run.",
+              }],
               isError: true,
             };
           }
@@ -268,10 +265,7 @@ export default function testToolExtension(pi) {
           : payload && payload.unit && Array.isArray(payload.unit.testFiles)
             ? payload.unit.testFiles
             : [];
-      const runs = routeSuites(
-        SUITES,
-        paths.map((p) => ({ path: p })),
-      );
+      const runs = routeSuites(SUITES, paths.map((p) => ({ path: p })));
       // Per-suite cwd: payload repoRoot joined with the suite cwd, falling
       // back to the tool-context cwd when no payload is present.
       const { join } = await import("node:path");
@@ -284,10 +278,7 @@ export default function testToolExtension(pi) {
         const suite = item.suite;
         if (item.skipped) {
           sections.push(
-            "## " +
-              suite.label +
-              "\nsuite '" +
-              suite.label +
+            "## " + suite.label + "\nsuite '" + suite.label +
               "' skipped (no routed paths)" +
               (filtered ? " — filtered iteration run, not verification" : ""),
           );
@@ -313,13 +304,10 @@ export default function testToolExtension(pi) {
         const out =
           tail([result.stdout, result.stderr].filter(Boolean).join("\n")) || "(no output)";
         sections.push(
-          "## " +
-            suite.label +
-            "\nexit " +
-            result.code +
+          "## " + suite.label +
+            "\nexit " + result.code +
             (result.killed ? " (killed)" : "") +
-            "\n" +
-            out,
+            "\n" + out,
         );
       }
       const summary =
@@ -329,10 +317,7 @@ export default function testToolExtension(pi) {
       // Every filtered result carries the header first: n = suites run,
       // m = total suites known at generation time.
       const header = filtered
-        ? "filtered run — " +
-          ran +
-          "/" +
-          SUITES.length +
+        ? "filtered run — " + ran + "/" + SUITES.length +
           " suites — does not satisfy the done criteria"
         : "";
       const text = (header ? header + "\n" : "") + summary + "\n\n" + sections.join("\n\n");
