@@ -10,6 +10,7 @@
 
 import { Type } from "typebox";
 
+import { registerVerifySourceTool } from "./verify-tools.ts";
 import { loadEvidencePack } from "../../common/evidence-cache.ts";
 
 import type { EvidencePack, EvidenceSource } from "../../common/evidence-cache.ts";
@@ -86,6 +87,8 @@ export function formatEvidencePack(pack: EvidencePack, includeContent: boolean):
  * @param pi - The pi extension API.
  */
 export default function (pi: ExtensionAPI): void {
+  registerVerifySourceTool(pi);
+
   pi.registerTool({
     name: "get_evidence",
     label: "Get Evidence Pack",
