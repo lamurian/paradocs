@@ -47,6 +47,33 @@ export function createDb(path: string): SqliteDb {
 // ── Schema ──
 
 /**
+ * Add a column to an existing table only if it is missing.
+ * @param db      Database instance.
+ * @param table   Table name to inspect and alter.
+ * @param column  Column name to add.
+ * @param type    SQLite column type/declaration for the new column.
+ */
+function addColumnIfMissing(db: SqliteDb, table: string, column: string, type: string): void {
+  const rows = db.all<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (rows.some((row) => row.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
+
+/**
+ * Apply idempotent column migrations for tables created by older versions.
+ * @param db Database instance with base tables already present.
+ */
+function migrateColumns(db: SqliteDb): void {
+  addColumnIfMissing(db, "files", "description", "TEXT");
+  addColumnIfMissing(db, "files", "reviewed", "TEXT");
+  addColumnIfMissing(db, "files", "review_interval", "INTEGER");
+
+  addColumnIfMissing(db, "citations", "published", "TEXT");
+  addColumnIfMissing(db, "citations", "verified_at", "TEXT");
+  addColumnIfMissing(db, "citations", "trust_class", "TEXT");
+}
+
+/**
  * Initialize the database schema:
  * - `files` — document metadata
  * - `tags` — tag index (composite PK)
@@ -94,4 +121,13 @@ export function initDb(db: SqliteDb): void {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_citations_doi ON citations(doi)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_citations_url ON citations(source_url)");
+
+  db.exec(`CREATE TABLE IF NOT EXISTS note_citations (
+    file_path TEXT NOT NULL,
+    citekey TEXT NOT NULL,
+    PRIMARY KEY (file_path, citekey)
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_note_citations_citekey ON note_citations(citekey)");
+
+  migrateColumns(db);
 }

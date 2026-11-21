@@ -102,6 +102,119 @@ describe("initDb", () => {
     expect(count?.cnt).toBe(1);
   });
 
+  it("should migrate a legacy schema and preserve existing rows", async () => {
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
+    db = createDb(":memory:");
+
+    // Simulate an older database without the newer columns.
+    db.exec(`CREATE TABLE files (
+      path TEXT PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      author TEXT NOT NULL DEFAULT '',
+      editor TEXT NOT NULL DEFAULT '',
+      created TEXT,
+      modified TEXT,
+      file_mtime TEXT,
+      source_url TEXT
+    )`);
+    db.exec(`CREATE TABLE citations (
+      citekey TEXT PRIMARY KEY,
+      bibtex TEXT NOT NULL,
+      doi TEXT,
+      source_url TEXT,
+      created TEXT,
+      updated TEXT
+    )`);
+    db.run("INSERT INTO files (path, title) VALUES (?, ?)", "docs/legacy.md", "Legacy");
+    db.run(
+      "INSERT INTO citations (citekey, bibtex) VALUES (?, ?)",
+      "legacy2020",
+      "@article{legacy2020}",
+    );
+
+    initDb(db);
+
+    const fileColumns = db
+      .prepare("PRAGMA table_info(files)")
+      .all<{ name: string }>()
+      .map((r) => r.name);
+    expect(fileColumns).toContain("description");
+    expect(fileColumns).toContain("reviewed");
+    expect(fileColumns).toContain("review_interval");
+
+    const citationColumns = db
+      .prepare("PRAGMA table_info(citations)")
+      .all<{ name: string }>()
+      .map((r) => r.name);
+    expect(citationColumns).toContain("published");
+    expect(citationColumns).toContain("verified_at");
+    expect(citationColumns).toContain("trust_class");
+
+    const file = db.get<{ path: string; title: string }>(
+      "SELECT path, title FROM files WHERE path = ?",
+      "docs/legacy.md",
+    );
+    expect(file).toEqual({ path: "docs/legacy.md", title: "Legacy" });
+
+    const citation = db.get<{ citekey: string; bibtex: string }>(
+      "SELECT citekey, bibtex FROM citations WHERE citekey = ?",
+      "legacy2020",
+    );
+    expect(citation).toEqual({ citekey: "legacy2020", bibtex: "@article{legacy2020}" });
+  });
+
+  it("should not duplicate migrated columns when called twice", async () => {
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
+    db = createDb(":memory:");
+    initDb(db);
+    initDb(db);
+
+    const fileColumns = db
+      .prepare("PRAGMA table_info(files)")
+      .all<{ name: string }>()
+      .map((r) => r.name);
+    expect(fileColumns.filter((name) => name === "description")).toHaveLength(1);
+    expect(fileColumns.filter((name) => name === "reviewed")).toHaveLength(1);
+    expect(fileColumns.filter((name) => name === "review_interval")).toHaveLength(1);
+
+    const citationColumns = db
+      .prepare("PRAGMA table_info(citations)")
+      .all<{ name: string }>()
+      .map((r) => r.name);
+    expect(citationColumns.filter((name) => name === "published")).toHaveLength(1);
+    expect(citationColumns.filter((name) => name === "verified_at")).toHaveLength(1);
+    expect(citationColumns.filter((name) => name === "trust_class")).toHaveLength(1);
+  });
+
+  it("should create note_citations keyed by (file_path, citekey)", async () => {
+    const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
+    db = createDb(":memory:");
+    initDb(db);
+
+    const table = db.get<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='note_citations'",
+    );
+    expect(table?.name).toBe("note_citations");
+
+    const index = db.get<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_note_citations_citekey'",
+    );
+    expect(index?.name).toBe("idx_note_citations_citekey");
+
+    db.run(
+      "INSERT INTO note_citations (file_path, citekey) VALUES (?, ?)",
+      "notes/a.md",
+      "key2020",
+    );
+    expect(() =>
+      db.run(
+        "INSERT INTO note_citations (file_path, citekey) VALUES (?, ?)",
+        "notes/a.md",
+        "key2020",
+      ),
+    ).toThrow();
+  });
+
   it("should accept a database created with createDb", async () => {
     const { createDb, initDb } = await import("../../extensions/para-knowledge/sqlite-init.ts");
     db = createDb(":memory:");
