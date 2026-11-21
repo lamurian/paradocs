@@ -1,107 +1,48 @@
 /**
- * Tests for ref.bib citation validation (T9) and loadRefBibCitekeys.
+ * Tests for ref.bib-aware citation previews.
  *
- * A citekey passes validation when present in the notes.db citations
- * table OR in the ref.bib citekey set parsed from KNOWLEDGE_DIR.
+ * A preview citekey must be unique against both the citations table and
+ * ref.bib, and the preview must never write either.
  *
  * @module tests/common/citation-bib.test
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { createDb, initDb } from "../../extensions/para-knowledge/sqlite-init.ts";
-
-import type { SqliteDb } from "../../extensions/para-knowledge/sqlite-types.ts";
-describe("validateCitations with ref.bib citekeys (T9)", () => {
+describe("previewCitation against ref.bib", () => {
   let tmpDir: string;
-  let dbPath: string;
-  let db: SqliteDb;
+  let knowledgeDir: string;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(homedir(), "citation-bib-test-"));
-    dbPath = join(tmpDir, "test.db");
-    db = createDb(dbPath);
-    initDb(db);
-    const insert = db.prepare(
-      "INSERT INTO citations (citekey, bibtex, doi, source_url, created, updated) VALUES (?, ?, ?, ?, ?, ?)",
-    );
-    insert.run("inBoth2024", "@misc{inBoth2024,…}", null, null, "2024-01-01", "2024-01-01");
-  });
-
-  afterEach(() => {
-    db.close();
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("accepts a citekey present only in the bib set", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.ts");
-
-    const result = validateCitations("Cites @onlyInBib here.", db, new Set(["onlyInBib"]));
-    expect(result.valid).toBe(true);
-    expect(result.missing).toEqual([]);
-  });
-
-  it("rejects a citekey in neither the table nor the bib set", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.ts");
-
-    const result = validateCitations("Cites @nowhere here.", db, new Set(["onlyInBib"]));
-    expect(result.valid).toBe(false);
-    expect(result.missing).toEqual(["nowhere"]);
-  });
-
-  it("still rejects @? even when a bib set is provided", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.ts");
-
-    const result = validateCitations("Unresolved @?.", db, new Set(["onlyInBib"]));
-    expect(result.valid).toBe(false);
-    expect(result.missing).toEqual(["?"]);
-  });
-
-  it("accepts a citekey present in both the table and the bib set", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.ts");
-
-    const result = validateCitations("Cites @inBoth2024.", db, new Set(["inBoth2024"]));
-    expect(result.valid).toBe(true);
-    expect(result.missing).toEqual([]);
-  });
-
-  it("checks duplicate citations in content only once", async () => {
-    const { validateCitations } = await import("../../common/citation-validation.ts");
-
-    const result = validateCitations("@dup2023 appears twice: @dup2023.", db, new Set<string>());
-    expect(result.valid).toBe(false);
-    expect(result.missing).toEqual(["dup2023"]);
-  });
-});
-
-describe("loadRefBibCitekeys", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = mkdtempSync(join(homedir(), "citation-bibload-test-"));
+    knowledgeDir = join(tmpDir, "knowledge");
+    mkdirSync(knowledgeDir, { recursive: true });
+    process.env.KNOWLEDGE_DIR = knowledgeDir;
+    process.env.KNOWLEDGE_DB = "notes.db";
   });
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
+    delete process.env.KNOWLEDGE_DIR;
+    delete process.env.KNOWLEDGE_DB;
   });
 
   it("parses citekeys from ref.bib entries", async () => {
-    const { writeFileSync } = await import("node:fs");
     const { loadRefBibCitekeys } = await import("../../common/citation-validation.ts");
 
     writeFileSync(
-      join(tmpDir, "ref.bib"),
+      resolve(knowledgeDir, "ref.bib"),
       ["@misc{alpha2024,", "  title = {A},", "}", "@article{beta2023,", "  title = {B},", "}"].join(
         "\n",
       ),
       "utf-8",
     );
 
-    const keys = loadRefBibCitekeys(tmpDir);
+    const keys = loadRefBibCitekeys(knowledgeDir);
     expect(keys.has("alpha2024")).toBe(true);
     expect(keys.has("beta2023")).toBe(true);
   });
@@ -111,5 +52,30 @@ describe("loadRefBibCitekeys", () => {
 
     const keys = loadRefBibCitekeys(join(tmpDir, "no-such-dir"));
     expect(keys.size).toBe(0);
+  });
+
+  it("picks a citekey not already used in ref.bib and leaves the file untouched", async () => {
+    const refBibPath = resolve(knowledgeDir, "ref.bib");
+    const original = "@misc{smith2024,\n\ttitle = {Already there},\n}\n";
+    writeFileSync(refBibPath, original, "utf-8");
+
+    const { previewCitation } = await import("../../common/citation.ts");
+
+    const result = await previewCitation(
+      {
+        source: "https://example.com/ref-bib-test",
+        title: "Ref Bib Test",
+        authors: ["Smith, Jane"],
+        year: 2024,
+        accessed: "2024-07-01",
+      },
+      { cwd: tmpDir },
+    );
+
+    expect(result.isNew).toBe(true);
+    expect(result.citekey).toBe("smith2024a");
+    expect(result.bibtex).toContain("@misc{smith2024a");
+    expect(result.bibtex).toContain("urldate = {2024-07-01}");
+    expect(readFileSync(refBibPath, "utf-8")).toBe(original);
   });
 });

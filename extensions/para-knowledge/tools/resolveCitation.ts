@@ -1,15 +1,17 @@
 /**
- * resolve_citation — tool wrapper around common/citation.ts.
+ * resolve_citation — preview-only tool wrapper around common/citation.ts.
  *
  * Thin adapter: parses params via typebox, delegates to the shared
- * resolveCitation function, and formats the result for tool output.
+ * previewCitation function, and formats the preview for tool output.
+ * Nothing is written here; ingest commits citations passed to
+ * stage_para_docs.
  *
  * @module extensions/para-knowledge/tools/resolveCitation
  */
 
 import { Type } from "typebox";
 
-import { resolveCitation } from "../../../common/citation.ts";
+import { previewCitation } from "../../../common/citation.ts";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -18,11 +20,14 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
     name: "resolve_citation",
     label: "Resolve Citation",
     description:
-      "Parse a URL or DOI via citation.js, generate a unique BibTeX citekey, " +
-      "deduplicate against the SQLite knowledge base, and append new entries to @ref.bib.",
+      "Preview a URL or DOI citation: parse via citation.js, generate a unique BibTeX " +
+      "citekey, deduplicate against the knowledge base, and return date/urldate fields. " +
+      "This tool never writes ref.bib or notes.db; pass the preview to stage_para_docs " +
+      "and ingest commits citations.",
     promptSnippet:
-      "Resolve a citation source: parse via citation.js, check dedup, insert into " +
-      "notes.db and append to ref.bib if new.",
+      "Preview a citation source: parse via citation.js, check dedup, return a BibTeX " +
+      "preview. Never writes ref.bib or notes.db; ingest commits citations passed to " +
+      "stage_para_docs.",
     parameters: Type.Object({
       source: Type.String({ description: "DOI or URL to resolve." }),
       title: Type.Optional(
@@ -39,16 +44,24 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       onUpdate?.({
-        content: [{ type: "text" as const, text: `📖 Resolving citation: ${params.source}…` }],
+        content: [{ type: "text" as const, text: `Resolving citation: ${params.source}…` }],
         details: {},
       });
 
-      const result = await resolveCitation(params, { cwd: ctx.cwd });
+      const result = await previewCitation(params, { cwd: ctx.cwd });
 
       if (result.error) {
         return {
-          content: [{ type: "text" as const, text: `❌ ${result.error}` }],
-          details: { citekey: null, bibtex: null, isNew: false, error: result.error },
+          content: [{ type: "text" as const, text: `Error: ${result.error}` }],
+          details: {
+            citekey: null,
+            bibtex: null,
+            isNew: false,
+            doi: null,
+            source_url: null,
+            published: null,
+            error: result.error,
+          },
         };
       }
 
@@ -57,7 +70,9 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
           content: [
             {
               type: "text" as const,
-              text: `✅ Citation already exists.\nCitekey: @${result.citekey}\n\n\`\`\`bibtex\n${result.bibtex}\n\`\`\``,
+              text:
+                `Citation already exists.\nCitekey: @${result.citekey}\n\n` +
+                `\`\`\`bibtex\n${result.bibtex}\n\`\`\``,
             },
           ],
           details: {
@@ -66,6 +81,7 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
             isNew: false,
             doi: result.doi,
             source_url: result.source_url,
+            published: result.published,
           },
         };
       }
@@ -74,7 +90,9 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
         content: [
           {
             type: "text" as const,
-            text: `✅ New citation created.\nCitekey: @${result.citekey}\nAppended to: ref.bib\n\n\`\`\`bibtex\n${result.bibtex}\n\`\`\``,
+            text:
+              `New citation preview.\nCitekey: @${result.citekey}\n\n` +
+              `\`\`\`bibtex\n${result.bibtex}\n\`\`\``,
           },
         ],
         details: {
@@ -83,6 +101,7 @@ export function registerResolveCitationTool(pi: ExtensionAPI): void {
           isNew: true,
           doi: result.doi,
           source_url: result.source_url,
+          published: result.published,
         },
       };
     },

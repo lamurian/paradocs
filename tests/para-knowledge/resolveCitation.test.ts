@@ -1,9 +1,11 @@
 /**
- * Tests for resolve_citation — verifies that ref.bib is written to
- * KNOWLEDGE_DIR rather than ctx.cwd.
+ * Tests for the resolve_citation tool.
+ *
+ * resolve_citation is preview-only: it returns a citekey and BibTeX with
+ * date/urldate fields but never writes ref.bib or notes.db.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -11,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-describe("resolve_citation ref.bib path", () => {
+describe("resolve_citation preview", () => {
   let tmpDir: string;
   let knowledgeDir: string;
   let projectDir: string;
@@ -36,7 +38,7 @@ describe("resolve_citation ref.bib path", () => {
     delete process.env.KNOWLEDGE_DB;
   });
 
-  it("should write ref.bib to KNOWLEDGE_DIR, not ctx.cwd", async () => {
+  it("returns a preview with date and urldate without writing ref.bib or notes.db", async () => {
     vi.resetModules();
     const { registerResolveCitationTool } =
       await import("../../extensions/para-knowledge/tools/resolveCitation.ts");
@@ -52,6 +54,8 @@ describe("resolve_citation ref.bib path", () => {
     expect(registeredTool).not.toBeNull();
 
     const tool = registeredTool!;
+    expect(String(tool.description)).toContain("never writes ref.bib or notes.db");
+
     const execute = tool.execute as (
       toolCallId: string,
       params: Record<string, unknown>,
@@ -63,30 +67,29 @@ describe("resolve_citation ref.bib path", () => {
       details: Record<string, unknown>;
     }>;
 
-    // Provide fallback metadata because citation.js can't parse plain URLs
-    // without DOI support
-    await execute(
+    const result = await execute(
       "call-1",
       {
         source: "https://example.com/test-paper",
         title: "Test Paper about Something",
         authors: ["Smith, John"],
         year: 2024,
+        accessed: "2024-08-01",
       },
       undefined,
       undefined,
       { cwd: projectDir } as ExtensionContext,
     );
 
-    // ref.bib should be in KNOWLEDGE_DIR, not projectDir
-    const knowledgeBib = resolve(knowledgeDir, "ref.bib");
-    const projectBib = resolve(projectDir, "ref.bib");
+    expect(result.details.citekey).toBe("smith2024");
+    expect(result.details.isNew).toBe(true);
+    expect(result.details.published).toBe("2024");
+    expect(String(result.details.bibtex)).toContain("date = {2024}");
+    expect(String(result.details.bibtex)).toContain("urldate = {2024-08-01}");
+    expect(result.content[0].text).toContain("preview");
 
-    expect(existsSync(knowledgeBib), `ref.bib should be at ${knowledgeBib}`).toBe(true);
-    expect(existsSync(projectBib), `ref.bib should NOT be at ${projectBib}`).toBe(false);
-
-    const content = readFileSync(knowledgeBib, "utf-8");
-    expect(content).toContain("@misc{smith2024,");
-    expect(content).toContain("Test Paper about Something");
+    expect(existsSync(resolve(knowledgeDir, "ref.bib"))).toBe(false);
+    expect(existsSync(resolve(projectDir, "ref.bib"))).toBe(false);
+    expect(existsSync(resolve(knowledgeDir, "notes.db"))).toBe(false);
   });
 });

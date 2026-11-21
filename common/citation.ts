@@ -1,32 +1,27 @@
 /**
- * Shared citation resolution module.
+ * Shared citation preview module.
  *
  * Parses URLs/DOIs via citation.js, deduplicates against the SQLite
- * citations table, generates unique BibTeX citekeys, and appends new
- * entries to ref.bib.
+ * citations table, generates unique BibTeX citekeys and enriches the
+ * BibTeX with `date`/`urldate` fields. This module never writes ref.bib
+ * or notes.db; ingestion commits staged citations separately.
  *
  * @module common/citation
  */
 
-import { appendFile, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
+import { injectBibtexField } from "./citation-commit.ts";
+import { loadRefBibCitekeys } from "./citation-validation.ts";
 import { getKnowledgeConfig } from "./env.ts";
-import { ensureNotesDb } from "./notesDb.ts";
+import { openNotesDbReadOnly } from "./notesDb.ts";
 
 import type { SqliteDb } from "../extensions/para-knowledge/db-sqlite.ts";
-
-// ── Constants ───────────────────────────────────────────────────────
-
-const REF_BIB = "ref.bib";
-
-// ── Internal types ──────────────────────────────────────────────────
 
 interface CitationRow {
   citekey: string;
   bibtex: string;
   doi: string | null;
   source_url: string | null;
+  published: string | null;
 }
 
 interface CitationParsed {
@@ -35,9 +30,28 @@ interface CitationParsed {
   year: number;
   doi: string | null;
   url: string | null;
+  published: string | null;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
+/** Parameters accepted when resolving a citation preview. */
+export interface CitationParams {
+  source: string;
+  title?: string;
+  authors?: string[];
+  year?: number;
+  accessed?: string;
+}
+
+/** Preview result returned to callers; no side effects are performed. */
+export interface CitationPreview {
+  citekey: string | null;
+  bibtex: string | null;
+  isNew: boolean;
+  doi: string | null;
+  source_url: string | null;
+  published: string | null;
+  error?: string;
+}
 
 function sanitiseFamily(name: string): string {
   return name
@@ -50,13 +64,22 @@ function proposeCitekey(family: string, year: number): string {
   return `${sanitiseFamily(family)}${year}`;
 }
 
-function resolveCitekey(db: SqliteDb, baseKey: string): string {
-  const existing = db.prepare("SELECT citekey FROM citations WHERE citekey = ?").get(baseKey);
-  if (!existing) return baseKey;
+function isCitekeyTaken(db: SqliteDb | null, bibKeys: ReadonlySet<string>, key: string): boolean {
+  if (bibKeys.has(key)) return true;
+  if (!db) return false;
+  const row = db.prepare("SELECT citekey FROM citations WHERE citekey = ?").get(key);
+  return Boolean(row);
+}
+
+function resolveCitekey(
+  db: SqliteDb | null,
+  bibKeys: ReadonlySet<string>,
+  baseKey: string,
+): string {
+  if (!isCitekeyTaken(db, bibKeys, baseKey)) return baseKey;
   for (let i = 97; i <= 122; i++) {
     const candidate = `${baseKey}${String.fromCharCode(i)}`;
-    const taken = db.prepare("SELECT citekey FROM citations WHERE citekey = ?").get(candidate);
-    if (!taken) return candidate;
+    if (!isCitekeyTaken(db, bibKeys, candidate)) return candidate;
   }
   return `${baseKey}-${Date.now()}`;
 }
@@ -68,12 +91,31 @@ function extractDoi(input: string): string | null {
   return null;
 }
 
+function formatIssuedDate(parts: number[] | undefined): string | null {
+  if (!parts || parts.length === 0) return null;
+  const [year, month, day] = parts;
+  if (typeof year !== "number" || !Number.isFinite(year)) return null;
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  if (typeof month === "number" && typeof day === "number") {
+    return `${year}-${pad(month)}-${pad(day)}`;
+  }
+  if (typeof month === "number") return `${year}-${pad(month)}`;
+  return String(year);
+}
+
+function replaceCitekey(bibtex: string, citekey: string): string {
+  return bibtex.replace(/^@\w+\{([^,\s]+)/, (match: string, oldKey: string) =>
+    match.replace(oldKey, citekey),
+  );
+}
+
 async function tryCitationJs(source: string): Promise<{
   bibtex: string;
   authorFamily: string;
   year: number;
   doi: string | null;
   url: string | null;
+  published: string | null;
 } | null> {
   try {
     const { Cite } = await import("@citation-js/core");
@@ -85,7 +127,8 @@ async function tryCitationJs(source: string): Promise<{
     if (!bibtex || !cite.data?.[0]) return null;
     const entry = cite.data[0];
     const authorFamily = entry.author?.[0]?.family;
-    const year = entry.issued?.["date-parts"]?.[0]?.[0];
+    const dateParts = entry.issued?.["date-parts"]?.[0];
+    const year = dateParts?.[0];
     if (!authorFamily || !year) return null;
     return {
       bibtex,
@@ -93,6 +136,7 @@ async function tryCitationJs(source: string): Promise<{
       year: Number(year),
       doi: entry.DOI || null,
       url: entry.URL || null,
+      published: formatIssuedDate(dateParts),
     };
   } catch {
     return null;
@@ -100,19 +144,22 @@ async function tryCitationJs(source: string): Promise<{
 }
 
 function findExistingCitation(
-  db: SqliteDb,
+  db: SqliteDb | null,
   doi: string | null,
   source: string,
 ): CitationRow | null {
+  if (!db) return null;
   let existing: CitationRow[] = [];
   if (doi) {
     existing = db
-      .prepare("SELECT citekey, bibtex, doi, source_url FROM citations WHERE doi = ?")
+      .prepare("SELECT citekey, bibtex, doi, source_url, published FROM citations WHERE doi = ?")
       .all<CitationRow>(doi);
   }
   if (existing.length === 0) {
     existing = db
-      .prepare("SELECT citekey, bibtex, doi, source_url FROM citations WHERE source_url = ?")
+      .prepare(
+        "SELECT citekey, bibtex, doi, source_url, published FROM citations WHERE source_url = ?",
+      )
       .all<CitationRow>(source);
   }
   return existing.length > 0 ? existing[0] : null;
@@ -132,12 +179,7 @@ function buildMiscEntry(
 async function parseCitationSource(
   source: string,
   doi: string | null,
-  params: {
-    title?: string;
-    authors?: string[];
-    year?: number;
-    accessed?: string;
-  },
+  params: CitationParams,
 ): Promise<CitationParsed | { error: string }> {
   const parsed = await tryCitationJs(source);
   if (parsed) {
@@ -147,6 +189,7 @@ async function parseCitationSource(
       year: parsed.year,
       doi: parsed.doi || doi,
       url: parsed.url || source,
+      published: parsed.published,
     };
   }
 
@@ -156,7 +199,7 @@ async function parseCitationSource(
     const year = params.year;
     const accessed = params.accessed || new Date().toISOString().slice(0, 10);
     const bibtex = buildMiscEntry(source, params.title, authors, year, accessed);
-    return { bibtex, authorFamily, year, doi, url: source };
+    return { bibtex, authorFamily, year, doi, url: source, published: String(year) };
   }
 
   return {
@@ -166,47 +209,30 @@ async function parseCitationSource(
   };
 }
 
-// ── Exports ─────────────────────────────────────────────────────────
-
 /**
- * Resolve a citation source: parse via citation.js, check dedup against
- * SQLite, generate a unique citekey, and append new entries to ref.bib.
+ * Preview a citation without writing ref.bib or notes.db.
  *
- * @param params.source  - DOI or URL to resolve.
- * @param params.title   - Title (needed when citation.js cannot parse).
- * @param params.authors - Author names in "Last, First" format.
- * @param params.year    - Publication year.
- * @param params.accessed - Access date in ISO 8601 (defaults to today).
- * @param options.cwd    - Working directory for env config resolution.
- * @returns Object with citekey, bibtex, isNew, doi, source_url, and
- *          optionally error on failure.
+ * Deduplicates against the citations table (when notes.db exists), produces
+ * a citekey unique against both the table and ref.bib, and injects
+ * `date = {<published>}` when known plus `urldate = {<accessed>}`.
+ *
+ * @param params - DOI/URL plus optional fallback metadata.
+ * @param options.cwd - Working directory for env config resolution.
+ * @returns Preview with citekey, bibtex, dedup flag, metadata and error.
  */
-export async function resolveCitation(
-  params: {
-    source: string;
-    title?: string;
-    authors?: string[];
-    year?: number;
-    accessed?: string;
-  },
+export async function previewCitation(
+  params: CitationParams,
   options: { cwd: string },
-): Promise<{
-  citekey: string | null;
-  bibtex: string | null;
-  isNew: boolean;
-  doi: string | null;
-  source_url: string | null;
-  error?: string;
-}> {
+): Promise<CitationPreview> {
   const source = params.source.trim();
   const doi = extractDoi(source);
-  const now = new Date().toISOString();
-
-  const db = await ensureNotesDb(options.cwd);
-  const { dir } = getKnowledgeConfig(options.cwd);
+  const accessed = params.accessed || new Date().toISOString().slice(0, 10);
 
   try {
-    // Check for existing citation
+    const db = openNotesDbReadOnly(options.cwd);
+    const { dir } = getKnowledgeConfig(options.cwd);
+    const bibKeys = loadRefBibCitekeys(dir);
+
     const existing = findExistingCitation(db, doi, source);
     if (existing) {
       return {
@@ -215,10 +241,10 @@ export async function resolveCitation(
         isNew: false,
         doi: existing.doi,
         source_url: existing.source_url,
+        published: existing.published,
       };
     }
 
-    // Try to parse the citation
     const parsed = await parseCitationSource(source, doi, params);
     if ("error" in parsed) {
       return {
@@ -227,59 +253,36 @@ export async function resolveCitation(
         isNew: false,
         doi: null,
         source_url: null,
+        published: null,
         error: parsed.error,
       };
     }
 
     const baseKey = proposeCitekey(parsed.authorFamily, parsed.year);
-    const citekey = resolveCitekey(db, baseKey);
-    const fixedBibtex = parsed.bibtex.replace(/^@\w+\{([^,]+)/, (match: string, oldKey: string) =>
-      match.replace(oldKey, citekey),
-    );
-
-    // Insert into SQLite
-    db.prepare(
-      "INSERT INTO citations (citekey, bibtex, doi, source_url, created, updated) VALUES (?, ?, ?, ?, ?, ?)",
-    ).run(citekey, fixedBibtex, parsed.doi, parsed.url, now, now);
-
-    // Append to ref.bib
-    const refBibPath = resolve(dir, REF_BIB);
-    let existingBibContent = "";
-    try {
-      existingBibContent = await readFile(refBibPath, "utf-8");
-    } catch {
-      /* ok */
-    }
-
-    if (!existingBibContent.includes(`@${citekey}`)) {
-      const separator =
-        existingBibContent.length > 0 && !existingBibContent.endsWith("\n")
-          ? "\n\n"
-          : existingBibContent.length > 0
-            ? "\n"
-            : "";
-      await appendFile(refBibPath, `${separator}${fixedBibtex}\n`, "utf-8");
-    }
+    const citekey = resolveCitekey(db, bibKeys, baseKey);
+    let bibtex = replaceCitekey(parsed.bibtex, citekey);
+    if (parsed.published) bibtex = injectBibtexField(bibtex, "date", parsed.published);
+    bibtex = injectBibtexField(bibtex, "urldate", accessed);
 
     return {
       citekey,
-      bibtex: fixedBibtex,
+      bibtex,
       isNew: true,
       doi: parsed.doi,
       source_url: parsed.url,
+      published: parsed.published,
     };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[resolveCitation] Error:", msg);
+    console.error("[previewCitation] Error:", msg);
     return {
       citekey: null,
       bibtex: null,
       isNew: false,
       doi: null,
       source_url: null,
+      published: null,
       error: msg,
     };
-  } finally {
-    // DB handle is managed by ensureNotesDb singleton — no close needed
   }
 }
