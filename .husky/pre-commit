@@ -8,9 +8,11 @@
 echo "🔍 Running pre-commit checks..."
 echo ""
 
-# Gather staged .ts files
+# Gather staged .ts files.
+# The dir list mirrors SOURCE_DIRS in scripts/check-lines.mjs so generated
+# artifacts outside the project source dirs are never formatted or checked.
 STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM \
-  | grep '\.ts$' \
+  | grep -E '^(extensions|common|types|scripts|skills|tests)/.*\.ts$' \
   || true)
 
 # 1. Prettier — auto-format staged .ts files

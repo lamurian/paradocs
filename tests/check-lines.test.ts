@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 describe("check-lines.mjs", () => {
   let tmpDir: string;
@@ -63,6 +64,48 @@ describe("check-lines.mjs", () => {
       const result = checkFile(emptyFile, 300);
       expect(result.overLimit).toBe(false);
       expect(result.lineCount).toBe(1); // empty string split by "\n" gives [""]
+    });
+  });
+
+  describe("filterStagedFiles", () => {
+    it("keeps .ts files under SOURCE_DIRS and drops paths outside them", async () => {
+      const { filterStagedFiles } = await import("../scripts/check-lines.mjs");
+
+      const result = filterStagedFiles([
+        "extensions/foo/index.ts",
+        "tests/foo.test.ts",
+        ".pi/extensions/test.ts",
+        ".pi/extensions/nested/thing.ts",
+        "docs/x.ts",
+        "README.md",
+        "scripts/check-lines.mjs",
+        "notes.txt",
+      ]);
+
+      expect(result).toEqual(["extensions/foo/index.ts", "tests/foo.test.ts"]);
+    });
+
+    it("strips a leading './' before matching", async () => {
+      const { filterStagedFiles } = await import("../scripts/check-lines.mjs");
+
+      expect(filterStagedFiles(["./common/slug.ts"])).toEqual(["common/slug.ts"]);
+    });
+
+    it("honours an explicit dirs argument", async () => {
+      const { filterStagedFiles } = await import("../scripts/check-lines.mjs");
+
+      const result = filterStagedFiles(
+        ["extensions/foo/index.ts", "custom/thing.ts", "docs/x.ts"],
+        ["custom"],
+      );
+
+      expect(result).toEqual(["custom/thing.ts"]);
+    });
+
+    it("shares SOURCE_DIRS with the full-scan directory list", async () => {
+      const { SOURCE_DIRS } = await import("../scripts/check-lines.mjs");
+
+      expect(SOURCE_DIRS).toEqual(["extensions", "common", "types", "scripts", "skills", "tests"]);
     });
   });
 

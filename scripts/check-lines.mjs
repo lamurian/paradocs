@@ -7,8 +7,10 @@
  * a configurable line limit (default 300).
  *
  * Exports:
+ *   SOURCE_DIRS                    — directories covered by the line check
  *   checkFile(filePath, maxLines)  — check a single file
  *   checkDirectory(dirPath)        — find all .ts files recursively in a dir
+ *   filterStagedFiles(files, dirs) — keep staged .ts files under SOURCE_DIRS
  *   main()                         — CLI entry point
  *
  * Usage: node scripts/check-lines.mjs [--staged] [--max-lines <n>]
@@ -19,6 +21,20 @@ import { execSync } from "node:child_process";
 import { join, extname } from "node:path";
 
 const DEFAULT_MAX_LINES = 300;
+
+/**
+ * Directories scanned by the full check. Staged mode uses the same list so
+ * artifacts generated elsewhere (e.g. .pi/) never trip the hook.
+ * @type {string[]}
+ */
+export const SOURCE_DIRS = [
+  "extensions",
+  "common",
+  "types",
+  "scripts",
+  "skills",
+  "tests",
+];
 
 /**
  * Check a single file's line count against a limit.
@@ -74,12 +90,30 @@ export function checkDirectory(dir, maxLines = DEFAULT_MAX_LINES) {
 }
 
 /**
+ * Filter a list of staged paths to checkable .ts files under the source dirs.
+ * A leading './' is stripped before matching, and only .ts files whose first
+ * path segment appears in `dirs` are kept. Returned paths are normalized.
+ * @param {string[]} files - Candidate file paths, typically staged paths.
+ * @param {string[]} [dirs] - Directories to keep; defaults to SOURCE_DIRS.
+ * @returns {string[]} Normalized paths ending in .ts under one of `dirs`.
+ */
+export function filterStagedFiles(files, dirs = SOURCE_DIRS) {
+  const result = [];
+  for (const file of files) {
+    const normalized = file.startsWith("./") ? file.slice(2) : file;
+    if (!normalized.endsWith(".ts")) continue;
+    const firstSegment = normalized.split("/")[0];
+    if (dirs.includes(firstSegment)) result.push(normalized);
+  }
+  return result;
+}
+
+/**
  * Find source directories to check based on CLI flags.
  * @returns {string[]}
  */
 function getDirectories() {
   const isStaged = process.argv.includes("--staged");
-  const dirs = ["extensions", "common", "types", "scripts", "skills", "tests"];
 
   if (isStaged) {
     const output = execSync(
@@ -87,10 +121,10 @@ function getDirectories() {
       { encoding: "utf-8" },
     );
     const staged = output.trim().split("\n").filter(Boolean);
-    return staged.filter((f) => f.endsWith(".ts") && !f.startsWith(".pi/"));
+    return filterStagedFiles(staged);
   }
 
-  return dirs;
+  return SOURCE_DIRS;
 }
 
 /** CLI entry point. */
