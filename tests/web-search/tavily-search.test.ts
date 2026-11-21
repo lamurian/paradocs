@@ -177,6 +177,34 @@ describe("searchTavily", () => {
     expect(results).toEqual([]);
   });
 
+  it("should pass timeRange through to the Tavily request body", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(TAVILY_JSON_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
+    await searchTavily("recent topic", 3, undefined, "month");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.timeRange).toBe("month");
+  });
+
+  it("should omit timeRange when not provided", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(TAVILY_JSON_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { searchTavily } = await import("../../extensions/web-search/tavily.ts");
+    await searchTavily("test", 3);
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.timeRange).toBeUndefined();
+  });
+
   it("should pass signal through to fetch call", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

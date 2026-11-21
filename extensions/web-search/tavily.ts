@@ -29,11 +29,18 @@ export interface SearchResult {
 
 /**
  * Query Tavily API. Requires TAVILY_KEY environment variable.
+ *
+ * @param query - The search query string.
+ * @param tier - Tier 1 (academic), 2 (filtered web), or 3 (general).
+ * @param signal - Optional AbortSignal for cancellation.
+ * @param timeRange - Optional Tavily time range ("month" or "year").
+ * @returns Matching search results.
  */
 export async function searchTavily(
   query: string,
   tier: number,
   signal?: AbortSignal,
+  timeRange?: "month" | "year"  ,
 ): Promise<SearchResult[]> {
   const apiKey = getApiKeys().tavily;
   if (!apiKey) return [];
@@ -43,6 +50,8 @@ export async function searchTavily(
     max_results: 10,
     include_answer: false,
   };
+
+  if (timeRange) body.timeRange = timeRange;
 
   if (tier === 1) {
     body.search_depth = "advanced";

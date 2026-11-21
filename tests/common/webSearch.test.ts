@@ -181,6 +181,48 @@ describe("searchWeb shared module", () => {
     expect(typeof result.tierLabel).toBe("string");
   });
 
+  it("should map a recent date to the month range", async () => {
+    const { sinceToTimeRange } = await import("../../common/webSearch.ts");
+    const now = new Date("2024-06-01T00:00:00Z");
+    expect(sinceToTimeRange("2024-05-15", now)).toBe("month");
+  });
+
+  it("should map a date within a year to the year range", async () => {
+    const { sinceToTimeRange } = await import("../../common/webSearch.ts");
+    const now = new Date("2024-06-01T00:00:00Z");
+    expect(sinceToTimeRange("2024-01-01", now)).toBe("year");
+  });
+
+  it("should return undefined for older, missing or invalid dates", async () => {
+    const { sinceToTimeRange } = await import("../../common/webSearch.ts");
+    const now = new Date("2024-06-01T00:00:00Z");
+    expect(sinceToTimeRange("2020-01-01", now)).toBeUndefined();
+    expect(sinceToTimeRange(undefined, now)).toBeUndefined();
+    expect(sinceToTimeRange(null, now)).toBeUndefined();
+    expect(sinceToTimeRange("not-a-date", now)).toBeUndefined();
+  });
+
+  it("should forward the mapped range to SearXNG as time_range", async () => {
+    const { searchWeb } = await import("../../common/webSearch.ts");
+    const recent = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    await searchWeb("recent query", { tier: 3, since: recent });
+
+    const fetchCalls = vi.mocked(globalThis.fetch).mock.calls;
+    const url = new URL(fetchCalls[0][0] as string);
+    expect(url.searchParams.get("time_range")).toBe("month");
+  });
+
+  it("should not send time_range when since is absent", async () => {
+    const { searchWeb } = await import("../../common/webSearch.ts");
+
+    await searchWeb("no since query", { tier: 3 });
+
+    const fetchCalls = vi.mocked(globalThis.fetch).mock.calls;
+    const url = new URL(fetchCalls[0][0] as string);
+    expect(url.searchParams.get("time_range")).toBeNull();
+  });
+
   it("should append the trust class to each formatted result line", async () => {
     const { formatResults } = await import("../../common/webSearch.ts");
 

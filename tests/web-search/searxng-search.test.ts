@@ -184,6 +184,34 @@ describe("searchSearxng", () => {
     delete process.env.SEARXNG_PORT;
   });
 
+  it("should set time_range when a timeRange is provided", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SEARXNG_JSON_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
+    await searchSearxng("test", 3, undefined, undefined, "year");
+
+    const url = new URL(mockFetch.mock.calls[0][0] as string);
+    expect(url.searchParams.get("time_range")).toBe("year");
+  });
+
+  it("should not set time_range when timeRange is absent", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SEARXNG_JSON_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { searchSearxng } = await import("../../extensions/web-search/searxng.ts");
+    await searchSearxng("test", 3);
+
+    const url = new URL(mockFetch.mock.calls[0][0] as string);
+    expect(url.searchParams.get("time_range")).toBeNull();
+  });
+
   it("should set safesearch, language and pageno parameters", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

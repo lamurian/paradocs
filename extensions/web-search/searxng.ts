@@ -31,12 +31,14 @@ export interface SearchResult {
  * @param tier - Tier 1 (academic), 2 (filtered web), or 3 (general)
  * @param signal - Optional AbortSignal for cancellation
  * @param category - Optional SearXNG category override (e.g. "it", "news")
+ * @param timeRange - Optional time range filter ("month" or "year")
  */
 export async function searchSearxng(
   query: string,
   tier: number,
   signal?: AbortSignal,
   category?: string,
+  timeRange?: "month" | "year"  ,
 ): Promise<SearchResult[]> {
   // Read port at runtime (not module load) so a custom SEARXNG_PORT from
   // ~/.pi/agent/.env or <cwd>/.pi/.env is honored after configureEnv().
@@ -47,6 +49,7 @@ export async function searchSearxng(
   params.set("safesearch", "1");
   params.set("language", "en");
   params.set("pageno", "1");
+  if (timeRange) params.set("time_range", timeRange);
 
   if (category) {
     // Custom category override — pass query through unmodified

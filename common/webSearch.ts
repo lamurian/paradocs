@@ -25,6 +25,30 @@ export interface SearchOutput {
   tierLabel: string;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Map a `since` date string to a search time range.
+ *
+ * @param since - ISO date string, or null/undefined when not supplied.
+ * @param now   - Reference date used to compute the age.
+ * @returns 'month' when age <= 31 days, 'year' when age <= 365 days,
+ *          otherwise undefined for older, missing or invalid dates.
+ */
+export function sinceToTimeRange(
+  since: string | null | undefined,
+  now: Date,
+): "month" | "year" | undefined {
+  if (!since) return undefined;
+  const then = new Date(since);
+  if (Number.isNaN(then.getTime())) return undefined;
+  const ageDays = (now.getTime() - then.getTime()) / DAY_MS;
+  if (ageDays < 0) return undefined;
+  if (ageDays <= 31) return "month";
+  if (ageDays <= 365) return "year";
+  return undefined;
+}
+
 // ── Domain filtering (Phase 3 only) ───────────────────────────────────
 
 const BING_ALLOWED_SUFFIXES = [
@@ -67,6 +91,7 @@ async function phase1SearXNG(
   forcedTier: number | undefined,
   category: string | undefined,
   signal: AbortSignal | undefined,
+  timeRange: "month" | "year" | undefined,
 ): Promise<{ results: SearchResult[]; maxTier: number }> {
   const tiers =
     forcedTier !== undefined && forcedTier >= 1 && forcedTier <= 3 ? [forcedTier] : [1, 2, 3];
@@ -78,7 +103,7 @@ async function phase1SearXNG(
     const catForTier = forcedTier !== undefined && forcedTier === tier ? category : undefined;
     const effectiveCategory =
       forcedTier !== undefined ? catForTier : tier === 2 ? category : undefined;
-    const results = await searchSearxng(query, tier, signal, effectiveCategory);
+    const results = await searchSearxng(query, tier, signal, effectiveCategory, timeRange);
     allResults.push(...results);
     maxTier = Math.max(maxTier, tier);
   }
@@ -90,8 +115,9 @@ async function phase2Tavily(
   query: string,
   tier: number,
   signal: AbortSignal | undefined,
+  timeRange: "month" | "year" | undefined,
 ): Promise<SearchResult[]> {
-  return searchTavily(query, tier, signal);
+  return searchTavily(query, tier, signal, timeRange);
 }
 
 async function phase3Bing(
@@ -133,15 +159,17 @@ export function formatResults(results: SearchResult[], query: string, tierLabel:
  * @param options.tier  - Force a specific SearXNG tier (1, 2, or 3).
  * @param options.category - Override SearXNG category (e.g. "it", "news").
  * @param options.signal - Optional AbortSignal for cancellation.
+ * @param options.since - Optional ISO date; mapped to a search time range.
  * @returns SearchOutput with results, tier used, and human-readable label.
  */
 export async function searchWeb(
   query: string,
-  options?: { tier?: number; category?: string; signal?: AbortSignal },
+  options?: { tier?: number; category?: string; signal?: AbortSignal; since?: string },
 ): Promise<SearchOutput> {
   const forcedTier = options?.tier;
   const category = options?.category;
   const signal = options?.signal;
+  const timeRange = sinceToTimeRange(options?.since, new Date());
 
   // ── Phase 1: SearXNG ──
   const { results: searxngResults, maxTier } = await phase1SearXNG(
@@ -149,6 +177,7 @@ export async function searchWeb(
     forcedTier,
     category,
     signal,
+    timeRange,
   );
   const usedTier = forcedTier ?? 3;
 
@@ -167,7 +196,7 @@ export async function searchWeb(
   }
 
   // ── Phase 2: Tavily ──
-  const tavilyResults = await phase2Tavily(query, maxTier || 3, signal);
+  const tavilyResults = await phase2Tavily(query, maxTier || 3, signal, timeRange);
   if (tavilyResults.length > 0) {
     return {
       results: tavilyResults,
