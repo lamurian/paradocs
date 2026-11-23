@@ -9,12 +9,13 @@
  * @module common/gather-evidence
  */
 
-import { parseDate } from "./freshness.ts";
+import { evaluateKbCoverage } from "./gather-kb.ts";
 import { classifyTrust } from "./trust.ts";
 import { canonicalizeUrl } from "./url.ts";
 
+import type { RelevanceConfig } from "./config-relevance.ts";
 import type { EvidencePack, EvidencePackQuery, EvidenceSource } from "./evidence-cache.ts";
-import type { Freshness } from "./freshness.ts";
+import type { GatherKbHit } from "./gather-kb.ts";
 import type { TrustClass } from "./trust.ts";
 import type { SearchResult } from "../extensions/web-search/native.ts";
 
@@ -25,8 +26,7 @@ export const MAX_SOURCES_CAP = 10;
 /** Default number of sources fetched per gather call. */
 export const DEFAULT_MAX_SOURCES = 5;
 
-// Gather limits: per-query hits, fetch concurrency, timeout and excerpt size.
-const KB_HITS_PER_QUERY = 5;
+// Gather limits: fetch concurrency, timeout and excerpt size.
 const FETCH_CONCURRENCY = 3;
 const FETCH_TIMEOUT_MS = 20_000;
 const EXCERPT_CHARS = 1500;
@@ -40,13 +40,7 @@ const TRUST_ORDER: TrustClass[] = [
   "unknown",
   "blog-forum",
 ];
-/** One knowledge-base hit returned by the injected `searchKb`. */
-export interface GatherKbHit {
-  path: string;
-  title: string;
-  description: string;
-  freshness: Freshness;
-}
+export type { GatherKbHit } from "./gather-kb.ts";
 /** Injected dependencies, kept explicit for deterministic testing. */
 export interface GatherEvidenceDeps {
   searchKb: (query: string) => GatherKbHit[];
@@ -57,6 +51,8 @@ export interface GatherEvidenceDeps {
     signal?: AbortSignal,
   ) => Promise<{ title: string; content: string } | { error: string }>;
   now: () => Date;
+  idf?: (term: string) => number;
+  relevance?: RelevanceConfig;
 }
 /** Input accepted by {@link gatherEvidence}. */
 export interface GatherEvidenceInput {
@@ -92,40 +88,6 @@ function trustRank(trust: TrustClass): number {
  */
 function toExcerpt(content: string): string {
   return content.replace(/\s+/g, " ").trim().slice(0, EXCERPT_CHARS);
-}
-
-/**
- * Find the newest source date among non-fresh KB hits.
- *
- * @param hits - KB hits for one query.
- * @returns Raw newest date string, or null when none is known.
- */
-function newestStaleSourceDate(hits: GatherKbHit[]): string | null {
-  let raw: string | null = null;
-  let best: number | null = null;
-  for (const hit of hits) {
-    if (hit.freshness.status === "fresh") continue;
-    const value = hit.freshness.newestSourcePublished;
-    const parsed = parseDate(value);
-    if (parsed === null) continue;
-    if (best === null || parsed > best) {
-      best = parsed;
-      raw = value;
-    }
-  }
-  return raw;
-}
-
-/**
- * Decide whether a query's KB hits make a web search unnecessary.
- *
- * @param hits - KB hits for one query.
- * @param force - When true the web is always searched.
- * @returns True when every hit is fresh and the search is not forced.
- */
-function isKbCovered(hits: GatherKbHit[], force: boolean): boolean {
-  if (force || hits.length === 0) return false;
-  return hits.every((hit) => hit.freshness.status === "fresh");
 }
 
 /**
@@ -212,9 +174,10 @@ async function fetchSources(
  * Gather a deterministic evidence pack for a question.
  *
  * The KB is searched for each query (top 5 hits). A query is `kbCovered`
- * when it has hits and all are fresh, unless `force` is set. Uncovered
- * queries call the injected web search with the newest source date of
- * their non-fresh hits as `since`. Web results are merged, deduplicated by
+ * when at least one hit passes the lexical relevance gate and every accepted
+ * hit is fresh, unless `force` is set. Uncovered queries call the injected
+ * web search with the newest source date of their accepted non-fresh hits as
+ * `since`. Web results are merged, deduplicated by
  * canonical URL and ranked by trust class, then tier, then discovery
  * order. The top `maxSources` are fetched with concurrency 3 and a 20 s
  * timeout; a failure records `fetchError` on that source without aborting
@@ -245,21 +208,15 @@ export async function gatherEvidence(
   let order = 0;
 
   for (const query of queries) {
-    const hits = deps.searchKb(query).slice(0, KB_HITS_PER_QUERY);
-    const kbCovered = isKbCovered(hits, input.force === true);
-    const kbHits = hits.map((hit) => ({
-      path: hit.path,
-      title: hit.title,
-      freshness: hit.freshness.status,
-    }));
+    const coverage = evaluateKbCoverage(query, deps.searchKb(query), {
+      force: input.force === true,
+      idf: deps.idf,
+      relevance: deps.relevance,
+    });
+    const { kbCovered, since, kbHits } = coverage;
 
-    if (kbCovered) {
-      packQueries.push({ query, kbCovered: true, since: null, kbHits });
-      continue;
-    }
-
-    const since = newestStaleSourceDate(hits);
-    packQueries.push({ query, kbCovered: false, since, kbHits });
+    packQueries.push({ query, kbCovered, since, kbHits });
+    if (kbCovered) continue;
 
     const results = await deps.searchWeb(query, { since });
     for (const result of results) {

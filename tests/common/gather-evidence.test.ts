@@ -40,10 +40,11 @@ function freshness(status: Freshness["status"], newestSourcePublished: string | 
  *
  * @param path - Note path.
  * @param freshnessValue - Freshness verdict for the note.
+ * @param title - Note title (defaults to the path).
  * @returns A KB hit for the fake searchKb.
  */
-function kbHit(path: string, freshnessValue: Freshness): GatherKbHit {
-  return { path, title: path, description: "", freshness: freshnessValue };
+function kbHit(path: string, freshnessValue: Freshness, title = path): GatherKbHit {
+  return { path, title, description: "", freshness: freshnessValue };
 }
 
 /**
@@ -77,7 +78,7 @@ describe("gatherEvidence — KB coverage", () => {
   it("should skip the web for fresh KB hits unless forced, marking the query kbCovered", async () => {
     const searchWeb = vi.fn(() => Promise.resolve([]));
     const deps = makeDeps({
-      searchKb: () => [kbHit("notes/a.md", freshness("fresh", "2024-12-01"))],
+      searchKb: () => [kbHit("notes/a.md", freshness("fresh", "2024-12-01"), "Fresh topic notes")],
       searchWeb,
     });
 
@@ -100,7 +101,7 @@ describe("gatherEvidence — web result handling", () => {
   it("should dedupe by canonical URL, fetch at most maxSources ranked by trust and record failures", async () => {
     const fetched: string[] = [];
     const deps = makeDeps({
-      searchKb: () => [kbHit("notes/a.md", freshness("stale", "2020-01-01"))],
+      searchKb: () => [kbHit("notes/a.md", freshness("stale", "2020-01-01"), "Topic notes")],
       searchWeb: () =>
         Promise.resolve([
           webResult("https://blog.example.com/post", 1),
@@ -138,9 +139,9 @@ describe("gatherEvidence — since date", () => {
     const searchWeb = vi.fn(() => Promise.resolve([]));
     const deps = makeDeps({
       searchKb: () => [
-        kbHit("notes/old.md", freshness("stale", "2023-01-01")),
-        kbHit("notes/newer.md", freshness("aging", "2024-06-15")),
-        kbHit("notes/fresh.md", freshness("fresh", "2025-01-01")),
+        kbHit("notes/old.md", freshness("stale", "2023-01-01"), "Topic old notes"),
+        kbHit("notes/newer.md", freshness("aging", "2024-06-15"), "Topic newer notes"),
+        kbHit("notes/fresh.md", freshness("fresh", "2025-01-01"), "Topic fresh notes"),
       ],
       searchWeb,
     });

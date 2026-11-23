@@ -36,7 +36,13 @@ export interface EvidencePackQuery {
   query: string;
   kbCovered: boolean;
   since: string | null;
-  kbHits: Array<{ path: string; title: string; freshness: string }>;
+  kbHits: Array<{
+    path: string;
+    title: string;
+    freshness: string;
+    relevance?: number;
+    relevant?: boolean;
+  }>;
 }
 
 /** A complete evidence pack as stored on disk. */

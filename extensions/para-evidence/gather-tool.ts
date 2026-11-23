@@ -18,9 +18,11 @@ import { fetchUrlWithTimeout } from "../../common/fetchUrl.ts";
 import { loadFreshness } from "../../common/freshness.ts";
 import { gatherEvidence } from "../../common/gather-evidence.ts";
 import { openNotesDbReadOnly } from "../../common/notesDb.ts";
+import { buildIdfMap } from "../../common/recall-query.ts";
 import { searchWeb as runWebSearch } from "../../common/webSearch.ts";
 import { searchDocs } from "../para-knowledge/sqlite-search.ts";
 
+import type { RelevanceConfig } from "../../common/config-relevance.ts";
 import type { EvidencePack } from "../../common/evidence-cache.ts";
 import type { GatherEvidenceDeps, GatherKbHit } from "../../common/gather-evidence.ts";
 import type { SearchResult } from "../web-search/native.ts";
@@ -39,6 +41,8 @@ export interface GatherToolDeps {
     signal?: AbortSignal,
   ) => Promise<{ title: string; content: string } | { error: string }>;
   now?: () => Date;
+  idf?: (term: string) => number;
+  relevance?: RelevanceConfig;
 }
 
 /**
@@ -52,19 +56,32 @@ export interface GatherToolDeps {
  */
 export function createDefaultGatherDeps(cwd: string): GatherToolDeps {
   const now = (): Date => new Date();
+  const { dir } = getKnowledgeConfig(cwd);
+  const { config } = loadParadocsConfig(dir);
+
+  const idf = (term: string): number => {
+    const db = openNotesDbReadOnly(cwd);
+    if (!db) return 1;
+    const map = buildIdfMap(db);
+    let max = 0;
+    for (const value of map.values()) {
+      if (value > max) max = value;
+    }
+    return map.get(term) ?? max;
+  };
 
   return {
     searchKb: (query: string): GatherKbHit[] => {
       const db = openNotesDbReadOnly(cwd);
       if (!db) return [];
-      const { dir } = getKnowledgeConfig(cwd);
-      const { config } = loadParadocsConfig(dir);
       const reference = now();
       return searchDocs(db, query).map((result) => ({
         path: result.path,
         title: result.title,
         description: result.description ?? "",
         freshness: loadFreshness(db, result.path, config.freshness, reference),
+        tags: result.tags,
+        body: result.body,
       }));
     },
     searchWeb: async (query: string, opts: { since: string | null }): Promise<SearchResult[]> => {
@@ -74,7 +91,22 @@ export function createDefaultGatherDeps(cwd: string): GatherToolDeps {
     fetch: (url: string, timeoutMs: number, signal?: AbortSignal) =>
       fetchUrlWithTimeout(url, timeoutMs, signal),
     now,
+    idf,
+    relevance: config.relevance,
   };
+}
+
+/**
+ * Render one KB hit line, including relevance when it was recorded.
+ *
+ * @param hit - Pack KB hit to render.
+ * @returns A single `kb hit:` line with freshness and relevance label.
+ */
+export function formatKbHit(hit: EvidencePack["queries"][number]["kbHits"][number]): string {
+  const base = `  kb hit: ${hit.path} — ${hit.title} (${hit.freshness}`;
+  if (hit.relevance === undefined) return `${base})`;
+  const label = hit.relevant === true ? "relevant" : "weak";
+  return `${base}, relevance ${hit.relevance.toFixed(2)} ${label})`;
 }
 
 /**
@@ -105,7 +137,7 @@ export function formatGatherResult(pack: EvidencePack): string {
       lines.push("  kb hits: (none)");
     } else {
       for (const hit of query.kbHits) {
-        lines.push(`  kb hit: ${hit.path} — ${hit.title} (${hit.freshness})`);
+        lines.push(formatKbHit(hit));
       }
     }
   }
@@ -164,6 +196,8 @@ export function registerGatherEvidenceTool(pi: ExtensionAPI, deps?: GatherToolDe
         searchWeb: active.searchWeb,
         fetch: active.fetch,
         now: active.now ?? (() => new Date()),
+        idf: active.idf,
+        relevance: active.relevance,
       };
 
       const raw = await gatherEvidence(params, gatherDeps, signal);

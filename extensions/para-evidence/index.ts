@@ -10,7 +10,7 @@
 
 import { Type } from "typebox";
 
-import { registerGatherEvidenceTool } from "./gather-tool.ts";
+import { formatKbHit, registerGatherEvidenceTool } from "./gather-tool.ts";
 import { registerVerifySourceTool } from "./verify-tools.ts";
 import { loadEvidencePack } from "../../common/evidence-cache.ts";
 
@@ -68,7 +68,7 @@ export function formatEvidencePack(pack: EvidencePack, includeContent: boolean):
       lines.push("  kb hits: (none)");
     } else {
       for (const hit of query.kbHits) {
-        lines.push(`  kb hit: ${hit.path} — ${hit.title} (${hit.freshness})`);
+        lines.push(formatKbHit(hit));
       }
     }
   }

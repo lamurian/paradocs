@@ -60,7 +60,15 @@ function makePack(): Omit<EvidencePack, "id"> {
         query: "evidence caching",
         kbCovered: true,
         since: "2024-01-01",
-        kbHits: [{ path: "Resources/cache.md", title: "Cache", freshness: "fresh" }],
+        kbHits: [
+          {
+            path: "Resources/cache.md",
+            title: "Cache",
+            freshness: "fresh",
+            relevance: 0.92,
+            relevant: true,
+          },
+        ],
       },
     ],
     sources: [
@@ -107,6 +115,7 @@ describe("get_evidence", () => {
     expect(text).toContain("How does evidence caching work?");
     expect(text).toContain("Example Source");
     expect(text).toContain("A short excerpt.");
+    expect(text).toContain("kb hit: Resources/cache.md — Cache (fresh, relevance 0.92 relevant)");
     expect(text).not.toContain("FULL SOURCE BODY UNIQUE");
     expect(result.details).toEqual({ id: saved.id, found: true, includeContent: false });
   });

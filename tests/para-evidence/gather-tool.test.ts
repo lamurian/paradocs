@@ -147,7 +147,9 @@ describe("gather_evidence", () => {
     expect(text).toContain(id);
     expect(text).toContain("kb covered: yes");
     expect(text).toContain("Cache Notes");
-    expect(text).toContain("(fresh)");
+    expect(text).toContain(
+      "kb hit: Resources/cache.md — Cache Notes (fresh, relevance 1.00 relevant)",
+    );
     expect(text).toContain("https://example.com/web");
     expect(text).toContain("trust: unknown");
     expect(text).toContain("A".repeat(300));
