@@ -77,7 +77,7 @@ describe("runRecall", () => {
       db,
       makeDoc({
         path: "Projects/alpha.md",
-        title: "TypeScript Database Design",
+        title: "TypeScript Database Reasoning",
         description: "A guide to orchestration",
       }),
     );
@@ -111,42 +111,12 @@ describe("runRecall", () => {
     expect(result?.hits).toBe(1);
     expect(result?.block).toContain("KB recall (paradocs): existing notes related to this prompt");
     expect(result?.block).toContain(
-      "- TypeScript Database Design | Projects/alpha.md | freshness: fresh | A guide to orchestration",
+      "- TypeScript Database Reasoning | Projects/alpha.md | freshness: fresh | A guide to orchestration",
     );
     expect(result?.block).not.toContain("Projects/beta.md");
   });
 
-  it("counts terms found in the description as well as title and body", () => {
-    indexFile(
-      db,
-      makeDoc({
-        path: "Projects/seed.md",
-        title: "Reasoning notes",
-        body: "reasoning",
-        description: "",
-      }),
-    );
-    indexFile(
-      db,
-      makeDoc({
-        path: "Projects/desc.md",
-        title: "TypeScript",
-        body: "database",
-        description: "reasoning notes",
-      }),
-    );
-
-    const result = runRecall(
-      "typescript database reasoning",
-      db,
-      makeConfig({ minMatchedTerms: 3 }),
-      new Date("2026-01-10T00:00:00.000Z"),
-    );
-
-    expect(result?.hits).toBe(1);
-  });
-
-  it("caps the block at maxHits", () => {
+  it("caps the block at 3 notes by default", () => {
     for (let i = 0; i < 6; i++) {
       indexFile(
         db,
@@ -160,21 +130,31 @@ describe("runRecall", () => {
     const result = runRecall(
       "typescript database reasoning orchestration",
       db,
-      makeConfig({ maxHits: 2 }),
+      makeConfig(),
       new Date("2026-01-10T00:00:00.000Z"),
     );
 
-    expect(result?.hits).toBe(2);
-    expect(result?.block.split("\n")).toHaveLength(3);
+    expect(result?.hits).toBe(3);
+    expect(result?.block.split("\n")).toHaveLength(4);
   });
 
-  it("returns null when no candidate matches minMatchedTerms", () => {
+  it("drops notes scoring below relativeCut x the best note", () => {
+    for (let i = 0; i < 2; i++) {
+      indexFile(
+        db,
+        makeDoc({
+          path: `Projects/best-${i}.md`,
+          title: "TypeScript Database Reasoning",
+          body: "",
+        }),
+      );
+    }
     indexFile(
       db,
       makeDoc({
-        path: "Projects/thin.md",
-        title: "TypeScript",
-        body: "typescript database",
+        path: "Projects/weak.md",
+        title: "TypeScript Database",
+        body: "reasoning",
         description: "",
       }),
     );
@@ -182,11 +162,73 @@ describe("runRecall", () => {
     const result = runRecall(
       "typescript database reasoning",
       db,
-      makeConfig({ minMatchedTerms: 3 }),
+      makeConfig(),
+      new Date("2026-01-10T00:00:00.000Z"),
+    );
+
+    expect(result?.hits).toBe(2);
+    expect(result?.block).not.toContain("Projects/weak.md");
+  });
+
+  it("returns null when the best coverage is below kbThreshold despite sharing two terms", () => {
+    indexFile(
+      db,
+      makeDoc({
+        path: "Projects/thin.md",
+        title: "TypeScript Database",
+        body: "",
+        description: "",
+      }),
+    );
+    indexFile(
+      db,
+      makeDoc({
+        path: "Projects/decoy.md",
+        title: "Unrelated",
+        body: "typescript database reasoning",
+      }),
+    );
+
+    const result = runRecall(
+      "typescript database reasoning",
+      db,
+      makeConfig(),
       new Date("2026-01-10T00:00:00.000Z"),
     );
 
     expect(result).toBeNull();
+  });
+
+  it("matches whole tokens only so 'digital' does not match the term 'git'", () => {
+    indexFile(
+      db,
+      makeDoc({
+        path: "Projects/digital.md",
+        title: "Digital caching conflicts",
+        body: "",
+        description: "",
+      }),
+    );
+    indexFile(
+      db,
+      makeDoc({
+        path: "Projects/git.md",
+        title: "Git caching conflicts",
+        body: "",
+        description: "",
+      }),
+    );
+
+    const result = runRecall(
+      "git caching conflicts",
+      db,
+      makeConfig(),
+      new Date("2026-01-10T00:00:00.000Z"),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.block).toContain("Projects/git.md");
+    expect(result?.block).not.toContain("Projects/digital.md");
   });
 
   it("returns null when fewer than three terms are kept", () => {

@@ -31,8 +31,7 @@ describe("loadParadocsConfig", () => {
     expect(config.recall.maxChars).toBe(2000);
     expect(config.recall.maxTerms).toBe(12);
     expect(config.recall.timeoutMs).toBe(150);
-    expect(config.recall.maxHits).toBe(5);
-    expect(config.recall.minMatchedTerms).toBe(2);
+    expect(config.recall.maxHits).toBe(3);
     expect(config.recall.skipPatterns).toEqual([]);
     expect(config.note.maxContentLines).toBe(60);
     expect(config.note.wrapWidth).toBe(80);

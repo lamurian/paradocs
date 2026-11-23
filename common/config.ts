@@ -29,7 +29,6 @@ export interface RecallConfig {
   maxTerms: number;
   timeoutMs: number;
   maxHits: number;
-  minMatchedTerms: number;
   skipPatterns: string[];
 }
 
@@ -55,8 +54,7 @@ export const DEFAULT_PARADOCS_CONFIG: ParadocsConfig = {
     maxChars: 2000,
     maxTerms: 12,
     timeoutMs: 150,
-    maxHits: 5,
-    minMatchedTerms: 2,
+    maxHits: 3,
     skipPatterns: [],
   },
   note: { maxContentLines: 60, wrapWidth: 80, maxLinks: 5 },
@@ -172,13 +170,6 @@ function mergeRecall(raw: unknown, issues: string[]): RecallConfig {
       issues,
     ),
     maxHits: readPositiveInteger(raw, "maxHits", defaults.maxHits, "recall.maxHits", issues),
-    minMatchedTerms: readPositiveInteger(
-      raw,
-      "minMatchedTerms",
-      defaults.minMatchedTerms,
-      "recall.minMatchedTerms",
-      issues,
-    ),
     skipPatterns: [...defaults.skipPatterns],
   };
 

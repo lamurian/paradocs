@@ -11,8 +11,11 @@
 import { DEFAULT_PARADOCS_CONFIG } from "./config.ts";
 import { loadFreshness } from "./freshness.ts";
 import { buildIdfMap, extractRecallTerms } from "./recall-query.ts";
+import { gateByRelevance } from "./relevance-gate.ts";
+import { createLexicalScorer } from "./relevance.ts";
 
 import type { ParadocsConfig, RecallConfig } from "./config.ts";
+import type { RelevanceDoc } from "./relevance.ts";
 import type { SqliteDb } from "../extensions/para-knowledge/sqlite-types.ts";
 
 /** Minimum number of prompt terms required before a recall query runs. */
@@ -44,6 +47,7 @@ interface RecallRow {
   title: string | null;
   body: string | null;
   description: string | null;
+  tags_csv: string | null;
 }
 
 /**
@@ -83,11 +87,15 @@ function isParadocsConfig(config: RecallRunConfig): config is ParadocsConfig {
  * Resolve a full Paradocs config from either full or recall-only input.
  *
  * @param config - Full configuration or just the recall section.
- * @returns Full configuration with recall and freshness defaults available.
+ * @returns Full configuration with recall, freshness and relevance defaults available.
  */
 function resolveConfig(config: RecallRunConfig): ParadocsConfig {
   if (isParadocsConfig(config)) return config;
-  return { ...DEFAULT_PARADOCS_CONFIG, recall: config };
+  return {
+    ...DEFAULT_PARADOCS_CONFIG,
+    recall: config,
+    relevance: { ...DEFAULT_PARADOCS_CONFIG.relevance },
+  };
 }
 
 /**
@@ -101,20 +109,40 @@ function resolveNow(now: Date | number): Date {
 }
 
 /**
- * Count how many terms appear in a note's lowercased text.
+ * Build an IDF lookup that falls back to the map's maximum weight.
  *
- * @param haystack - Lowercased title, description and body.
- * @param terms - Lowercase prompt terms.
- * @returns Number of distinct terms contained in the note text.
+ * Missing terms use the largest value in the map (or 1 when the map is empty)
+ * so a term absent from the index still contributes a conservative weight.
+ *
+ * @param idf - IDF map produced by {@link buildIdfMap}.
+ * @returns Function mapping an unstemmed term to its IDF weight.
  */
-function countMatchedTerms(haystack: string, terms: string[]): number {
-  return terms.filter((term) => haystack.includes(term)).length;
+function buildIdfLookup(idf: Map<string, number>): (term: string) => number {
+  let max = 0;
+  for (const value of idf.values()) {
+    if (value > max) max = value;
+  }
+  const fallback = idf.size === 0 ? 1 : max;
+  return (term: string): number => idf.get(term) ?? fallback;
+}
+
+/**
+ * Map an FTS row to relevance document fields.
+ *
+ * @param row - Candidate row from `docs_fts`.
+ * @returns Strong fields (title, description, tags, path) plus body text.
+ */
+function rowToDoc(row: RecallRow): RelevanceDoc {
+  return {
+    strong: [row.title ?? "", row.description ?? "", row.tags_csv ?? "", row.path],
+    body: row.body ?? "",
+  };
 }
 
 /**
  * Render the hidden KB recall block.
  *
- * @param hits - Notes that passed the term threshold, already capped.
+ * @param hits - Accepted notes, already ranked and capped.
  * @returns Markdown block injected as a custom message.
  */
 function renderBlock(hits: RecallHit[]): string {
@@ -129,10 +157,10 @@ function renderBlock(hits: RecallHit[]): string {
  * Run a deterministic BM25 recall lookup for a prompt.
  *
  * Returns null when recall is skipped, when fewer than three terms survive
- * extraction, or when no candidate matches at least `minMatchedTerms`.
- * Candidates are fetched with an OR query ordered by FTS5 rank, filtered by
- * lowercase term containment across title, description and body, then cut
- * to `maxHits`.
+ * extraction, or when no candidate passes the lexical relevance gate.
+ * Candidates are fetched with an OR query ordered by FTS5 rank, gated by
+ * coverage against `relevance.kbThreshold`, cut relative to the best score,
+ * then capped at `recall.maxHits`.
  *
  * @param prompt - Raw user prompt.
  * @param db - Open notes.db handle.
@@ -147,11 +175,12 @@ export function runRecall(
   now: Date | number = new Date(),
 ): RecallResult | null {
   const fullConfig = resolveConfig(config);
-  const { recall } = fullConfig;
+  const { recall, relevance } = fullConfig;
 
   if (shouldSkipRecall(prompt, recall)) return null;
 
-  const terms = extractRecallTerms(prompt, buildIdfMap(db), {
+  const idf = buildIdfMap(db);
+  const terms = extractRecallTerms(prompt, idf, {
     maxChars: recall.maxChars,
     maxTerms: recall.maxTerms,
   });
@@ -160,7 +189,8 @@ export function runRecall(
   const ftsQuery = terms.map((term) => `"${term}"`).join(" OR ");
   const rows = db
     .prepare(
-      `SELECT d.path AS path, d.title AS title, d.body AS body, f.description AS description
+      `SELECT d.path AS path, d.title AS title, d.body AS body,
+              d.tags_csv AS tags_csv, f.description AS description
        FROM docs_fts d
        JOIN files f ON f.path = d.path
        WHERE d.docs_fts MATCH ?
@@ -169,23 +199,27 @@ export function runRecall(
     )
     .all<RecallRow>(ftsQuery, recall.maxHits * CANDIDATE_MULTIPLIER);
 
+  const scorer = createLexicalScorer({
+    threshold: relevance.kbThreshold,
+    bodyWeight: relevance.bodyWeight,
+    idf: buildIdfLookup(idf),
+  });
+
+  const { accepted } = gateByRelevance(terms.join(" "), rows, rowToDoc, {
+    scorers: [scorer],
+    relativeCut: relevance.relativeCut,
+    maxHits: recall.maxHits,
+  });
+
+  if (accepted.length === 0) return null;
+
   const reference = resolveNow(now);
-  const hits: RecallHit[] = [];
-  for (const row of rows) {
-    if (hits.length >= recall.maxHits) break;
+  const hits: RecallHit[] = accepted.map((entry) => ({
+    title: entry.item.title ?? "",
+    path: entry.item.path,
+    description: entry.item.description ?? "",
+    freshness: loadFreshness(db, entry.item.path, fullConfig.freshness, reference).status,
+  }));
 
-    const description = row.description ?? "";
-    const haystack = `${row.title ?? ""} ${description} ${row.body ?? ""}`.toLowerCase();
-    if (countMatchedTerms(haystack, terms) < recall.minMatchedTerms) continue;
-
-    hits.push({
-      title: row.title ?? "",
-      path: row.path,
-      description,
-      freshness: loadFreshness(db, row.path, fullConfig.freshness, reference).status,
-    });
-  }
-
-  if (hits.length === 0) return null;
   return { block: renderBlock(hits), hits: hits.length };
 }
