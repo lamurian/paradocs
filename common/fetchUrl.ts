@@ -4,13 +4,15 @@
  * 1. PDF detection → pdftotext
  * 2. Obscura CDP → headless browser markdown
  * 3. HTTP fallback → HTML stripping
- * 4. Tavily extract fallback (when TAVILY_KEY is set)
- * 5. If all fail → return { error }
+ * 4. Junk-page check (captcha / redirect stub) on HTML results
+ * 5. Tavily extract fallback (when TAVILY_KEY is set)
+ * 6. If all fail → return { error }
  *
  * @module common/fetchUrl
  */
 
 import { getApiKeys } from "./env.ts";
+import { detectJunkPage } from "./fetch-quality.ts";
 import { tryObscura } from "../extensions/link-summarizer/cdp.ts";
 import { fetchViaHttp } from "../extensions/link-summarizer/http.ts";
 import { tryExtractPdf, isPdfUrl } from "../extensions/link-summarizer/pdf.ts";
@@ -90,6 +92,41 @@ async function handleHtml(
   return formatContent(title || "(no title)", url, body, "http-fallback");
 }
 
+// ── Tavily fallback ──────────────────────────────────────────────────
+
+/**
+ * Decide whether a pipeline error is recoverable through Tavily extraction.
+ *
+ * Tavily is a last-resort extractor for pages the transport could not
+ * retrieve at all. Definitive responses (HTTP status errors, PDF content
+ * types, and arbitrary upstream errors) are surfaced unchanged.
+ *
+ * @param error - The error string returned by the HTML pipeline.
+ * @returns True when Tavily extraction is worth attempting.
+ */
+function isRecoverableFetchError(error: string): boolean {
+  return (
+    error.startsWith("Fetch failed") ||
+    error.startsWith("Error reading body") ||
+    error === "No response body" ||
+    error.startsWith("No readable text extracted")
+  );
+}
+
+async function tryTavily(
+  url: string,
+  signal?: AbortSignal,
+): Promise<{ title: string; content: string; engine: string } | null> {
+  if (!getApiKeys().tavily) return null;
+  const tavilyResult = await extractWithTavily(url, signal);
+  if ("error" in tavilyResult) return null;
+  return {
+    title: tavilyResult.title,
+    content: tavilyResult.content,
+    engine: "tavily-extract",
+  };
+}
+
 // ── Timeout wrapper ──────────────────────────────────────────────────
 
 /**
@@ -142,7 +179,8 @@ export async function fetchUrlWithTimeout(
  * 1. PDF detection (URL-based) → pdftotext
  * 2. Obscura headless browser (CDP WebSocket)
  * 3. HTTP fallback with HTML stripping
- * 4. If HTTP response is PDF → pdftotext
+ * 4. Reject junk pages (captcha / redirect stubs)
+ * 5. If HTTP response is PDF → pdftotext
  *
  * Returns structured content on success, or { error } on failure.
  *
@@ -174,18 +212,24 @@ export async function fetchUrlAsText(
 
   // HTML pipeline (Obscura → HTTP → PDF fallback)
   const result = await handleHtml(url, signal);
-  if (!("error" in result)) return result;
+  if (!("error" in result)) {
+    // PDF results are not quality-checked.
+    if (result.engine === "pdftotext") return result;
 
-  // Last resort: Tavily extract when an API key is configured
-  if (getApiKeys().tavily) {
-    const tavilyResult = await extractWithTavily(url, signal);
-    if (!("error" in tavilyResult)) {
-      return {
-        title: tavilyResult.title,
-        content: tavilyResult.content,
-        engine: "tavily-extract",
-      };
-    }
+    const junkReason = detectJunkPage(result.title, result.content);
+    if (!junkReason) return result;
+
+    // Junk page: treat like a failed fetch, trying Tavily when configured.
+    const tavilyResult = await tryTavily(url, signal);
+    if (tavilyResult) return tavilyResult;
+    return { error: `Rejected page: ${junkReason}` };
+  }
+
+  // Last resort: Tavily extract when an API key is configured and the
+  // failure was a transport/read problem rather than a definitive response.
+  if (isRecoverableFetchError(result.error)) {
+    const tavilyResult = await tryTavily(url, signal);
+    if (tavilyResult) return tavilyResult;
   }
 
   return result;

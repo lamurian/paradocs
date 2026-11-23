@@ -1,11 +1,4 @@
-/**
- * Tests for common/fetchUrl.ts — shared fetchUrlAsText function.
- *
- * Verifies that the exported function:
- * - Returns { title, content, engine } on success
- * - Returns { error } on failure
- * - Handles PDF, Obscura CDP, HTTP fallback
- */
+/** Tests for common/fetchUrl.ts — shared fetchUrlAsText function. */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -24,11 +17,10 @@ vi.mock("../../common/env.ts", async (importOriginal) => {
   };
 });
 
+const load = () => import("../../common/fetchUrl.ts");
 beforeEach(() => {
-  // isolate=false shares the module registry, so force a fresh graph that
-  // uses the @tavily/core mock below.
+  // isolate=false shares the module registry, so force a fresh graph.
   vi.resetModules();
-  // Keep Tavily unavailable by default so the primary pipeline is exercised.
   mockApiKeys.tavily = "";
   tavilyExtractMock.mockReset();
 });
@@ -46,8 +38,7 @@ describe("fetchUrlWithTimeout", () => {
     originalFetch = globalThis.fetch;
     originalWs = globalThis.WebSocket;
     vi.useFakeTimers();
-
-    // Stub WebSocket to throw synchronously (Obscura not available)
+    // Obscura not available.
     vi.stubGlobal(
       "WebSocket",
       vi.fn(function () {
@@ -72,7 +63,6 @@ describe("fetchUrlWithTimeout", () => {
         controller.close();
       },
     });
-
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -82,39 +72,25 @@ describe("fetchUrlWithTimeout", () => {
         text: () => Promise.resolve(html),
       }),
     );
-
-    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.ts");
+    const { fetchUrlWithTimeout } = await load();
     const result = await fetchUrlWithTimeout("https://example.com/fast", 5000);
-
     expect(result).toHaveProperty("content");
-    if ("content" in result) {
-      expect(result.content).toContain("Fast Page");
-    }
+    if ("content" in result) expect(result.content).toContain("Fast Page");
   });
 
   it("should return error when fetch times out", async () => {
-    // A fetch that never resolves
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
-
-    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.ts");
-
+    const { fetchUrlWithTimeout } = await load();
     const resultPromise = fetchUrlWithTimeout("https://example.com/slow", 100);
-
-    // Advance past the timeout
     await vi.advanceTimersByTimeAsync(200);
-
     const result = await resultPromise;
     expect(result).toHaveProperty("error");
-    if ("error" in result) {
-      expect(result.error).toContain("timed out");
-    }
+    if ("error" in result) expect(result.error).toContain("timed out");
   });
 
   it("should return error on invalid URL", async () => {
-    const { fetchUrlWithTimeout } = await import("../../common/fetchUrl.ts");
-
+    const { fetchUrlWithTimeout } = await load();
     const result = await fetchUrlWithTimeout("not-a-url", 5000);
-
     expect(result).toHaveProperty("error");
   });
 });
@@ -124,10 +100,7 @@ describe("fetchUrlAsText shared module", () => {
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
-    // Stub WebSocket to fail immediately (Obscura not available)
-
     const mockWs = vi.fn(function () {
-      // Return a mock WebSocket that triggers onerror immediately
       const ws: Record<string, unknown> = {
         onopen: null,
         onerror: null,
@@ -138,7 +111,6 @@ describe("fetchUrlAsText shared module", () => {
       };
       setTimeout(() => {
         ws.readyState = 3;
-
         (ws.onerror as ((e: Event) => void) | null)?.(new Event("error"));
       }, 50);
       return ws;
@@ -152,26 +124,19 @@ describe("fetchUrlAsText shared module", () => {
   });
 
   it("should return error when URL is invalid", async () => {
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
-
+    const { fetchUrlAsText } = await load();
     const result = await fetchUrlAsText("not-a-valid-url");
-
     expect(result).toHaveProperty("error");
   });
 
   it("should return error for unsupported protocol", async () => {
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
-
+    const { fetchUrlAsText } = await load();
     const result = await fetchUrlAsText("ftp://example.com/file");
-
     expect(result).toHaveProperty("error");
-    if ("error" in result) {
-      expect(result.error).toContain("Unsupported protocol");
-    }
+    if ("error" in result) expect(result.error).toContain("Unsupported protocol");
   });
 
   it("should handle HTTP fallback when Obscura is unavailable", async () => {
-    // Mock HTTP fetch to return HTML content
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -183,10 +148,8 @@ describe("fetchUrlAsText shared module", () => {
           ),
       }),
     );
-
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const { fetchUrlAsText } = await load();
     const result = await fetchUrlAsText("https://example.com/test");
-
     if ("error" in result) {
       expect(result.error).toBeTruthy();
     } else {
@@ -198,11 +161,78 @@ describe("fetchUrlAsText shared module", () => {
 
   it("should return error shape when all engines fail", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
-
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const { fetchUrlAsText } = await load();
     const result = await fetchUrlAsText("https://example.com/failing");
-
     expect(result).toHaveProperty("error");
+  });
+});
+
+describe("fetchUrlAsText junk-page rejection", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    tavilyExtractMock.mockReset();
+    mockApiKeys.tavily = "";
+    vi.stubGlobal(
+      "WebSocket",
+      vi.fn(function () {
+        throw new Error("WebSocket not available");
+      }),
+    );
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function stubCaptchaPage(): void {
+    const html =
+      "<html><head><title>Checking your browser - reCAPTCHA</title></head>" +
+      "<body><p>Please wait while we verify you are human.</p></body></html>";
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(html));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Map([["content-type", "text/html"]]),
+        body,
+        text: () => Promise.resolve(html),
+      }),
+    );
+  }
+
+  it("should return 'Rejected page:' error for a captcha page without Tavily", async () => {
+    stubCaptchaPage();
+    const { fetchUrlAsText } = await load();
+    const result = await fetchUrlAsText("https://example.com/captcha");
+    expect(result).toHaveProperty("error");
+    if ("error" in result) expect(result.error.startsWith("Rejected page:")).toBe(true);
+    expect(tavilyExtractMock).not.toHaveBeenCalled();
+  });
+
+  it("should return Tavily-extracted content for a captcha page when a key is set", async () => {
+    stubCaptchaPage();
+    mockApiKeys.tavily = "test-key";
+    tavilyExtractMock.mockResolvedValue({
+      results: [{ url: "https://example.com/captcha", title: "Real Page", rawContent: "# Real" }],
+      failedResults: [],
+    });
+    const { fetchUrlAsText } = await load();
+    const result = await fetchUrlAsText("https://example.com/captcha");
+    expect(result).toEqual({
+      title: "Real Page",
+      content: "# Real",
+      engine: "tavily-extract",
+    });
   });
 });
 
@@ -234,10 +264,8 @@ describe("fetchUrlAsText Tavily extract fallback", () => {
       results: [{ url: "https://example.com/spa", title: "SPA Page", rawContent: "# SPA" }],
       failedResults: [],
     });
-
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const { fetchUrlAsText } = await load();
     const result = await fetchUrlAsText("https://example.com/spa");
-
     expect(result).toEqual({
       title: "SPA Page",
       content: "# SPA",
@@ -251,10 +279,8 @@ describe("fetchUrlAsText Tavily extract fallback", () => {
       results: [],
       failedResults: [{ url: "https://example.com/spa", error: "Tavily failed" }],
     });
-
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const { fetchUrlAsText } = await load();
     const result = await fetchUrlAsText("https://example.com/spa");
-
     expect(result).toHaveProperty("error");
     if ("error" in result) {
       expect(result.error).not.toBe("Tavily failed");
@@ -263,9 +289,8 @@ describe("fetchUrlAsText Tavily extract fallback", () => {
   });
 
   it("should return the original error when TAVILY_KEY is unset", async () => {
-    const { fetchUrlAsText } = await import("../../common/fetchUrl.ts");
+    const { fetchUrlAsText } = await load();
     const result = await fetchUrlAsText("https://example.com/spa");
-
     expect(result).toHaveProperty("error");
     expect(tavilyExtractMock).not.toHaveBeenCalled();
   });
