@@ -153,13 +153,23 @@ export function formatGatherResult(pack: EvidencePack): string {
   }
 
   lines.push("", `Sources (${pack.sources.length}):`);
-  if (pack.sources.length === 0) lines.push("- (none)");
+  if (pack.sources.length === 0) {
+    const webSearched = pack.queries.some((query) => !query.kbCovered);
+    lines.push(webSearched ? "No relevant sources. Pass `urls` with primary docs." : "- (none)");
+  }
   pack.sources.forEach((source, index) => {
     lines.push(`${index + 1}. ${source.title}`);
     lines.push(`   url: ${source.url}`);
     lines.push(`   trust: ${source.trust}`);
+    if (source.relevance !== undefined) {
+      lines.push(`   relevance: ${source.relevance.toFixed(2)}`);
+    }
     lines.push(`   excerpt: ${source.excerpt.slice(0, EXCERPT_PREVIEW_CHARS)}`);
   });
+
+  if (pack.rejected !== undefined && pack.rejected.length > 0) {
+    lines.push("", `Rejected: ${pack.rejected.length} (low relevance, junk page or fetch error)`);
+  }
 
   return lines.join("\n");
 }

@@ -137,6 +137,38 @@ describe("get_evidence", () => {
     expect(result.details).toEqual({ id: saved.id, found: true, includeContent: true });
   });
 
+  it("prints source relevance and the rejected count", async () => {
+    const base = makePack();
+    const saved = saveEvidencePack(cwd, {
+      ...base,
+      sources: [{ ...base.sources[0], relevance: 0.88 }],
+      rejected: [{ url: "https://junk.example", reason: "junk" }],
+    });
+    const text = (
+      await registerTool().execute("call-r", { id: saved.id }, undefined, undefined, { cwd })
+    ).content[0].text;
+
+    expect(text).toContain("   trust: unknown | tier: 3\n   relevance: 0.88\n   query:");
+    expect(text).toContain("Rejected: 1 (low relevance, junk page or fetch error)");
+  });
+
+  it("prints the no-relevant-sources hint only when a query was not kb covered", async () => {
+    const base = makePack();
+    const empty = { ...base, sources: [], queries: [{ ...base.queries[0], kbCovered: false }] };
+    const uncovered = saveEvidencePack(cwd, empty);
+    const tool = registerTool();
+    const text = (await tool.execute("call-u", { id: uncovered.id }, undefined, undefined, { cwd }))
+      .content[0].text;
+    expect(text).toContain("No relevant sources. Pass `urls` with primary docs.");
+
+    const covered = saveEvidencePack(cwd, { ...empty, queries: [base.queries[0]] });
+    const coveredText = (
+      await tool.execute("call-c", { id: covered.id }, undefined, undefined, { cwd })
+    ).content[0].text;
+    expect(coveredText).toContain("- (none)");
+    expect(coveredText).not.toContain("No relevant sources");
+  });
+
   it("returns an error naming the id when the pack does not exist", async () => {
     const tool = registerTool();
 

@@ -9,9 +9,13 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { loadEvidencePack } from "../../common/evidence-cache.ts";
-import { registerGatherEvidenceTool } from "../../extensions/para-evidence/gather-tool.ts";
+import {
+  formatGatherResult,
+  registerGatherEvidenceTool,
+} from "../../extensions/para-evidence/gather-tool.ts";
 import paraEvidence from "../../extensions/para-evidence/index.ts";
 
+import type { EvidencePack } from "../../common/evidence-cache.ts";
 import type { GatherKbHit } from "../../common/gather-evidence.ts";
 import type { GatherToolDeps } from "../../extensions/para-evidence/gather-tool.ts";
 import type { SearchResult } from "../../extensions/web-search/native.ts";
@@ -231,6 +235,42 @@ describe("gather_evidence", () => {
     expect(guidelines[4]).toBe(
       "Pass kind: 'tech' for software, library, API or tooling questions; use 'academic' only for research literature; default is 'general'.",
     );
+  });
+  it("prints source relevance, rejected count and the no-relevant-sources hint", () => {
+    const pack: EvidencePack = {
+      id: "ev-1",
+      question: "q",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      queries: [
+        { query: "caching", kbCovered: true, since: null, kbHits: [] },
+        { query: "web facet", kbCovered: false, since: null, kbHits: [] },
+      ],
+      sources: [
+        {
+          url: "https://example.com/a",
+          canonicalUrl: "https://example.com/a",
+          title: "A",
+          trust: "unknown",
+          tier: null,
+          query: "web facet",
+          excerpt: "excerpt",
+          relevance: 0.88,
+        },
+      ],
+      rejected: [
+        { url: "https://junk.example", reason: "junk" },
+        { url: "https://low.example", reason: "low relevance" },
+      ],
+    };
+    const text = formatGatherResult(pack);
+    expect(text).toContain("   trust: unknown\n   relevance: 0.88\n   excerpt:");
+    expect(text).toContain("Rejected: 2 (low relevance, junk page or fetch error)");
+
+    const empty = { ...pack, sources: [], rejected: undefined };
+    expect(formatGatherResult({ ...empty, queries: [pack.queries[1]] })).toContain(
+      "No relevant sources. Pass `urls` with primary docs.",
+    );
+    expect(formatGatherResult({ ...empty, queries: [pack.queries[0]] })).toContain("- (none)");
   });
 });
 

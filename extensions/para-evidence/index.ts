@@ -31,6 +31,7 @@ function formatSource(source: EvidenceSource, index: number, includeContent: boo
     `   url: ${source.url}`,
     `   canonical: ${source.canonicalUrl}`,
     `   trust: ${source.trust} | tier: ${source.tier === null ? "n/a" : source.tier}`,
+    ...(source.relevance === undefined ? [] : [`   relevance: ${source.relevance.toFixed(2)}`]),
     `   query: ${source.query}`,
     `   excerpt: ${source.excerpt}`,
   ];
@@ -74,10 +75,17 @@ export function formatEvidencePack(pack: EvidencePack, includeContent: boolean):
   }
 
   lines.push("", `Sources (${pack.sources.length}):`);
-  if (pack.sources.length === 0) lines.push("- (none)");
+  if (pack.sources.length === 0) {
+    const webSearched = pack.queries.some((query) => !query.kbCovered);
+    lines.push(webSearched ? "No relevant sources. Pass `urls` with primary docs." : "- (none)");
+  }
   pack.sources.forEach((source, index) => {
     lines.push(...formatSource(source, index + 1, includeContent));
   });
+
+  if (pack.rejected !== undefined && pack.rejected.length > 0) {
+    lines.push("", `Rejected: ${pack.rejected.length} (low relevance, junk page or fetch error)`);
+  }
 
   return lines.join("\n");
 }
