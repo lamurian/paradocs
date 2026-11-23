@@ -25,6 +25,7 @@ import { searchDocs } from "../para-knowledge/sqlite-search.ts";
 import type { RelevanceConfig } from "../../common/config-relevance.ts";
 import type { EvidencePack } from "../../common/evidence-cache.ts";
 import type { GatherEvidenceDeps, GatherKbHit } from "../../common/gather-evidence.ts";
+import type { SearchKind } from "../../common/search-routing.ts";
 import type { SearchResult } from "../web-search/native.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -34,7 +35,10 @@ const EXCERPT_PREVIEW_CHARS = 300;
 /** Injected dependencies for {@link registerGatherEvidenceTool}. */
 export interface GatherToolDeps {
   searchKb: (query: string) => GatherKbHit[];
-  searchWeb: (query: string, opts: { since: string | null }) => Promise<SearchResult[]>;
+  searchWeb: (
+    query: string,
+    opts: { since: string | null; kind: SearchKind },
+  ) => Promise<SearchResult[]>;
   fetch: (
     url: string,
     timeoutMs: number,
@@ -84,8 +88,14 @@ export function createDefaultGatherDeps(cwd: string): GatherToolDeps {
         body: result.body,
       }));
     },
-    searchWeb: async (query: string, opts: { since: string | null }): Promise<SearchResult[]> => {
-      const output = await runWebSearch(query, opts.since ? { since: opts.since } : {});
+    searchWeb: async (
+      query: string,
+      opts: { since: string | null; kind: SearchKind },
+    ): Promise<SearchResult[]> => {
+      const output = await runWebSearch(query, {
+        kind: opts.kind,
+        ...(opts.since ? { since: opts.since } : {}),
+      });
       return output.results;
     },
     fetch: (url: string, timeoutMs: number, signal?: AbortSignal) =>
@@ -175,6 +185,7 @@ export function registerGatherEvidenceTool(pi: ExtensionAPI, deps?: GatherToolDe
       "Call gather_evidence after search_para_docs or the KB recall block when: no relevant hit exists or a facet is uncovered; any relevant hit is stale or unknown; a fast-changing claim (versions, pricing, current best practice) rests on an aging hit; or you are about to make a factual claim you cannot cite.",
       "Pass one query per facet (1-5). In implement, reuse evidence ids from discuss via get_evidence and call gather_evidence only for new gaps with maxSources 3.",
       "Never call gather_evidence during finalize.",
+      "Pass kind: 'tech' for software, library, API or tooling questions; use 'academic' only for research literature; default is 'general'.",
     ],
     parameters: Type.Object({
       question: Type.String({ description: "The knowledge question being answered" }),
@@ -186,6 +197,20 @@ export function registerGatherEvidenceTool(pi: ExtensionAPI, deps?: GatherToolDe
       ),
       force: Type.Optional(
         Type.Boolean({ description: "Search the web even when the KB is fresh (default false)" }),
+      ),
+      kind: Type.Optional(
+        Type.Union(
+          [
+            Type.Literal("general"),
+            Type.Literal("tech"),
+            Type.Literal("academic"),
+            Type.Literal("news"),
+          ],
+          {
+            description:
+              "Search kind: general (default), tech for software/library/API/docs, academic for research literature only, news for current events.",
+          },
+        ),
       ),
     }),
 

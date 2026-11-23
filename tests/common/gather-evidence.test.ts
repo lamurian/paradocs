@@ -67,7 +67,7 @@ function webResult(url: string, tier: number): SearchResult {
 function makeDeps(overrides: Partial<GatherEvidenceDeps> = {}): GatherEvidenceDeps {
   return {
     searchKb: () => [],
-    searchWeb: () => Promise.resolve([]),
+    searchWeb: vi.fn(() => Promise.resolve([])),
     fetch: () => Promise.resolve({ title: "Fetched", content: "body" }),
     now: () => new Date("2025-01-01T00:00:00.000Z"),
     ...overrides,
@@ -148,7 +148,20 @@ describe("gatherEvidence — since date", () => {
 
     const pack = await gatherEvidence({ question: "q", queries: ["topic"] }, deps);
 
-    expect(searchWeb).toHaveBeenCalledWith("topic", { since: "2024-06-15" });
+    expect(searchWeb).toHaveBeenCalledWith("topic", { since: "2024-06-15", kind: "general" });
     expect(pack.queries[0].since).toBe("2024-06-15");
+  });
+});
+
+describe("gatherEvidence — search kind", () => {
+  it("should default the search kind to general and forward an explicit kind", async () => {
+    const searchWeb = vi.fn(() => Promise.resolve([]));
+    const deps = makeDeps({ searchWeb });
+
+    await gatherEvidence({ question: "q", queries: ["topic"] }, deps);
+    expect(searchWeb).toHaveBeenLastCalledWith("topic", { since: null, kind: "general" });
+
+    await gatherEvidence({ question: "q", queries: ["topic"], kind: "tech" }, deps);
+    expect(searchWeb).toHaveBeenLastCalledWith("topic", { since: null, kind: "tech" });
   });
 });

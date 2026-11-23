@@ -16,6 +16,7 @@ import { canonicalizeUrl } from "./url.ts";
 import type { RelevanceConfig } from "./config-relevance.ts";
 import type { EvidencePack, EvidencePackQuery, EvidenceSource } from "./evidence-cache.ts";
 import type { GatherKbHit } from "./gather-kb.ts";
+import type { SearchKind } from "./search-routing.ts";
 import type { TrustClass } from "./trust.ts";
 import type { SearchResult } from "../extensions/web-search/native.ts";
 
@@ -44,7 +45,10 @@ export type { GatherKbHit } from "./gather-kb.ts";
 /** Injected dependencies, kept explicit for deterministic testing. */
 export interface GatherEvidenceDeps {
   searchKb: (query: string) => GatherKbHit[];
-  searchWeb: (query: string, opts: { since: string | null }) => Promise<SearchResult[]>;
+  searchWeb: (
+    query: string,
+    opts: { since: string | null; kind: SearchKind },
+  ) => Promise<SearchResult[]>;
   fetch: (
     url: string,
     timeoutMs: number,
@@ -60,6 +64,7 @@ export interface GatherEvidenceInput {
   queries: string[];
   maxSources?: number;
   force?: boolean;
+  kind?: SearchKind;
 }
 /** A ranked web candidate plus the query that produced it. */
 interface Candidate {
@@ -218,7 +223,7 @@ export async function gatherEvidence(
     packQueries.push({ query, kbCovered, since, kbHits });
     if (kbCovered) continue;
 
-    const results = await deps.searchWeb(query, { since });
+    const results = await deps.searchWeb(query, { since, kind: input.kind ?? "general" });
     for (const result of results) {
       candidates.push({
         result,

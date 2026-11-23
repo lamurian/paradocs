@@ -13,6 +13,7 @@ import { configureEnv } from "../../common/env.ts";
 import { classifyTrust } from "../../common/trust.ts";
 import { searchWeb, formatResults } from "../../common/webSearch.ts";
 
+import type { SearchKind } from "../../common/search-routing.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI): void {
@@ -20,14 +21,11 @@ export default function (pi: ExtensionAPI): void {
     name: "web_search",
     label: "Web Search (3-Phase: SearXNG -> Tavily -> Bing RSS)",
     description:
-      "Three-phase web search: SearXNG category-based search (1→2→3), then Tavily, then Bing RSS with domain filtering (Phase 3 only). " +
-      "Tier 1 — scientific_publications category (academic papers, peer-reviewed research). " +
-      "Tier 2 — web category with site:edu|gov filtering (authoritative non-academic). Override via category: " +
-      "'it' for tech/software, 'news' for news, 'web' for filtered web. " +
-      "Tier 3 — general category (broad exploration, blogs, any web). " +
-      "Fallback chain (when no tier forced): SearXNG >3 results → Tavily → Bing RSS (domain-filtered).",
+      "Three-phase web search routed by kind: SearXNG category-based search, then Tavily, then Bing RSS with domain filtering (Phase 3 only). " +
+      "Kinds: 'general' (default), 'tech' for software/library/API/docs questions, 'academic' for research literature only, 'news' for current events. " +
+      "Fallback chain: SearXNG results that clear the prefetch threshold -> Tavily -> Bing RSS (domain-filtered).",
     promptSnippet:
-      "Search the web (3-phase: SearXNG academic -> filtered -> general, then Tavily, then Bing RSS). Use tier=1 for academic, tier=2 for filtered web (default site:edu|gov), tier=3 for general. Pass category='it' for tech/software, 'news' for news queries, etc.",
+      "Search the web (SearXNG by kind -> Tavily -> Bing RSS). Pass kind='tech' for software/library/API/docs, 'academic' only for research literature, 'news' for current events; default is 'general'.",
     parameters: Type.Object({
       query: Type.String({ description: "The search query" }),
       tier: Type.Optional(
@@ -42,21 +40,37 @@ export default function (pi: ExtensionAPI): void {
             "Override SearXNG category for the chosen tier. Useful for context-aware tier 2: 'it' for software/tech, 'news' for news, 'web' for general web. Only applied when tier is set. See @.pi/extensions/web-search/AGENTS.md for all supported categories.",
         }),
       ),
+      kind: Type.Optional(
+        Type.Union(
+          [
+            Type.Literal("general"),
+            Type.Literal("tech"),
+            Type.Literal("academic"),
+            Type.Literal("news"),
+          ],
+          {
+            description:
+              "Search kind: general (default), tech for software/library/API/docs questions, academic for research literature only, news for current events.",
+          },
+        ),
+      ),
     }),
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       configureEnv(ctx.cwd);
 
-      const { query, tier, category } = params;
+      const { query, tier, category, kind } = params;
+      const usedKind: SearchKind = kind ?? "general";
       const {
         results,
         tier: usedTier,
         tierLabel,
-      } = await searchWeb(query, { tier, category, signal });
+      } = await searchWeb(query, { tier, category, kind: usedKind, signal });
       return {
         content: [{ type: "text" as const, text: formatResults(results, query, tierLabel) }],
         details: {
           query,
+          kind: usedKind,
           tier: usedTier,
           category: category ?? null,
           tierLabel,

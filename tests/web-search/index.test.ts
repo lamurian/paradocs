@@ -23,10 +23,20 @@ vi.mock("../../common/env.ts", async (importOriginal) => {
   };
 });
 
+// Spy on the shared orchestrator so forwarding of the search kind is observable.
+vi.mock("../../common/webSearch.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../common/webSearch.ts")>();
+  return {
+    ...actual,
+    searchWeb: vi.fn(actual.searchWeb),
+  };
+});
+
 interface ToolExecuteResult {
   content: Array<{ type: string; text: string }>;
   details: {
     query: string;
+    kind: string;
     tier: number;
     category: string | null;
     tierLabel: string;
@@ -46,7 +56,7 @@ interface SearchTool {
   name: string;
   execute: (
     toolCallId: string,
-    params: { query: string; tier?: number; category?: string },
+    params: { query: string; tier?: number; category?: string; kind?: string },
     signal: AbortSignal | undefined,
     onUpdate: unknown,
     ctx: { cwd: string },
@@ -145,6 +155,41 @@ describe("web_search extension", () => {
     expect(result.content[0].text).toContain("Search results");
     expect(result.details.count).toBe(4);
     expect(result.details.tier).toBe(1);
+  });
+
+  it("should forward kind to searchWeb, defaulting to general, and report it in details", async () => {
+    const { searchWeb } = await import("../../common/webSearch.ts");
+    vi.mocked(searchWeb).mockClear();
+
+    const extension = (await import("../../extensions/web-search/index.ts")).default;
+    extension(mockPi as unknown as ExtensionAPI);
+    const tool = registeredTool();
+
+    const defaulted = await tool.execute(
+      "call-kind-default",
+      { query: "quantum computing" },
+      undefined,
+      undefined,
+      { cwd: "/test/project" },
+    );
+    expect(vi.mocked(searchWeb)).toHaveBeenLastCalledWith(
+      "quantum computing",
+      expect.objectContaining({ kind: "general" }),
+    );
+    expect(defaulted.details.kind).toBe("general");
+
+    const explicit = await tool.execute(
+      "call-kind-tech",
+      { query: "node streams", kind: "tech" },
+      undefined,
+      undefined,
+      { cwd: "/test/project" },
+    );
+    expect(vi.mocked(searchWeb)).toHaveBeenLastCalledWith(
+      "node streams",
+      expect.objectContaining({ kind: "tech" }),
+    );
+    expect(explicit.details.kind).toBe("tech");
   });
 
   it("should list the trust class of every result in text and details", async () => {

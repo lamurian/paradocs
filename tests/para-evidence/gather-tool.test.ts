@@ -28,6 +28,7 @@ interface ToolParams {
   queries: string[];
   maxSources?: number;
   force?: boolean;
+  kind?: "general" | "tech" | "academic" | "news";
 }
 
 interface RegisteredTool {
@@ -78,13 +79,16 @@ function freshHit(path: string, title: string): GatherKbHit {
 /** Build fake deps with a fresh KB hit, one web result and a long fetch body. */
 function makeDeps(overrides: Partial<GatherToolDeps> = {}): {
   deps: GatherToolDeps;
-  webCalls: Array<{ query: string; since: string | null }>;
+  webCalls: Array<{ query: string; since: string | null; kind: string }>;
 } {
-  const webCalls: Array<{ query: string; since: string | null }> = [];
+  const webCalls: Array<{ query: string; since: string | null; kind: string }> = [];
   const deps: GatherToolDeps = {
     searchKb: () => [freshHit("Resources/cache.md", "Cache Notes")],
-    searchWeb: (query: string, opts: { since: string | null }): Promise<SearchResult[]> => {
-      webCalls.push({ query, since: opts.since });
+    searchWeb: (
+      query: string,
+      opts: { since: string | null; kind: "general" | "tech" | "academic" | "news" },
+    ): Promise<SearchResult[]> => {
+      webCalls.push({ query, since: opts.since, kind: opts.kind });
       return Promise.resolve([]);
     },
     fetch: () => Promise.resolve({ title: "Fetched", content: "A".repeat(500) }),
@@ -177,12 +181,35 @@ describe("gather_evidence", () => {
       { cwd },
     );
 
-    expect(webCalls).toEqual([{ query: "brand new facet", since: null }]);
+    expect(webCalls).toEqual([{ query: "brand new facet", since: null, kind: "general" }]);
     const text = result.content[0].text;
     expect(text).toContain("- caching");
     expect(text).toContain("kb covered: yes");
     expect(text).toContain("- brand new facet");
     expect(text).toContain("kb covered: no");
+  });
+
+  it("forwards an explicit kind to every uncovered web query", async () => {
+    const { pi, tools } = createFakePi();
+    const { deps, webCalls } = makeDeps({
+      searchKb: () => [],
+    });
+    registerGatherEvidenceTool(pi, deps);
+    const tool = tools.get("gather_evidence");
+    if (!tool) throw new Error("gather_evidence was not registered");
+
+    await tool.execute(
+      "call-3",
+      { question: "Tech question", queries: ["node streams", "typescript generics"], kind: "tech" },
+      undefined,
+      undefined,
+      { cwd },
+    );
+
+    expect(webCalls).toEqual([
+      { query: "node streams", since: null, kind: "tech" },
+      { query: "typescript generics", since: null, kind: "tech" },
+    ]);
   });
 
   it("defines knowledge questions, excludes repo-internal ones and lists the four call conditions", () => {
@@ -192,7 +219,7 @@ describe("gather_evidence", () => {
     if (!tool) throw new Error("gather_evidence was not registered");
 
     const guidelines = tool.promptGuidelines ?? [];
-    expect(guidelines).toHaveLength(4);
+    expect(guidelines).toHaveLength(5);
     expect(guidelines[0]).toContain("A knowledge question is any claim");
     expect(guidelines[0]).toContain("Repo-internal questions use code search");
     expect(guidelines[1]).toContain("no relevant hit exists or a facet is uncovered");
@@ -202,6 +229,9 @@ describe("gather_evidence", () => {
     expect(guidelines[2]).toContain("one query per facet");
     expect(guidelines[2]).toContain("maxSources 3");
     expect(guidelines[3]).toBe("Never call gather_evidence during finalize.");
+    expect(guidelines[4]).toBe(
+      "Pass kind: 'tech' for software, library, API or tooling questions; use 'academic' only for research literature; default is 'general'.",
+    );
   });
 });
 
