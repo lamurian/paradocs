@@ -117,6 +117,116 @@ describe("search_para_docs read-only behaviour", () => {
     expect(results[0].freshness.windowDays).toBe(365);
   });
 
+  it("labels text hits by relevance and lists relevant hits before weak hits", async () => {
+    mkdirSync(knowledgeDir, { recursive: true });
+
+    const { createDb, initDb, indexFile } =
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
+    const base = {
+      author: "pi",
+      editor: "",
+      created: "2020-01-01T00:00:00.000Z",
+      modified: "2020-01-01T00:00:00.000Z",
+      file_mtime: "2020-01-01T00:00:00.000Z",
+      source_url: null,
+    };
+    const db = createDb(resolve(knowledgeDir, "notes.db"));
+    initDb(db);
+    indexFile(db, {
+      ...base,
+      path: "Projects/quantum-widgets.md",
+      title: "Quantum Widgets",
+      body: "A strong note about quantum widgets.",
+      tags: ["note"],
+    });
+    indexFile(db, {
+      ...base,
+      path: "Projects/weak-one.md",
+      title: "Unrelated Notes",
+      body: "quantum widgets ".repeat(30),
+      tags: ["misc"],
+    });
+    indexFile(db, {
+      ...base,
+      path: "Projects/weak-two.md",
+      title: "Another Note",
+      body: "quantum widgets ".repeat(10),
+      tags: ["misc"],
+    });
+    db.close();
+
+    const tool = await loadTool();
+    const result = await tool.execute(
+      "call-relevance",
+      { query: "quantum widgets" },
+      undefined,
+      undefined,
+      { cwd: projectDir } as ExtensionContext,
+    );
+
+    const text = result.content[0]?.text ?? "";
+    const lines = text.split("\n").filter((line) => line.startsWith("- ["));
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toContain("[Quantum Widgets]");
+    expect(lines[0]).toMatch(/\(score: -?\d+\.\d{2}, relevance: relevant \d\.\d{2}\)/);
+    expect(lines[1]).toMatch(/\(score: -?\d+\.\d{2}, relevance: weak \d\.\d{2}\)/);
+    expect(lines[2]).toMatch(/\(score: -?\d+\.\d{2}, relevance: weak \d\.\d{2}\)/);
+
+    const weakScores = lines
+      .slice(1)
+      .map((line) => Number(line.match(/\(score: (-?\d+\.\d{2}),/)?.[1]));
+    expect(weakScores[0]).toBeLessThanOrEqual(weakScores[1]);
+
+    const results = result.details.results as Array<{
+      path: string;
+      relevance: number;
+      relevant: boolean;
+    }>;
+    expect(results.map((entry) => entry.path)).toEqual(
+      lines.map((line) => line.match(/\]\(([^)]+)\)/)?.[1]),
+    );
+    expect(results[0].path).toBe("Projects/quantum-widgets.md");
+    expect(results[0].relevant).toBe(true);
+    expect(typeof results[0].relevance).toBe("number");
+    expect(results.slice(1).every((entry) => !entry.relevant)).toBe(true);
+  });
+
+  it("keeps tag-only hits labelled tag-only", async () => {
+    mkdirSync(knowledgeDir, { recursive: true });
+
+    const { createDb, initDb, indexFile } =
+      await import("../../extensions/para-knowledge/db-sqlite.ts");
+    const db = createDb(resolve(knowledgeDir, "notes.db"));
+    initDb(db);
+    indexFile(db, {
+      path: "Projects/tagged.md",
+      title: "Tagged Note",
+      body: "Body without the searched term.",
+      tags: ["specialtag"],
+      author: "pi",
+      editor: "",
+      created: "2020-01-01T00:00:00.000Z",
+      modified: "2020-01-01T00:00:00.000Z",
+      file_mtime: "2020-01-01T00:00:00.000Z",
+      source_url: null,
+    });
+    db.close();
+
+    const tool = await loadTool();
+    const result = await tool.execute(
+      "call-tag-only",
+      { query: "missingterm", tags: ["specialtag"] },
+      undefined,
+      undefined,
+      { cwd: projectDir } as ExtensionContext,
+    );
+
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain("[Tagged Note]");
+    expect(text).toMatch(/relevance: tag-only/);
+    expect(text).not.toMatch(/relevance: (relevant|weak)/);
+  });
+
   it("returns missing-db guidance and leaves no notes.db behind", async () => {
     const tool = await loadTool();
     const dbPath = resolve(knowledgeDir, "notes.db");
