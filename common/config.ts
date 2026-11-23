@@ -9,6 +9,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import {
+  cloneRelevanceDefaults,
+  DEFAULT_RELEVANCE_CONFIG,
+  mergeRelevance,
+} from "./config-relevance.ts";
+
+import type { RelevanceConfig } from "./config-relevance.ts";
+
 /** Freshness defaults and per-tag windows (days) or null for never stale. */
 export interface FreshnessConfig {
   defaultWindowDays: number;
@@ -37,6 +45,7 @@ export interface ParadocsConfig {
   freshness: FreshnessConfig;
   recall: RecallConfig;
   note: NoteConfig;
+  relevance: RelevanceConfig;
 }
 
 /** Built-in defaults used when no config file (or value) is available. */
@@ -51,6 +60,7 @@ export const DEFAULT_PARADOCS_CONFIG: ParadocsConfig = {
     skipPatterns: [],
   },
   note: { maxContentLines: 60, wrapWidth: 80, maxLinks: 5 },
+  relevance: DEFAULT_RELEVANCE_CONFIG,
 };
 
 /** Result of loading configuration, including any validation issues. */
@@ -81,6 +91,7 @@ function cloneDefaults(): ParadocsConfig {
       skipPatterns: [...DEFAULT_PARADOCS_CONFIG.recall.skipPatterns],
     },
     note: { ...DEFAULT_PARADOCS_CONFIG.note },
+    relevance: cloneRelevanceDefaults(),
   };
 }
 
@@ -242,6 +253,7 @@ export function loadParadocsConfig(knowledgeDir: string): LoadedParadocsConfig {
       freshness: mergeFreshness(raw.freshness, issues),
       recall: mergeRecall(raw.recall, issues),
       note: mergeNote(raw.note, issues),
+      relevance: mergeRelevance(raw.relevance, issues),
     },
     issues,
   };

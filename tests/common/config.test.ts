@@ -37,6 +37,11 @@ describe("loadParadocsConfig", () => {
     expect(config.note.maxContentLines).toBe(60);
     expect(config.note.wrapWidth).toBe(80);
     expect(config.note.maxLinks).toBe(5);
+    expect(config.relevance.kbThreshold).toBe(0.75);
+    expect(config.relevance.outputThreshold).toBe(0.75);
+    expect(config.relevance.prefetchThreshold).toBe(0.5);
+    expect(config.relevance.relativeCut).toBe(0.9);
+    expect(config.relevance.bodyWeight).toBe(0.5);
   });
 
   it("deep-merges a partial file over the defaults", () => {
@@ -58,6 +63,54 @@ describe("loadParadocsConfig", () => {
     expect(config.note.wrapWidth).toBe(100);
     expect(config.note.maxContentLines).toBe(60);
     expect(config.note.maxLinks).toBe(5);
+  });
+
+  it("merges a partial relevance section over the defaults", () => {
+    writeConfig({ relevance: { kbThreshold: 0.6, bodyWeight: 0.25 } });
+
+    const { config, issues } = loadParadocsConfig(dir);
+
+    expect(issues).toEqual([]);
+    expect(config.relevance.kbThreshold).toBe(0.6);
+    expect(config.relevance.bodyWeight).toBe(0.25);
+    expect(config.relevance.outputThreshold).toBe(0.75);
+    expect(config.relevance.prefetchThreshold).toBe(0.5);
+    expect(config.relevance.relativeCut).toBe(0.9);
+  });
+
+  it("falls back to relevance defaults for invalid values and reports issues", () => {
+    writeConfig({
+      relevance: { kbThreshold: 1.5, outputThreshold: "high", prefetchThreshold: 0 },
+    });
+
+    const { config, issues } = loadParadocsConfig(dir);
+
+    expect(config.relevance.kbThreshold).toBe(0.75);
+    expect(config.relevance.outputThreshold).toBe(0.75);
+    expect(config.relevance.prefetchThreshold).toBe(0.5);
+    expect(config.relevance.relativeCut).toBe(0.9);
+    expect(config.relevance.bodyWeight).toBe(0.5);
+    expect(issues).toHaveLength(3);
+    expect(issues.join(" ")).toContain(
+      "relevance.kbThreshold must be a number in (0, 1]; using default 0.75",
+    );
+    expect(issues.join(" ")).toContain("relevance.outputThreshold");
+    expect(issues.join(" ")).toContain("relevance.prefetchThreshold");
+  });
+
+  it("uses relevance defaults and reports an issue for a non-object section", () => {
+    writeConfig({ relevance: "loud" });
+
+    const { config, issues } = loadParadocsConfig(dir);
+
+    expect(config.relevance).toEqual({
+      kbThreshold: 0.75,
+      outputThreshold: 0.75,
+      prefetchThreshold: 0.5,
+      relativeCut: 0.9,
+      bodyWeight: 0.5,
+    });
+    expect(issues).toEqual(["relevance must be an object; using defaults"]);
   });
 
   it("returns defaults plus an issue for invalid JSON", () => {

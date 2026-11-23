@@ -54,6 +54,7 @@ function makeConfig(recall: Partial<ParadocsConfig["recall"]> = {}): ParadocsCon
     freshness: { ...DEFAULT_PARADOCS_CONFIG.freshness },
     recall: { ...DEFAULT_PARADOCS_CONFIG.recall, ...recall },
     note: { ...DEFAULT_PARADOCS_CONFIG.note },
+    relevance: { ...DEFAULT_PARADOCS_CONFIG.relevance },
   };
 }
 
