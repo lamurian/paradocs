@@ -13,10 +13,23 @@ describe("classifyTrust", () => {
     expect(classifyTrust("https://example.org/article", { doi: "10.1000/xyz" })).toBe(
       "peer-reviewed",
     );
+    expect(classifyTrust("https://doi.org/10.1000/xyz", { doi: "10.1000/xyz" })).toBe(
+      "peer-reviewed",
+    );
+  });
+
+  it("should classify URL DOIs by registrant prefix", () => {
+    expect(classifyTrust("https://doi.org/10.1038/nature123")).toBe("peer-reviewed");
+    expect(classifyTrust("https://dx.doi.org/10.1145/1234")).toBe("peer-reviewed");
+    expect(classifyTrust("https://example.org/doi/10.1126/science.1")).toBe("peer-reviewed");
+    expect(classifyTrust("https://doi.org/10.2139/ssrn.123")).toBe("preprint");
+    expect(classifyTrust("https://doi.org/10.1101/2020.01.01")).toBe("preprint");
+    expect(classifyTrust("https://doi.org/10.5089/imf.123")).toBe("reference");
+    expect(classifyTrust("https://doi.org/10.1000/xyz")).toBe("reference");
+  });
+
+  it("should treat null DOI option as no signal", () => {
     expect(classifyTrust("https://example.org/article", { doi: null })).toBe("unknown");
-    expect(classifyTrust("https://doi.org/10.1000/xyz")).toBe("peer-reviewed");
-    expect(classifyTrust("https://dx.doi.org/10.1000/xyz")).toBe("peer-reviewed");
-    expect(classifyTrust("https://example.org/doi/10.1000/xyz")).toBe("peer-reviewed");
   });
 
   it("should classify preprint servers as preprint", () => {

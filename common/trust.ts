@@ -138,19 +138,76 @@ function isGovEduHost(host: string): boolean {
   return GOV_EDU_SUFFIXES.some((suffix) => host.endsWith(suffix)) || GOV_EDU_CC_PATTERN.test(host);
 }
 
+/** DOI registrant prefixes that identify preprint servers. */
+const PREPRINT_DOI_PREFIXES = [
+  "10.2139", // SSRN
+  "10.48550", // arXiv
+  "10.1101", // bioRxiv / medRxiv
+  "10.31219", // OSF
+  "10.31234", // OSF
+  "10.31235", // OSF
+  "10.21203", // Research Square
+  "10.20944", // Preprints.org
+];
+
+/** DOI registrant prefixes that identify peer-reviewed publishers. */
+const PEER_REVIEWED_DOI_PREFIXES = [
+  "10.1038", // Nature
+  "10.1126", // Science
+  "10.1016", // Elsevier
+  "10.1007", // Springer
+  "10.1002", // Wiley
+  "10.1111", // Wiley
+  "10.1080", // Taylor & Francis
+  "10.1177", // SAGE
+  "10.1001", // JAMA
+  "10.1056", // NEJM
+  "10.1136", // BMJ
+  "10.1371", // PLOS
+  "10.3389", // Frontiers
+  "10.3390", // MDPI
+  "10.1145", // ACM
+  "10.1109", // IEEE
+  "10.1093", // OUP
+  "10.1017", // Cambridge
+];
+
 /**
- * Check whether any DOI signal (explicit DOI, DOI resolver host, DOI path)
- * indicates peer review.
+ * Extract the `10.NNNN` registrant prefix from a DOI string.
+ *
+ * @param doi - Raw DOI, optionally prefixed with a resolver URL.
+ * @returns The prefix, or null when no DOI prefix can be found.
+ */
+function extractDoiPrefix(doi: string): string | null {
+  const match = /(10\.\d+)\//.exec(doi);
+  return match ? match[1] : null;
+}
+
+/**
+ * Extract a DOI string from the URL host/path, when present.
  *
  * @param host - Normalized hostname.
  * @param path - Lowercase URL pathname.
- * @param doi - Optional DOI seen alongside the result.
- * @returns True when a DOI signal is present.
+ * @returns The DOI text, or null when the URL carries no DOI signal.
  */
-function hasDoiSignal(host: string, path: string, doi: string | null | undefined): boolean {
-  if (doi && doi.trim().length > 0) return true;
-  if (matchesHost(host, "doi.org") || matchesHost(host, "dx.doi.org")) return true;
-  return path.includes("/doi/10.");
+function extractUrlDoi(host: string, path: string): string | null {
+  if (matchesHost(host, "doi.org") || matchesHost(host, "dx.doi.org")) {
+    return path.replace(/^\//, "");
+  }
+  if (path.includes("/doi/10.")) return path;
+  return null;
+}
+
+/**
+ * Classify a DOI prefix as a trust class.
+ *
+ * @param prefix - DOI registrant prefix such as `10.1038`.
+ * @returns The matching trust class.
+ */
+function classifyDoiPrefix(prefix: string): TrustClass {
+  if (PREPRINT_DOI_PREFIXES.includes(prefix)) return "preprint";
+  if (PEER_REVIEWED_DOI_PREFIXES.includes(prefix)) return "peer-reviewed";
+  return "reference";
 }
 
 /**
@@ -189,8 +246,9 @@ function isBlogForum(host: string, path: string): boolean {
 /**
  * Classify the trust level of a URL.
  *
- * Rules are applied in order: DOI → preprint → peer-reviewed journal →
- * gov/edu suffix → official docs → reference → blog/forum → unknown.
+ * Rules are applied in order: explicit DOI → preprint host → peer-reviewed
+ * host → URL DOI prefix → gov/edu suffix → official docs → reference →
+ * blog/forum → unknown. Host lists win over the DOI prefix rule.
  *
  * @param url - The URL to classify.
  * @param opts.doi - Optional DOI seen alongside the result.
@@ -201,27 +259,34 @@ export function classifyTrust(url: string, opts?: { doi?: string | null }): Trus
   const host = parsed ? normalizeHost(parsed.hostname) : normalizeHost(url.trim().toLowerCase());
   const path = parsed ? parsed.pathname.toLowerCase() : "";
 
-  // 1. DOI signals peer review.
-  if (hasDoiSignal(host, path, opts?.doi)) return "peer-reviewed";
+  // 1. Explicit DOI signals peer review.
+  if (opts?.doi && opts.doi.trim().length > 0) return "peer-reviewed";
 
-  // 2. Preprint servers.
+  // 2. Preprint servers (host lists win over DOI prefix).
   if (matchesAnyHost(host, PREPRINT_HOSTS)) return "preprint";
 
-  // 3. Peer-reviewed journals and publishers.
+  // 3. Peer-reviewed journals and publishers (host lists win over DOI prefix).
   if (matchesAnyHost(host, PEER_REVIEWED_HOSTS)) return "peer-reviewed";
 
-  // 4. Government, military and academic suffixes.
+  // 4. URL DOI signals classified by registrant prefix.
+  const urlDoi = extractUrlDoi(host, path);
+  if (urlDoi) {
+    const prefix = extractDoiPrefix(urlDoi);
+    if (prefix) return classifyDoiPrefix(prefix);
+  }
+
+  // 5. Government, military and academic suffixes.
   if (isGovEduHost(host)) return "gov-edu";
 
-  // 5. Official documentation.
+  // 6. Official documentation.
   if (isOfficialDocs(host, path)) return "official-docs";
 
-  // 6. Reference works.
+  // 7. Reference works.
   if (matchesAnyHost(host, REFERENCE_HOSTS)) return "reference";
 
-  // 7. Blogs and forums.
+  // 8. Blogs and forums.
   if (isBlogForum(host, path)) return "blog-forum";
 
-  // 8. Unknown.
+  // 9. Unknown.
   return "unknown";
 }
