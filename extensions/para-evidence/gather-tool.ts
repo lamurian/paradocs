@@ -161,6 +161,9 @@ export function formatGatherResult(pack: EvidencePack): string {
     lines.push(`${index + 1}. ${source.title}`);
     lines.push(`   url: ${source.url}`);
     lines.push(`   trust: ${source.trust}`);
+    if (source.primary === true) {
+      lines.push("   primary: yes");
+    }
     if (source.relevance !== undefined) {
       lines.push(`   relevance: ${source.relevance.toFixed(2)}`);
     }
@@ -196,6 +199,7 @@ export function registerGatherEvidenceTool(pi: ExtensionAPI, deps?: GatherToolDe
       "Pass one query per facet (1-5). In implement, reuse evidence ids from discuss via get_evidence and call gather_evidence only for new gaps with maxSources 3.",
       "Never call gather_evidence during finalize.",
       "Pass kind: 'tech' for software, library, API or tooling questions; use 'academic' only for research literature; default is 'general'.",
+      "When you already know the primary docs for a facet, pass them in urls instead of calling fetch_url, so they land in the pack and verify_quote can check them.",
     ],
     parameters: Type.Object({
       question: Type.String({ description: "The knowledge question being answered" }),
@@ -204,6 +208,11 @@ export function registerGatherEvidenceTool(pi: ExtensionAPI, deps?: GatherToolDe
       }),
       maxSources: Type.Optional(
         Type.Number({ description: "Maximum sources to fetch (default 5, cap 10)" }),
+      ),
+      urls: Type.Optional(
+        Type.Array(Type.String(), {
+          description: "Primary documentation URLs to fetch directly into the pack (max 5)",
+        }),
       ),
       force: Type.Optional(
         Type.Boolean({ description: "Search the web even when the KB is fresh (default false)" }),

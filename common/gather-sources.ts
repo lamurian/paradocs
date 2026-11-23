@@ -1,6 +1,5 @@
 /**
  * Web candidate ranking and source fetching for evidence gathering.
- *
  * Candidates are scored and filtered by the prefetch threshold, then fetched;
  * pages must pass the junk check and output relevance gate to be accepted.
  *
@@ -10,20 +9,21 @@
 import { DEFAULT_RELEVANCE_CONFIG } from "./config-relevance.ts";
 import { detectJunkPage } from "./fetch-quality.ts";
 import { coverageScore, createLexicalScorer } from "./relevance.ts";
+import { classifyTrust } from "./trust.ts";
+import { canonicalizeUrl } from "./url.ts";
 
 import type { RelevanceConfig } from "./config-relevance.ts";
 import type { EvidenceSource } from "./evidence-cache.ts";
 import type { TrustClass } from "./trust.ts";
 import type { SearchResult } from "../extensions/web-search/native.ts";
 
-/** Fetch concurrency, timeout, excerpt size, minimum page size and attempt cap. */
 const FETCH_CONCURRENCY = 3;
 const FETCH_TIMEOUT_MS = 20_000;
 const EXCERPT_CHARS = 1500;
 const MIN_PAGE_CHARS = 300;
 const ATTEMPTS_PER_SOURCE = 3;
-
-/** Trust ranking, most trustworthy first. */
+/** Maximum number of primary URLs accepted in one gather call. */
+export const MAX_PRIMARY_URLS = 5;
 const TRUST_ORDER: TrustClass[] = [
   "peer-reviewed",
   "gov-edu",
@@ -33,7 +33,6 @@ const TRUST_ORDER: TrustClass[] = [
   "unknown",
   "blog-forum",
 ];
-
 /** A web search result tagged with the query that produced it. */
 export interface WebCandidate {
   result: SearchResult;
@@ -42,7 +41,6 @@ export interface WebCandidate {
   canonical: string;
   trust: TrustClass;
 }
-
 /** A fetched candidate that was not accepted as a source. */
 export interface RejectedSource {
   url: string;
@@ -69,40 +67,24 @@ export interface FetchSourcesResult {
   sources: EvidenceSource[];
   rejected: RejectedSource[];
 }
-/** One fetch outcome, keeping its candidate and rejection reason. */
 interface FetchOutcome {
   candidate: WebCandidate;
   fetched?: { title: string; content: string };
   error?: string;
 }
+interface PrimaryOutcome {
+  url: string;
+  fetched?: { title: string; content: string };
+  error?: string;
+}
 
-/**
- * Rank of a trust class in the trust order; unknown values sort last.
- *
- * @param trust - Trust class to rank.
- * @returns Zero-based rank within the trust order.
- */
 function trustRank(trust: TrustClass): number {
   const index = TRUST_ORDER.indexOf(trust);
   return index === -1 ? TRUST_ORDER.length : index;
 }
-
-/**
- * Collapse whitespace and truncate content to the excerpt limit.
- *
- * @param content - Raw fetched content.
- * @returns Whitespace-collapsed excerpt of at most 1500 characters.
- */
 function toExcerpt(content: string): string {
   return content.slice(0, EXCERPT_CHARS).replace(/\s+/g, " ").trim();
 }
-
-/**
- * Build the strong URL field: host plus pathname.
- *
- * @param url - Source URL.
- * @returns `host/path` when parseable, otherwise the trimmed URL.
- */
 function urlStrong(url: string): string {
   try {
     const parsed = new URL(url.trim());
@@ -111,16 +93,10 @@ function urlStrong(url: string): string {
     return url.trim();
   }
 }
-
 /**
- * Rank web candidates by lexical relevance, keeping only candidates at or
- * above the prefetch threshold.
- *
- * Candidates are de-duplicated by canonical URL first (the earliest discovery
- * wins). Ties are broken by trust class, then tier, then discovery order.
- *
- * @param candidates - Web results tagged with their originating query.
- * @param opts - Optional IDF function and relevance config.
+ * Rank candidates by lexical relevance above the prefetch threshold.
+ * @param candidates - Web results tagged with their query.
+ * @param opts - IDF function and relevance config.
  * @returns Unique relevant candidates in ranked order.
  */
 export function rankCandidates(candidates: WebCandidate[], opts: RankOptions = {}): WebCandidate[] {
@@ -131,7 +107,6 @@ export function rankCandidates(candidates: WebCandidate[], opts: RankOptions = {
     seen.add(candidate.canonical);
     return true;
   });
-
   const scored = unique
     .map((candidate) => ({
       candidate,
@@ -148,7 +123,6 @@ export function rankCandidates(candidates: WebCandidate[], opts: RankOptions = {
       ),
     }))
     .filter((entry) => entry.score >= relevance.prefetchThreshold);
-
   scored.sort((a, b) => {
     const byScore = b.score - a.score;
     if (byScore !== 0) return byScore;
@@ -159,18 +133,8 @@ export function rankCandidates(candidates: WebCandidate[], opts: RankOptions = {
     if (tierA !== tierB) return tierA - tierB;
     return a.candidate.order - b.candidate.order;
   });
-
   return scored.map((entry) => entry.candidate);
 }
-
-/**
- * Fetch one candidate, converting thrown errors into an error outcome.
- *
- * @param candidate - Candidate to fetch.
- * @param opts - Fetch function plus output-gate settings.
- * @param signal - Optional cancellation signal.
- * @returns The fetch outcome for one candidate.
- */
 async function fetchCandidate(
   candidate: WebCandidate,
   opts: FetchSourcesOptions,
@@ -184,14 +148,6 @@ async function fetchCandidate(
     return { candidate, error: (error as Error).message };
   }
 }
-
-/**
- * Decide whether a fetch outcome is an acceptable source.
- *
- * @param outcome - Completed fetch outcome.
- * @param opts - Output-gate settings.
- * @returns Either a rejected reason or the accepted source.
- */
 function evaluateOutcome(
   outcome: FetchOutcome,
   opts: FetchSourcesOptions,
@@ -200,18 +156,13 @@ function evaluateOutcome(
   if (outcome.error !== undefined) {
     return { rejected: { url: candidate.result.url, reason: outcome.error } };
   }
-
   const fetched = outcome.fetched;
   if (fetched === undefined) {
     return { rejected: { url: candidate.result.url, reason: "fetch returned no content" } };
   }
-
   const title = fetched.title || candidate.result.title;
   const junk = detectJunkPage(title, fetched.content, { minChars: MIN_PAGE_CHARS });
-  if (junk !== null) {
-    return { rejected: { url: candidate.result.url, reason: junk } };
-  }
-
+  if (junk !== null) return { rejected: { url: candidate.result.url, reason: junk } };
   const relevance = opts.relevance ?? DEFAULT_RELEVANCE_CONFIG;
   const scorer = createLexicalScorer({
     threshold: relevance.outputThreshold,
@@ -223,16 +174,11 @@ function evaluateOutcome(
     strong: [title, urlStrong(candidate.result.url), excerpt],
     body: fetched.content.slice(EXCERPT_CHARS),
   });
-
   if (!verdict.pass) {
     return {
-      rejected: {
-        url: candidate.result.url,
-        reason: `low-relevance ${verdict.score.toFixed(2)}`,
-      },
+      rejected: { url: candidate.result.url, reason: `low-relevance ${verdict.score.toFixed(2)}` },
     };
   }
-
   return {
     source: {
       url: candidate.result.url,
@@ -247,18 +193,12 @@ function evaluateOutcome(
     },
   };
 }
-
 /**
- * Fetch ranked candidates with concurrency 3 until enough sources are accepted.
- *
- * At most `3 x maxSources` fetch attempts are made. Accepted sources keep the
- * ranked order; every failed, junk or low-relevance page is recorded in
- * `rejected` with its reason.
- *
+ * Fetch ranked candidates with concurrency 3 until enough are accepted.
  * @param ranked - Candidates in ranked order.
  * @param opts - Fetch function, source cap and output-gate settings.
- * @param signal - Optional cancellation signal; stops further fetches.
- * @returns Accepted sources in ranked order plus rejected candidates.
+ * @param signal - Optional cancellation signal.
+ * @returns Accepted sources plus rejected candidates.
  */
 export async function fetchRankedSources(
   ranked: WebCandidate[],
@@ -271,20 +211,16 @@ export async function fetchRankedSources(
   const rejected: RejectedSource[] = [];
   let cursor = 0;
   let attempts = 0;
-
   while (sources.length < maxSources && cursor < ranked.length && attempts < attemptLimit) {
     if (signal?.aborted) break;
-
     const batchSize = Math.min(FETCH_CONCURRENCY, ranked.length - cursor, attemptLimit - attempts);
     const batch = ranked.slice(cursor, cursor + batchSize);
     cursor += batch.length;
     attempts += batch.length;
-
     const outcomes = await Promise.all(
       batch.map((candidate) => fetchCandidate(candidate, opts, signal)),
     );
     if (signal?.aborted) break;
-
     for (const outcome of outcomes) {
       if (sources.length >= maxSources) break;
       const verdict = evaluateOutcome(outcome, opts);
@@ -292,6 +228,70 @@ export async function fetchRankedSources(
       else rejected.push(verdict.rejected);
     }
   }
-
+  return { sources, rejected };
+}
+/**
+ * Fetch primary URLs directly, bypassing search, prefetch and relevance gates.
+ * Rejects fetch errors and junk pages; keeps at most five URLs in input order.
+ * @param urls - Primary documentation URLs, in desired source order.
+ * @param opts - Fetch function.
+ * @param signal - Optional cancellation signal.
+ * @returns Accepted primary sources plus rejected URLs and reasons.
+ */
+export async function fetchPrimarySources(
+  urls: string[],
+  opts: { fetch: FetchSourcesOptions["fetch"] },
+  signal?: AbortSignal,
+): Promise<FetchSourcesResult> {
+  const primaryUrls = urls
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0)
+    .slice(0, MAX_PRIMARY_URLS);
+  const sources: EvidenceSource[] = [];
+  const rejected: RejectedSource[] = [];
+  for (let cursor = 0; cursor < primaryUrls.length; cursor += FETCH_CONCURRENCY) {
+    if (signal?.aborted) break;
+    const batch = primaryUrls.slice(cursor, cursor + FETCH_CONCURRENCY);
+    const outcomes = await Promise.all(
+      batch.map(async (url): Promise<PrimaryOutcome> => {
+        try {
+          const fetched = await opts.fetch(url, FETCH_TIMEOUT_MS, signal);
+          if ("error" in fetched) return { url, error: fetched.error };
+          return { url, fetched };
+        } catch (error) {
+          return { url, error: (error as Error).message };
+        }
+      }),
+    );
+    if (signal?.aborted) break;
+    for (const outcome of outcomes) {
+      if (outcome.error !== undefined) {
+        rejected.push({ url: outcome.url, reason: outcome.error });
+        continue;
+      }
+      const fetched = outcome.fetched;
+      if (fetched === undefined) {
+        rejected.push({ url: outcome.url, reason: "fetch returned no content" });
+        continue;
+      }
+      const title = fetched.title || outcome.url;
+      const junk = detectJunkPage(title, fetched.content);
+      if (junk !== null) {
+        rejected.push({ url: outcome.url, reason: junk });
+        continue;
+      }
+      sources.push({
+        url: outcome.url,
+        canonicalUrl: canonicalizeUrl(outcome.url),
+        title,
+        trust: classifyTrust(outcome.url),
+        tier: null,
+        query: "(primary)",
+        excerpt: toExcerpt(fetched.content),
+        content: fetched.content,
+        primary: true,
+      });
+    }
+  }
   return { sources, rejected };
 }

@@ -10,7 +10,7 @@
  */
 
 import { evaluateKbCoverage } from "./gather-kb.ts";
-import { fetchRankedSources, rankCandidates } from "./gather-sources.ts";
+import { fetchPrimarySources, fetchRankedSources, rankCandidates } from "./gather-sources.ts";
 import { classifyTrust } from "./trust.ts";
 import { canonicalizeUrl } from "./url.ts";
 
@@ -52,6 +52,7 @@ export interface GatherEvidenceInput {
   maxSources?: number;
   force?: boolean;
   kind?: SearchKind;
+  urls?: string[];
 }
 
 /**
@@ -65,9 +66,12 @@ export interface GatherEvidenceInput {
  * by lexical relevance; candidates below the prefetch threshold are never
  * fetched. Ranked candidates are fetched with concurrency 3 and a 20 s
  * timeout until `maxSources` sources pass the junk check and output relevance
- * gate. Rejected pages are recorded in `rejected` with their reason.
+ * gate. Primary URLs are fetched directly and placed first, bypassing the
+ * prefetch and output relevance gates and not counting toward `maxSources`.
+ * Rejected pages are recorded in `rejected` with their reason.
  *
- * @param input - Question, queries (1-5), optional source cap and force flag.
+ * @param input - Question, queries (1-5), optional source cap, force flag and
+ * primary URLs.
  * @param deps - Injected KB search, web search, fetch and clock.
  * @param signal - Optional cancellation signal; stops further fetches.
  * @returns The evidence pack contents, without an id.
@@ -86,6 +90,8 @@ export async function gatherEvidence(
   const requested =
     input.maxSources === undefined ? DEFAULT_MAX_SOURCES : Math.floor(input.maxSources);
   const maxSources = Math.min(Math.max(requested, 0), MAX_SOURCES_CAP);
+
+  const primary = await fetchPrimarySources(input.urls ?? [], { fetch: deps.fetch }, signal);
 
   const packQueries: EvidencePackQuery[] = [];
   const candidates: WebCandidate[] = [];
@@ -134,7 +140,7 @@ export async function gatherEvidence(
     question: input.question,
     createdAt: deps.now().toISOString(),
     queries: packQueries,
-    sources: fetched.sources,
-    rejected: fetched.rejected,
+    sources: [...primary.sources, ...fetched.sources],
+    rejected: [...primary.rejected, ...fetched.rejected],
   };
 }

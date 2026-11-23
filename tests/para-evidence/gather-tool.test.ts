@@ -26,15 +26,14 @@ interface ToolResult {
   details?: Record<string, unknown>;
   isError?: boolean;
 }
-
 interface ToolParams {
   question: string;
   queries: string[];
   maxSources?: number;
   force?: boolean;
   kind?: "general" | "tech" | "academic" | "news";
+  urls?: string[];
 }
-
 interface RegisteredTool {
   name: string;
   promptGuidelines?: string[];
@@ -46,12 +45,8 @@ interface RegisteredTool {
     ctx: { cwd: string },
   ) => Promise<ToolResult>;
 }
-
 /** Create a fake pi API capturing every registered tool by name. */
-function createFakePi(): {
-  pi: ExtensionAPI;
-  tools: Map<string, RegisteredTool>;
-} {
+function createFakePi(): { pi: ExtensionAPI; tools: Map<string, RegisteredTool> } {
   const tools = new Map<string, RegisteredTool>();
   const pi = {
     registerTool: (tool: RegisteredTool) => {
@@ -60,7 +55,6 @@ function createFakePi(): {
   } as unknown as ExtensionAPI;
   return { pi, tools };
 }
-
 /** Freshness verdict helper for fake KB hits. */
 function freshHit(path: string, title: string): GatherKbHit {
   return {
@@ -79,7 +73,6 @@ function freshHit(path: string, title: string): GatherKbHit {
     },
   };
 }
-
 /** Build fake deps with a fresh KB hit, one web result and a long fetch body. */
 function makeDeps(overrides: Partial<GatherToolDeps> = {}): {
   deps: GatherToolDeps;
@@ -105,12 +98,10 @@ function makeDeps(overrides: Partial<GatherToolDeps> = {}): {
 describe("gather_evidence", () => {
   let tmpDir: string;
   let cwd: string;
-
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "gather-tool-test-"));
     cwd = join(tmpDir, "project");
   });
-
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -134,7 +125,6 @@ describe("gather_evidence", () => {
     registerGatherEvidenceTool(pi, deps);
     const tool = tools.get("gather_evidence");
     if (!tool) throw new Error("gather_evidence was not registered");
-
     const result = await tool.execute(
       "call-1",
       { question: "How does caching work?", queries: ["caching", "new facet"] },
@@ -142,15 +132,12 @@ describe("gather_evidence", () => {
       undefined,
       { cwd },
     );
-
     const id = result.details?.id as string;
     expect(id).toMatch(/^ev-/);
-
     const stored = loadEvidencePack(cwd, id);
     expect(stored).not.toBeNull();
     expect(stored?.question).toBe("How does caching work?");
     expect(stored?.queries).toHaveLength(2);
-
     const text = result.content[0].text;
     expect(text).toContain(id);
     expect(text).toContain("kb covered: yes");
@@ -175,7 +162,6 @@ describe("gather_evidence", () => {
     registerGatherEvidenceTool(pi, deps);
     const tool = tools.get("gather_evidence");
     if (!tool) throw new Error("gather_evidence was not registered");
-
     const result = await tool.execute(
       "call-2",
       { question: "Mixed coverage", queries: ["caching", "brand new facet"] },
@@ -183,7 +169,6 @@ describe("gather_evidence", () => {
       undefined,
       { cwd },
     );
-
     expect(webCalls).toEqual([{ query: "brand new facet", since: null, kind: "general" }]);
     const text = result.content[0].text;
     expect(text).toContain("- caching");
@@ -194,13 +179,10 @@ describe("gather_evidence", () => {
 
   it("forwards an explicit kind to every uncovered web query", async () => {
     const { pi, tools } = createFakePi();
-    const { deps, webCalls } = makeDeps({
-      searchKb: () => [],
-    });
+    const { deps, webCalls } = makeDeps({ searchKb: () => [] });
     registerGatherEvidenceTool(pi, deps);
     const tool = tools.get("gather_evidence");
     if (!tool) throw new Error("gather_evidence was not registered");
-
     await tool.execute(
       "call-3",
       { question: "Tech question", queries: ["node streams", "typescript generics"], kind: "tech" },
@@ -208,7 +190,6 @@ describe("gather_evidence", () => {
       undefined,
       { cwd },
     );
-
     expect(webCalls).toEqual([
       { query: "node streams", since: null, kind: "tech" },
       { query: "typescript generics", since: null, kind: "tech" },
@@ -220,9 +201,8 @@ describe("gather_evidence", () => {
     registerGatherEvidenceTool(pi, makeDeps().deps);
     const tool = tools.get("gather_evidence");
     if (!tool) throw new Error("gather_evidence was not registered");
-
     const guidelines = tool.promptGuidelines ?? [];
-    expect(guidelines).toHaveLength(5);
+    expect(guidelines).toHaveLength(6);
     expect(guidelines[0]).toContain("A knowledge question is any claim");
     expect(guidelines[0]).toContain("Repo-internal questions use code search");
     expect(guidelines[1]).toContain("no relevant hit exists or a facet is uncovered");
@@ -235,7 +215,38 @@ describe("gather_evidence", () => {
     expect(guidelines[4]).toBe(
       "Pass kind: 'tech' for software, library, API or tooling questions; use 'academic' only for research literature; default is 'general'.",
     );
+    expect(guidelines[5]).toBe(
+      "When you already know the primary docs for a facet, pass them in urls instead of calling fetch_url, so they land in the pack and verify_quote can check them.",
+    );
   });
+
+  it("fetches primary urls through the tool and marks them in the output and stored pack", async () => {
+    const { pi, tools } = createFakePi();
+    const { deps } = makeDeps({
+      searchKb: () => [],
+      fetch: () => Promise.resolve({ title: "Primary Docs", content: "primary docs ".repeat(40) }),
+    });
+    registerGatherEvidenceTool(pi, deps);
+    const tool = tools.get("gather_evidence");
+    if (!tool) throw new Error("gather_evidence was not registered");
+    const result = await tool.execute(
+      "call-primary",
+      {
+        question: "Primary docs question",
+        queries: ["primary docs"],
+        urls: ["https://docs.example.com/primary"],
+      },
+      undefined,
+      undefined,
+      { cwd },
+    );
+    expect(result.content[0].text).toContain("   primary: yes");
+    const id = result.details?.id as string;
+    const stored = loadEvidencePack(cwd, id);
+    expect(stored?.sources[0].primary).toBe(true);
+    expect(stored?.sources[0].query).toBe("(primary)");
+  });
+
   it("prints source relevance, rejected count and the no-relevant-sources hint", () => {
     const pack: EvidencePack = {
       id: "ev-1",
@@ -265,7 +276,6 @@ describe("gather_evidence", () => {
     const text = formatGatherResult(pack);
     expect(text).toContain("   trust: unknown\n   relevance: 0.88\n   excerpt:");
     expect(text).toContain("Rejected: 2 (low relevance, junk page or fetch error)");
-
     const empty = { ...pack, sources: [], rejected: undefined };
     expect(formatGatherResult({ ...empty, queries: [pack.queries[1]] })).toContain(
       "No relevant sources. Pass `urls` with primary docs.",
@@ -278,7 +288,6 @@ describe("para-evidence registration", () => {
   it("registers gather_evidence, get_evidence, verify_source and verify_quote", () => {
     const { pi, tools } = createFakePi();
     paraEvidence(pi);
-
     expect([...tools.keys()].sort()).toEqual([
       "gather_evidence",
       "get_evidence",

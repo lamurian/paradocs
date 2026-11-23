@@ -30,6 +30,7 @@ export interface EvidenceSource {
   content?: string;
   fetchError?: string;
   relevance?: number;
+  primary?: boolean;
 }
 
 /** One query executed while gathering evidence, with its KB coverage. */
