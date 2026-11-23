@@ -167,12 +167,27 @@ Stored at `KNOWLEDGE_DIR/paradocs.json`. Missing sections use these defaults:
 | `recall.maxChars` | `2000` |
 | `recall.maxTerms` | `12` |
 | `recall.timeoutMs` | `150` |
-| `recall.maxHits` | `5` |
-| `recall.minMatchedTerms` | `2` |
+| `recall.maxHits` | `3` |
 | `recall.skipPatterns` | `[]` |
+| `relevance.kbThreshold` | `0.75` |
+| `relevance.outputThreshold` | `0.75` |
+| `relevance.prefetchThreshold` | `0.5` |
+| `relevance.relativeCut` | `0.9` |
+| `relevance.bodyWeight` | `0.5` |
 | `note.maxContentLines` | `60` |
 | `note.wrapWidth` | `80` |
 | `note.maxLinks` | `5` |
+
+Relevance gating uses a lexical **coverage score**: BM25 with `k1=0`
+normalized by the maximum achievable score for the query. Each distinct query
+term contributes its IDF weight — full weight in a strong field (title,
+description, tags, path, or URL host and path), `relevance.bodyWeight` when
+found only in the body, zero otherwise — matched as whole stemmed tokens.
+A precision-first gate requires the threshold, the rarest-term (anchor) rule,
+and the relative cut, applies a hard cap, and abstains when nothing passes. The
+scorer is pluggable behind a `RelevanceScorer` interface and the gate ANDs all
+registered scorers; only the lexical scorer ships today, with no semantic
+search.
 
 # Project Outbox and Git
 

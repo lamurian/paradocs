@@ -194,9 +194,15 @@ below; invalid values fall back to the default for that value.
     "maxChars": 2000,
     "maxTerms": 12,
     "timeoutMs": 150,
-    "maxHits": 5,
-    "minMatchedTerms": 2,
+    "maxHits": 3,
     "skipPatterns": []
+  },
+  "relevance": {
+    "kbThreshold": 0.75,
+    "outputThreshold": 0.75,
+    "prefetchThreshold": 0.5,
+    "relativeCut": 0.9,
+    "bodyWeight": 0.5
   },
   "note": {
     "maxContentLines": 60,
@@ -213,12 +219,35 @@ below; invalid values fall back to the default for that value.
 | `recall.maxChars` | `2000` | Maximum size of the injected recall block. |
 | `recall.maxTerms` | `12` | Maximum prompt terms used for the BM25 lookup. |
 | `recall.timeoutMs` | `150` | Discard the injection when the lookup takes longer. |
-| `recall.maxHits` | `5` | Maximum notes injected. |
-| `recall.minMatchedTerms` | `2` | Minimum matched terms before a note qualifies. |
+| `recall.maxHits` | `3` | Maximum notes injected. |
 | `recall.skipPatterns` | `[]` | Regular expressions for prompts that skip recall. |
+| `relevance.kbThreshold` | `0.75` | Minimum coverage for a KB note to qualify as recall context. |
+| `relevance.outputThreshold` | `0.75` | Minimum coverage for an item to appear in tool output. |
+| `relevance.prefetchThreshold` | `0.5` | Minimum coverage for a web candidate to be fetched or kept. |
+| `relevance.relativeCut` | `0.9` | Keep only scores at least this fraction of the best score. |
+| `relevance.bodyWeight` | `0.5` | Credit for a query term found only in a document's body. |
 | `note.maxContentLines` | `60` | Maximum wrapped Summary + Key Points content lines. |
 | `note.wrapWidth` | `80` | Hard-wrap width for Summary and Key Points. |
 | `note.maxLinks` | `5` | Maximum BM25 related-note links added at ingest. |
+
+### Relevance and coverage
+
+Gating uses a deterministic lexical **coverage score** rather than raw BM25
+counts. Coverage is BM25 with `k1=0`, normalized by the query's maximum
+achievable score: each distinct query term contributes its IDF weight, with
+full weight in a strong field (title, description, tags, path, or URL host and
+path), `relevance.bodyWeight` when found only in the body, and zero otherwise.
+Matching is whole stemmed tokens only, never substrings.
+
+A precision-first gate decides yes/no: coverage must clear the threshold, the
+rarest query term (the anchor) must match, scores below `relevance.relativeCut`
+of the best are dropped, a hard cap applies, and the gate abstains when nothing
+passes. Candidate retrieval and ordering still use BM25/FTS5.
+
+The scorer is pluggable behind a `RelevanceScorer` interface, and the gate ANDs
+every registered scorer. Only the lexical scorer ships today; a semantic scorer
+can be added later as a second key without rework. There is no semantic search
+now.
 
 Environment variables use the three-layer cascade (hardcoded defaults →
 `~/.pi/agent/.env` → `<cwd>/.pi/.env`). Path-like values support `~` expansion.

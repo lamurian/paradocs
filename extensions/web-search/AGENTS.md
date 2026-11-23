@@ -95,16 +95,38 @@ Lists of engines to explicitly enable or disable. Overrides the default set.
 The web-search tool (`web_search`) abstracts these parameters behind a simpler interface:
 
 - `query` (string, required) — mapped to `q`
-- `tier` (1, 2, or 3, optional) — maps to `categories` as shown above
-- `category` (string, optional) — overrides `categories` for the chosen tier
+- `kind` (string, optional) — coarse search intent, default `general`; maps to a SearXNG category and a Tavily tier (see below)
+- `tier` (1, 2, or 3, optional) — explicit override for the SearXNG tier
+- `category` (string, optional) — explicit override for the SearXNG category
 
-When `category` is provided, no query modification is applied. When `tier=2` with no custom category, the query is prefixed with `site:.edu OR site:.gov` for authoritative source filtering.
+### `kind` routing
+
+`kind` picks the SearXNG category string used for the query:
+
+| `kind` | SearXNG category |
+| ------ | ---------------- |
+| `general` (default) | `general` |
+| `tech` | `it,general` |
+| `academic` | `scientific_publications` |
+| `news` | `news` |
+
+When `tier` or `category` is provided, they remain explicit overrides over the
+kind-derived route. When `category` is provided, no query modification is
+applied. When `tier=2` with no custom category, the query is prefixed with
+`site:.edu OR site:.gov` for authoritative source filtering.
+
+After SearXNG returns, results are scored for lexical coverage. If fewer than
+3 results score at or above `0.5`, the search falls back to **Tavily**; if
+Tavily returns nothing, it falls back to Bing RSS (domain-filtered).
 
 ## Usage note for the agent
 
-When calling `web_search`, the agent can influence tier 2 behavior via the `category` parameter:
+When calling `web_search`, prefer `kind` for routing:
 
-- For technical software/IT questions, pass `category: "it"`
-- For news queries, pass `category: "news"`
-- For academic literature, use `tier: 1` (category is automatically `scientific_publications`)
-- For general web results, use `tier: 3`
+- For technical software/IT questions, pass `kind: "tech"`
+- For academic literature, pass `kind: "academic"`
+- For news queries, pass `kind: "news"`
+- For general web results, use `kind: "general"` (or omit it)
+
+`tier` and `category` remain available as explicit overrides when you need to
+force a specific SearXNG behavior.
