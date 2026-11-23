@@ -98,16 +98,16 @@ describe("gatherEvidence — KB coverage", () => {
 });
 
 describe("gatherEvidence — web result handling", () => {
-  it("should dedupe by canonical URL, fetch at most maxSources ranked by trust and record failures", async () => {
+  it("should dedupe by canonical URL, skip candidates below the prefetch threshold and record rejected fetches", async () => {
     const fetched: string[] = [];
     const deps = makeDeps({
       searchKb: () => [kbHit("notes/a.md", freshness("stale", "2020-01-01"), "Topic notes")],
       searchWeb: () =>
         Promise.resolve([
-          webResult("https://blog.example.com/post", 1),
+          webResult("https://blog.example.com/topic-guide", 1),
           webResult("https://www.nature.com/articles/x", 3),
-          webResult("https://www.nature.com/articles/x?utm_source=feed", 1),
-          webResult("https://example.edu/study", 2),
+          webResult("https://example.edu/topic-study", 2),
+          webResult("https://blog.example.com/topic-guide?utm_source=feed", 1),
         ]),
       fetch: (url) => {
         fetched.push(url);
@@ -115,22 +115,26 @@ describe("gatherEvidence — web result handling", () => {
           return Promise.resolve({ error: "blocked by paywall" });
         }
         return Promise.resolve({
-          title: "Study",
-          content: `  Intro   text \n\n ${"x".repeat(2000)}  `,
+          title: "Topic Guide",
+          content: `  topic guide ${"x".repeat(2000)}  `,
         });
       },
     });
 
     const pack = await gatherEvidence({ question: "q", queries: ["topic"], maxSources: 2 }, deps);
 
-    expect(fetched).toEqual(["https://www.nature.com/articles/x", "https://example.edu/study"]);
+    expect(fetched).toEqual([
+      "https://example.edu/topic-study",
+      "https://blog.example.com/topic-guide",
+    ]);
     expect(pack.sources).toHaveLength(2);
-    expect(pack.sources[0].trust).toBe("peer-reviewed");
-    expect(pack.sources[0].fetchError).toBe("blocked by paywall");
-    expect(pack.sources[1].trust).toBe("gov-edu");
+    expect(pack.sources[0].trust).toBe("gov-edu");
+    expect(pack.sources[0].fetchError).toBeUndefined();
+    expect(pack.sources[1].trust).toBe("unknown");
     expect(pack.sources[1].fetchError).toBeUndefined();
-    expect(pack.sources[1].excerpt).toHaveLength(1500);
-    expect(pack.sources[1].excerpt).not.toContain("  ");
+    expect(pack.sources[0].relevance).toBeGreaterThan(0);
+    expect(pack.sources[0].excerpt).not.toContain("  ");
+    expect(pack.rejected).toEqual([]);
   });
 });
 

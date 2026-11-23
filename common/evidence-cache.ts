@@ -29,6 +29,7 @@ export interface EvidenceSource {
   excerpt: string;
   content?: string;
   fetchError?: string;
+  relevance?: number;
 }
 
 /** One query executed while gathering evidence, with its KB coverage. */
@@ -52,6 +53,7 @@ export interface EvidencePack {
   createdAt: string;
   queries: EvidencePackQuery[];
   sources: EvidenceSource[];
+  rejected?: Array<{ url: string; reason: string }>;
 }
 
 /**
@@ -103,6 +105,7 @@ export function saveEvidencePack(cwd: string, pack: Omit<EvidencePack, "id">): E
     createdAt: pack.createdAt,
     queries: pack.queries,
     sources: pack.sources.map(capSourceContent),
+    ...(pack.rejected === undefined ? {} : { rejected: pack.rejected }),
   };
 
   const dir = evidenceDir(cwd);

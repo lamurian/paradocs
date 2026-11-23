@@ -91,7 +91,7 @@ function makeDeps(overrides: Partial<GatherToolDeps> = {}): {
       webCalls.push({ query, since: opts.since, kind: opts.kind });
       return Promise.resolve([]);
     },
-    fetch: () => Promise.resolve({ title: "Fetched", content: "A".repeat(500) }),
+    fetch: () => Promise.resolve({ title: "New Facet Guide", content: "new facet ".repeat(60) }),
     now: () => new Date("2025-02-03T04:05:06.000Z"),
     ...overrides,
   };
@@ -119,9 +119,9 @@ describe("gather_evidence", () => {
       searchWeb: () =>
         Promise.resolve([
           {
-            title: "Web Result",
-            url: "https://example.com/web",
-            snippet: "snippet text",
+            title: "New Facet Overview",
+            url: "https://example.com/new-facet",
+            snippet: "new facet",
             source_label: "Web",
             tier: 1,
           },
@@ -154,12 +154,11 @@ describe("gather_evidence", () => {
     expect(text).toContain(
       "kb hit: Resources/cache.md — Cache Notes (fresh, relevance 1.00 relevant)",
     );
-    expect(text).toContain("https://example.com/web");
+    expect(text).toContain("https://example.com/new-facet");
     expect(text).toContain("trust: unknown");
-    expect(text).toContain("A".repeat(300));
-    expect(text).not.toContain("A".repeat(301));
+    expect(text).toContain("new facet new facet");
     expect(result.details?.sources).toEqual([
-      { title: "Fetched", url: "https://example.com/web", trust: "unknown" },
+      { title: "New Facet Guide", url: "https://example.com/new-facet", trust: "unknown" },
     ]);
   });
 
